@@ -1,0 +1,181 @@
+{% comment %} Bloco para exibir um resumo de todos os erros de validação no topo do formulário. {% endcomment %}
+{% if form.errors %}
+    <div class="alert alert-danger mb-3">
+        <strong>Por favor, corrija os erros indicados abaixo para continuar.</strong>
+        {% if form.non_field_errors %}
+            <ul class="mb-0 mt-2">
+            {% for error in form.non_field_errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+{% endif %}
+
+<div class="accordion" id="accordionCalculo">
+    <!-- Card: Descrição -->
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="headingZero">
+            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseZero" aria-expanded="true" aria-controls="collapseZero">
+                <strong>Descrição do Cálculo</strong>
+            </button>
+        </h2>
+        <div id="collapseZero" class="accordion-collapse collapse show" aria-labelledby="headingZero">
+            <div class="accordion-body">
+                <div class="mb-3">
+                    {{ form.descricao.label_tag }}
+                    {{ form.descricao }}
+                    <div class="form-text">{{ form.descricao.help_text }}</div>
+                    <div class="text-danger small mt-1">{{ form.descricao.errors }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card: Valor e Período -->
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="headingOne">
+            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
+                <strong>1. Valor e Período Principal</strong>
+            </button>
+        </h2>
+        <div id="collapseOne" class="accordion-collapse collapse show" aria-labelledby="headingOne">
+            <div class="accordion-body">
+                <div class="mb-3">
+                    {{ form.valor_original.label_tag }}
+                    {{ form.valor_original }}
+                    <div class="text-danger small mt-1">{{ form.valor_original.errors }}</div>
+                </div>
+                <div class="mb-3">
+                    {{ form.data_inicio.label_tag }}
+                    {{ form.data_inicio }}
+                    <div class="text-danger small mt-1">{{ form.data_inicio.errors }}</div>
+                </div>
+                <div class="mb-3">
+                    {{ form.data_fim.label_tag }}
+                    {{ form.data_fim }}
+                    <div class="text-danger small mt-1">{{ form.data_fim.errors }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card: Correção Monetária -->
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="headingTwo">
+            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo" aria-expanded="true" aria-controls="collapseTwo">
+                <strong>2. Correção Monetária</strong>
+            </button>
+        </h2>
+        <div id="collapseTwo" class="accordion-collapse collapse show" aria-labelledby="headingTwo">
+            <div class="accordion-body">
+                <div class="mb-3">
+                    {{ form.indice.label_tag }}
+                    {{ form.indice }}
+                    <div class="text-danger small mt-1">{{ form.indice.errors }}</div>
+                </div>
+                <div class="form-check">
+                    {{ form.correcao_pro_rata }}
+                    {{ form.correcao_pro_rata.label_tag }}
+                    <div class="text-danger small mt-1">{{ form.correcao_pro_rata.errors }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card: Juros -->
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="headingThree">
+            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree" aria-expanded="true" aria-controls="collapseThree">
+                <strong>3. Juros Moratórios</strong>
+            </button>
+        </h2>
+        <div id="collapseThree" class="accordion-collapse collapse show" aria-labelledby="headingThree">
+            <div class="accordion-body">
+                <div class="row">
+                    <div class="col-md-8 mb-3">
+                        {{ form.juros_taxa.label_tag }}
+                        {{ form.juros_taxa }}
+                        <div class="text-danger small mt-1">{{ form.juros_taxa.errors }}</div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        {{ form.juros_periodo.label_tag }}
+                        {{ form.juros_periodo }}
+                        <div class="text-danger small mt-1">{{ form.juros_periodo.errors }}</div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    {{ form.juros_tipo.label_tag }}
+                    {{ form.juros_tipo }}
+                    <div class="text-danger small mt-1">{{ form.juros_tipo.errors }}</div>
+                </div>
+                <hr>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="usarPeriodoJurosEspecifico">
+                    <label class="form-check-label" for="usarPeriodoJurosEspecifico">Usar período de juros diferente do principal?</label>
+                </div>
+                <div id="campos-periodo-juros" style="display: none;">
+                    <div class="mb-3">
+                        {{ form.juros_data_inicio.label_tag }}
+                        {{ form.juros_data_inicio }}
+                        <div class="form-text">{{ form.juros_data_inicio.help_text }}</div>
+                        <div class="text-danger small mt-1">{{ form.juros_data_inicio.errors }}</div>
+                    </div>
+                    <div class="mb-3">
+                        {{ form.juros_data_fim.label_tag }}
+                        {{ form.juros_data_fim }}
+                        <div class="form-text">{{ form.juros_data_fim.help_text }}</div>
+                        <div class="text-danger small mt-1">{{ form.juros_data_fim.errors }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card: Multa e Honorários -->
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="headingFour">
+            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFour" aria-expanded="true" aria-controls="collapseFour">
+                <strong>4. Multa e Honorários</strong>
+            </button>
+        </h2>
+        <div id="collapseFour" class="accordion-collapse collapse show" aria-labelledby="headingFour">
+            <div class="accordion-body">
+                <div class="mb-3">
+                    {{ form.multa_percentual.label_tag }}
+                    {{ form.multa_percentual }}
+                    <div class="text-danger small mt-1">{{ form.multa_percentual.errors }}</div>
+                </div>
+                <div class="form-check mb-3">
+                    {{ form.multa_sobre_juros }}
+                    {{ form.multa_sobre_juros.label_tag }}
+                    <div class="text-danger small mt-1">{{ form.multa_sobre_juros.errors }}</div>
+                </div>
+                <hr>
+                <div class="mb-3">
+                    {{ form.honorarios_percentual.label_tag }}
+                    {{ form.honorarios_percentual }}
+                    <div class="text-danger small mt-1">{{ form.honorarios_percentual.errors }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card: Opções de Exibição -->
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="headingFive">
+            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFive" aria-expanded="true" aria-controls="collapseFive">
+                <strong>5. Opções de Exibição</strong>
+            </button>
+        </h2>
+        <div id="collapseFive" class="accordion-collapse collapse show" aria-labelledby="headingFive">
+            <div class="accordion-body">
+                <div class="form-check">
+                    {{ form.gerar_memorial }}
+                    {{ form.gerar_memorial.label_tag }}
+                    <div class="text-danger small mt-1">{{ form.gerar_memorial.errors }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

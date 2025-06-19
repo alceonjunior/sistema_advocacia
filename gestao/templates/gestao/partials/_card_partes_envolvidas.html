@@ -1,0 +1,30 @@
+<div class="card-header"><h5 class="mb-0">Partes Envolvidas</h5></div>
+<div class="card-body">
+    <div class="row">
+        <div class="col-md-6">
+            <h6 class="text-success">Polo Ativo (Autores)</h6>
+            <ul class="list-unstyled mb-0">
+                {% for parte in processo.partes.all %}
+                    {% if parte.tipo_participacao == 'AUTOR' %}
+                        <li class="mb-2">
+                            <strong>{{ parte.cliente.nome_completo }}</strong>
+                            {% if parte.representado_por %}
+                                <br><small class="text-muted ps-2">↳ Representado(a) por: {{ parte.representado_por.cliente.nome_completo }}</small>
+                            {% endif %}
+                        </li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        </div>
+        <div class="col-md-6">
+            <h6 class="text-danger">Polo Passivo (Réus)</h6>
+            <ul class="list-unstyled mb-0">
+               {% for parte in processo.partes.all %}
+                    {% if parte.tipo_participacao == 'REU' %}
+                        <li class="mb-2"><strong>{{ parte.cliente.nome_completo }}</strong></li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>

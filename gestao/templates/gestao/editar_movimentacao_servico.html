@@ -1,0 +1,17 @@
+<!-- gestao/templates/gestao/editar_movimentacao_servico.html -->
+{% extends 'gestao/base.html' %}
+{% block title %}Editar Movimentação de Serviço{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header"><h3>Editar Movimentação: {{ movimentacao.titulo }}</h3></div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit" class="btn btn-success mt-3">Salvar</button>
+            <a href="{% url 'detalhe_servico' pk=movimentacao.servico.pk %}" class="btn btn-secondary mt-3">Cancelar</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

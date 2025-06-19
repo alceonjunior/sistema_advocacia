@@ -1,0 +1,64 @@
+<div class="card-header d-flex justify-content-between align-items-center">
+    <h4 class="h5 mb-0">Histórico de Movimentações</h4>
+    <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#formNovaMovimentacao" aria-expanded="false" aria-controls="formNovaMovimentacao">
+        + Adicionar Movimentação
+    </button>
+</div>
+<div class="card-body">
+    <div class="collapse mb-4" id="formNovaMovimentacao">
+        <div class="card card-body bg-light">
+            <h4>Nova Movimentação, Prazo ou Tarefa</h4>
+            <form method="post">
+                {% csrf_token %}
+                {{ form_movimentacao.as_p }}
+                <button type="submit" name="submit_movimentacao" class="btn btn-success mt-2">Salvar Nova Movimentação</button>
+            </form>
+        </div>
+    </div>
+    <div class="list-group">
+        {% for mov in movimentacoes %}
+            <div class="list-group-item mb-3 shadow-sm">
+                <div class="d-flex w-100 justify-content-between">
+                    <h5 class="mb-1">{{ mov.titulo }}</h5>
+
+                    <div class="d-flex align-items-center gap-2">
+
+                        {% if mov.status != 'CONCLUIDA' and mov.status != 'CANCELADA' %}
+                            <form method="post" action="{% url 'concluir_movimentacao' pk=mov.pk %}" style="display: inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-success">Concluir</button>
+                            </form>
+                        {% endif %}
+
+                        <a href="{% url 'editar_movimentacao' pk=mov.pk %}" class="btn btn-sm btn-outline-primary">Editar</a>
+                        <form method="post" action="{% url 'excluir_movimentacao' pk=mov.pk %}" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta movimentação?');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Excluir</button>
+                        </form>
+                    </div>
+                </div>
+                <p class="mb-1"><span class="badge bg-secondary">{{ mov.tipo_movimentacao|default:"Geral" }}</span>
+                    <span class="badge
+    {% if mov.status == 'CONCLUIDA' %}
+        bg-success
+    {% elif mov.status == 'EM_ANDAMENTO' %}
+        bg-warning text-dark
+    {% elif mov.status == 'PENDENTE' %}
+        bg-danger
+    {% else %}
+        bg-secondary
+    {% endif %}">
+    {{ mov.get_status_display }}
+</span> <strong>Responsável:</strong> {{ mov.responsavel|default:"-" }}</p>
+                <div class="d-flex justify-content-start gap-4 mt-2">
+                    <small class="text-muted"><strong>Cadastrado em:</strong> {{ mov.data_criacao|date:"d/m/Y H:i" }}</small>
+                    {% if mov.data_publicacao %}<small class="text-muted"><strong>Publicação/Ciência:</strong> {{ mov.data_publicacao|date:"d/m/Y" }}</small>{% endif %}
+                    {% if mov.data_prazo_final %}<small class="fw-bold text-danger"><strong>PRAZO FINAL: {{ mov.data_prazo_final|date:"d/m/Y" }}</strong></small>{% endif %}
+                </div>
+                {% if mov.detalhes %}<hr class="my-2"><small>{{ mov.detalhes|linebreaks }}</small>{% endif %}
+            </div>
+        {% empty %}
+            <p class="text-muted">Nenhuma movimentação registrada para este processo ainda.</p>
+        {% endfor %}
+    </div>
+</div>

@@ -1,0 +1,119 @@
+{% load humanize %}
+<div class="card shadow-sm">
+    <div class="card-header bg-success-subtle d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 text-success-emphasis">Demonstrativo do Cálculo</h5>
+        <button type="button" class="btn btn-sm btn-outline-dark d-print-none" onclick="window.print();"><i class="bi bi-printer"></i> Imprimir</button>
+    </div>
+    <div class="card-body p-4">
+        <!-- SEÇÃO 1: DADOS BÁSICOS -->
+        <h4 class="mb-3 border-bottom pb-2">Dados básicos informados para cálculo</h4>
+        <table class="table table-sm table-borderless mb-4">
+            <tbody>
+                <tr>
+                    <td style="width: 250px;"><strong>Valor Nominal</strong></td>
+                    <td class="text-end">R$ {{ form_data.valor_original|floatformat:2|intcomma }}</td>
+                </tr>
+                <tr>
+                    <td><strong>Indexador e metodologia</strong></td>
+                    <td class="text-end">{{ resultado.resumo.indice_display_name }} - {% if form_data.correcao_pro_rata %}Calculado pro-rata die.{% else %}Calculado mês a mês.{% endif %}</td>
+                </tr>
+                <tr>
+                    <td><strong>Período da correção</strong></td>
+                    <td class="text-end">{{ form_data.data_inicio|date:"d/m/Y" }} a {{ form_data.data_fim|date:"d/m/Y" }}</td>
+                </tr>
+                <tr>
+                    <td><strong>Taxa de juros (%)</strong></td>
+                    <td class="text-end">{{ form_data.juros_taxa|default_if_none:"0"|floatformat:2|intcomma }}% a.m. {{ form_data.juros_tipo|lower }}</td>
+                </tr>
+                <tr>
+                    <td><strong>Período dos juros</strong></td>
+                    <td class="text-end">{{ form_data.juros_data_inicio|default:form_data.data_inicio|date:"d/m/Y" }} a {{ form_data.juros_data_fim|default:form_data.data_fim|date:"d/m/Y" }}</td>
+                </tr>
+                <tr>
+                    <td><strong>Multa (%)</strong></td>
+                    <td class="text-end">{{ form_data.multa_percentual|default_if_none:"0"|floatformat:2|intcomma }}%</td>
+                </tr>
+                <tr>
+                    <td><strong>Honorários (%)</strong></td>
+                    <td class="text-end">{{ form_data.honorarios_percentual|default_if_none:"0"|floatformat:2|intcomma }}%</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- SEÇÃO 2: DADOS CALCULADOS -->
+        <h4 class="mb-3 border-bottom pb-2">Dados calculados</h4>
+        <table class="table table-sm table-borderless mb-4">
+            <tbody>
+                <tr>
+                    <td>Fator de correção do período</td>
+                    <td>{{ resultado.resumo.dias_corridos }} dias</td>
+                    <td class="text-end">{{ resultado.resumo.fator_correcao_periodo|floatformat:6|intcomma }}</td>
+                </tr>
+                <tr>
+                    <td>Percentual correspondente</td>
+                    <td>{{ resultado.resumo.dias_corridos }} dias</td>
+                    <td class="text-end">{{ resultado.resumo.percentual_correcao_periodo|floatformat:6|intcomma }} %</td>
+                </tr>
+                <tr>
+                    <td>Valor corrigido para {{ form_data.data_fim|date:"d/m/Y" }}</td>
+                    <td class="text-end">(=)</td>
+                    <td class="text-end">R$ {{ resultado.resumo.valor_corrigido_total|floatformat:2|intcomma }}</td>
+                </tr>
+                <tr>
+                    <td>Juros ({{ resultado.resumo.dias_juros }} dias - {{ resultado.resumo.percentual_juros_total|floatformat:5|intcomma }}%)</td>
+                    <td class="text-end">(+)</td>
+                    <td class="text-end">R$ {{ resultado.resumo.total_juros|floatformat:2|intcomma }}</td>
+                </tr>
+                <tr>
+                    <td>Multa ({{ form_data.multa_percentual|default_if_none:"0"|floatformat:2|intcomma }}%)</td>
+                    <td class="text-end">(+)</td>
+                    <td class="text-end">R$ {{ resultado.resumo.multa_valor|floatformat:2|intcomma }}</td>
+                </tr>
+                <tr class="fw-bold">
+                    <td>Sub Total</td>
+                    <td class="text-end">(=)</td>
+                    <td class="text-end">R$ {{ resultado.resumo.sub_total|floatformat:2|intcomma }}</td>
+                </tr>
+                <tr>
+                    <td>Honorários ({{ form_data.honorarios_percentual|default_if_none:"0"|floatformat:2|intcomma }}%)</td>
+                    <td class="text-end">(+)</td>
+                    <td class="text-end">R$ {{ resultado.resumo.honorarios_valor|floatformat:2|intcomma }}</td>
+                </tr>
+            </tbody>
+            <tfoot class="table-group-divider">
+                <tr class="fs-4">
+                    <td class="fw-bold">Valor total</td>
+                    <td class="text-end fw-bold">(=)</td>
+                    <td class="text-end fw-bold text-success">R$ {{ resultado.resumo.valor_final|floatformat:2|intcomma }}</td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <!-- SEÇÃO 3: MEMORIAL ANALÍTICO -->
+        {% if form_data.gerar_memorial %}
+        <h4 class="mb-3 border-bottom pb-2">Memória analítica do cálculo</h4>
+        <div class="table-responsive memorial-container">
+            <table class="table table-sm table-hover table-bordered">
+                <thead class="table-light sticky-top">
+                    <tr>
+                        <th>Termo inicial</th>
+                        <th>Termo final</th>
+                        <th>Variação do período</th>
+                        <th>Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for linha in resultado.memorial %}
+                    <tr>
+                        <td>{{ linha.termo_inicial|date:"d/m/Y" }}</td>
+                        <td>{{ linha.termo_final|date:"d/m/Y" }}</td>
+                        <td>{{ linha.variacao_periodo|floatformat:4|intcomma }} %</td>
+                        <td class="text-end">R$ {{ linha.valor_atualizado_mes|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>

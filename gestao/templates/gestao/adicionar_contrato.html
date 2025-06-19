@@ -1,0 +1,28 @@
+{% extends 'gestao/base.html' %}
+
+{% block title %}Adicionar Contrato de Honorários{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+    <div class="card-header">
+        <h1 class="h3 mb-0">Adicionar Contrato de Honorários</h1>
+        <p class="mb-0 text-muted">
+            Vinculado a: <strong>{{ parent_object }}</strong>
+        </p>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+
+            <hr>
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                {% if parent_object.get_absolute_url %} {# Assume que seus modelos têm get_absolute_url, senão mude #}
+                    <a href="{{ parent_object.get_absolute_url }}" class="btn btn-secondary">Cancelar</a>
+                {% endif %}
+                <button type="submit" class="btn btn-primary">Salvar Contrato</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

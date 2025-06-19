@@ -1,0 +1,327 @@
+{% extends 'gestao/base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Cálculos Judiciais - Processo {{ processo.numero_processo }}{% endblock %}
+
+{% block content %}
+<style>
+    /* Garante que as colunas principais ocupem toda a altura disponível */
+    .main-row {
+        display: flex;
+        flex-wrap: wrap;
+    }
+    .main-column {
+        display: flex;
+        flex-direction: column;
+        height: 100%; /* Permite que os filhos se estiquem */
+    }
+    .form-card {
+        flex: 1; /* Faz o card do formulário ocupar o espaço restante */
+    }
+    /* Destaque para o item ativo no histórico */
+    .list-group-item.active {
+        z-index: 2;
+        color: var(--bs-list-group-active-color);
+        background-color: var(--bs-list-group-active-bg);
+        border-color: var(--bs-list-group-active-border-color);
+    }
+    .result-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #198754;
+    }
+    /* Lógica para o botão de exclusão aparecer no hover */
+    .list-group-item .btn-delete {
+        visibility: hidden;
+        opacity: 0;
+        transition: opacity 0.2s ease-in-out;
+    }
+    .list-group-item:hover .btn-delete {
+        visibility: visible;
+        opacity: 1;
+    }
+    /* Estilos para os erros de validação */
+    .invalid-feedback {
+        display: none; /* Oculto por padrão */
+        width: 100%;
+        margin-top: .25rem;
+        font-size: .875em;
+        color: #dc3545;
+    }
+    .is-invalid ~ .invalid-feedback {
+        display: block; /* Exibe o erro se o campo for inválido */
+    }
+    select.is-invalid,
+    textarea.is-invalid,
+    input.is-invalid {
+        border-color: #dc3545;
+    }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4 d-print-none">
+    <div>
+        <h1 class="h2 d-flex align-items-center gap-2">
+            <i class="bi bi-calculator-fill text-primary"></i>
+            Cálculos Judiciais do Processo
+        </h1>
+        <p class="text-muted mb-0"><strong>Processo:</strong> {{ processo }}</p>
+    </div>
+    <div>
+        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal"
+                data-bs-target="#confirmDeleteModal"
+                data-delete-url="{% url 'excluir_todos_calculos' processo_pk=processo.pk %}"
+                data-modal-title="Excluir Todos os Cálculos"
+                data-modal-body="Você tem certeza que deseja excluir PERMANENTEMENTE todos os {{ calculos_salvos.count }} cálculo(s) deste processo? Esta ação não pode ser desfeita."
+                {% if not calculos_salvos %}disabled{% endif %}>
+            <i class="bi bi-trash-fill"></i> Excluir Todos
+        </button>
+        <a href="{% url 'detalhe_processo' pk=processo.pk %}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle"></i> Voltar ao Processo</a>
+        <button type="button" class="btn btn-outline-secondary" onclick="window.print();" {% if not resultado %}disabled{% endif %}><i class="bi bi-printer-fill"></i> Imprimir</button>
+    </div>
+</div>
+
+<div class="row g-4 main-row">
+
+    <div class="col-lg-3 d-print-none main-column">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Histórico</h5>
+            </div>
+            <div class="list-group list-group-flush" style="max-height: 75vh; overflow-y: auto;">
+                <a href="{% url 'pagina_de_calculos' processo_pk=processo.pk %}" class="list-group-item list-group-item-action {% if not calculo_carregado %}active{% endif %}">
+                    <i class="bi bi-plus-circle-fill me-2"></i><strong>Novo Cálculo</strong>
+                </a>
+                {% for calculo in calculos_salvos %}
+                <div class="list-group-item {% if calculo_carregado and calculo_carregado.pk == calculo.pk %}active{% endif %}">
+                    <div class="d-flex w-100 justify-content-between align-items-start">
+                        <a href="{% url 'carregar_calculo' processo_pk=processo.pk calculo_pk=calculo.pk %}" class="text-decoration-none text-reset flex-grow-1">
+                            <p class="mb-1 fw-bold text-truncate" title="{{ calculo.descricao }}">{{ calculo.descricao }}</p>
+                        </a>
+                        <button type="button" class="btn btn-sm btn-danger py-0 px-1 ms-2 btn-delete"
+                                data-bs-toggle="modal" data-bs-target="#confirmDeleteModal"
+                                data-delete-url="{% url 'excluir_calculo' calculo_pk=calculo.pk %}"
+                                data-modal-title="Excluir Cálculo"
+                                data-modal-body="Você tem certeza que deseja excluir o cálculo '{{ calculo.descricao }}'? Esta ação não pode ser desfeita.">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                     <a href="{% url 'carregar_calculo' processo_pk=processo.pk calculo_pk=calculo.pk %}" class="text-decoration-none text-reset">
+                        <small>R$ {{ calculo.valor_final|floatformat:2|intcomma }} <span class="text-muted">· {{ calculo.data_calculo|date:"d/m/y" }}</span></small>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5 d-print-none main-column">
+        <div class="card shadow-sm form-card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    {% if calculo_carregado %}<i class="bi bi-pencil-square text-primary"></i> Parâmetros do Cálculo Carregado{% else %}<i class="bi bi-file-earmark-text-fill text-primary"></i> Parâmetros para Novo Cálculo{% endif %}
+                </h5>
+            </div>
+            <form id="calculo-form" method="post" action="{% if calculo_carregado %}{% url 'carregar_calculo' processo_pk=processo.pk calculo_pk=calculo_carregado.pk %}{% else %}{% url 'novo_calculo' processo_pk=processo.pk %}{% endif %}" class="d-flex flex-column h-100" novalidate>
+                {% csrf_token %}
+                <div class="card-body" style="overflow-y: auto;">
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger pb-0"><ul>{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>
+                    {% endif %}
+
+                    <h6 class="text-muted border-bottom pb-2 mb-3"><i class="bi bi-cash-coin"></i> 1. Valor e Período</h6>
+                    <div class="mb-3">
+                        <label for="{{ form.descricao.id_for_label }}" class="form-label">{{ form.descricao.label }}</label>
+                        {{ form.descricao }}
+                        <div class="invalid-feedback">{{ form.descricao.errors|striptags }}</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="{{ form.valor_original.id_for_label }}" class="form-label">{{ form.valor_original.label }}</label>
+                        {{ form.valor_original }}
+                        <div class="invalid-feedback">{{ form.valor_original.errors|striptags }}</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.data_inicio.id_for_label }}" class="form-label">{{ form.data_inicio.label }}</label>
+                            {{ form.data_inicio }}
+                            <div class="invalid-feedback">{{ form.data_inicio.errors|striptags }}</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.data_fim.id_for_label }}" class="form-label">{{ form.data_fim.label }}</label>
+                            {{ form.data_fim }}
+                            <div class="invalid-feedback">{{ form.data_fim.errors|striptags }}</div>
+                        </div>
+                    </div>
+
+                    <h6 class="text-muted border-bottom pb-2 mt-4 mb-3"><i class="bi bi-graph-up-arrow"></i> 2. Correção Monetária</h6>
+                    <div class="mb-3">
+                        <label for="{{ form.indice.id_for_label }}" class="form-label">{{ form.indice.label }}</label>
+                        {{ form.indice }}
+                        <div class="invalid-feedback d-block">{{ form.indice.errors|striptags }}</div>
+                    </div>
+                    <div class="form-check">
+                        {{ form.correcao_pro_rata }}
+                        <label class="form-check-label" for="{{ form.correcao_pro_rata.id_for_label }}">{{ form.correcao_pro_rata.label }}</label>
+                        <div class="invalid-feedback">{{ form.correcao_pro_rata.errors|striptags }}</div>
+                    </div>
+
+                    <h6 class="text-muted border-bottom pb-2 mt-4 mb-3"><i class="bi bi-percent"></i> 3. Juros</h6>
+                    <div class="row">
+                        <div class="col-md-7 mb-3">
+                            <label for="{{ form.juros_taxa.id_for_label }}" class="form-label">{{ form.juros_taxa.label }}</label>
+                            {{ form.juros_taxa }}
+                            <div class="invalid-feedback">{{ form.juros_taxa.errors|striptags }}</div>
+                        </div>
+                        <div class="col-md-5 mb-3">
+                            <label for="{{ form.juros_periodo.id_for_label }}" class="form-label">{{ form.juros_periodo.label }}</label>
+                            {{ form.juros_periodo }}
+                            <div class="invalid-feedback d-block">{{ form.juros_periodo.errors|striptags }}</div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="{{ form.juros_tipo.id_for_label }}" class="form-label">{{ form.juros_tipo.label }}</label>
+                        {{ form.juros_tipo }}
+                        <div class="invalid-feedback d-block">{{ form.juros_tipo.errors|striptags }}</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.juros_data_inicio.id_for_label }}" class="form-label">{{ form.juros_data_inicio.label }}</label>
+                            {{ form.juros_data_inicio }}
+                            <div class="invalid-feedback">{{ form.juros_data_inicio.errors|striptags }}</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.juros_data_fim.id_for_label }}" class="form-label">{{ form.juros_data_fim.label }}</label>
+                            {{ form.juros_data_fim }}
+                            <div class="invalid-feedback">{{ form.juros_data_fim.errors|striptags }}</div>
+                        </div>
+                    </div>
+
+                    <h6 class="text-muted border-bottom pb-2 mt-4 mb-3"><i class="bi bi-journal-check"></i> 4. Multa e Honorários</h6>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.multa_percentual.id_for_label }}" class="form-label">{{ form.multa_percentual.label }}</label>
+                            {{ form.multa_percentual }}
+                            <div class="invalid-feedback">{{ form.multa_percentual.errors|striptags }}</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.honorarios_percentual.id_for_label }}" class="form-label">{{ form.honorarios_percentual.label }}</label>
+                            {{ form.honorarios_percentual }}
+                            <div class="invalid-feedback">{{ form.honorarios_percentual.errors|striptags }}</div>
+                        </div>
+                    </div>
+                    <div class="form-check mb-2">
+                        {{ form.multa_sobre_juros }}
+                        <label class="form-check-label" for="{{ form.multa_sobre_juros.id_for_label }}">{{ form.multa_sobre_juros.label }}</label>
+                        <div class="invalid-feedback">{{ form.multa_sobre_juros.errors|striptags }}</div>
+                    </div>
+                    <div class="form-check">
+                        {{ form.gerar_memorial }}
+                        <label class="form-check-label" for="{{ form.gerar_memorial.id_for_label }}">{{ form.gerar_memorial.label }}</label>
+                        <div class="invalid-feedback">{{ form.gerar_memorial.errors|striptags }}</div>
+                    </div>
+                </div>
+                <div class="card-footer p-3 border-top bg-light">
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-play-circle-fill"></i> Calcular e Salvar</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-lg-4 d-print-inline main-column">
+        <div class="card shadow-sm flex-grow-1">
+             <div class="card-header"><h5 class="mb-0"><i class="bi bi-file-earmark-ruled-fill"></i> Resultado do Cálculo</h5></div>
+             <div class="card-body" style="overflow-y: auto;">
+                {% if error %}
+                    <div class="alert alert-danger"><h5 class="alert-heading">Erro no Cálculo</h5><p>{{ error }}</p></div>
+                {% elif resultado %}
+                    <div class="text-center mb-4"><h6 class="text-muted">VALOR TOTAL ATUALIZADO</h6><p class="result-value">R$ {{ resultado.resumo.valor_final|floatformat:2|intcomma }}</p></div>
+                    <ul class="nav nav-tabs nav-fill mb-3" id="myTab" role="tablist">
+                        <li class="nav-item" role="presentation"><button class="nav-link active" id="resumo-tab" data-bs-toggle="tab" data-bs-target="#resumo-tab-pane" type="button" role="tab">Resumo</button></li>
+                        <li class="nav-item" role="presentation"><button class="nav-link" id="memorial-tab" data-bs-toggle="tab" data-bs-target="#memorial-tab-pane" type="button" role="tab" {% if not resultado.memorial %}disabled{% endif %}>Memorial</button></li>
+                    </ul>
+                    <div class="tab-content" id="myTabContent">
+                        <div class="tab-pane fade show active" id="resumo-tab-pane" role="tabpanel">
+                            <table class="table table-sm table-borderless small">
+                                <tr><td colspan="3" class="text-muted fw-bold">Dados Iniciais</td></tr>
+                                <tr><td>Valor Nominal</td><td class="text-end" colspan="2">R$ {{ form_data.valor_original|floatformat:2|intcomma }}</td></tr>
+                                <tr><td>Período da Correção</td><td class="text-end" colspan="2">{{ form_data.data_inicio|date:"d/m/Y" }} a {{ form_data.data_fim|date:"d/m/Y" }}</td></tr>
+                                <tr class="table-group-divider"><td colspan="3" class="text-muted fw-bold pt-3">Valores Calculados</td></tr>
+                                <tr><td>Valor Corrigido</td><td class="text-end">(=)</td><td class="text-end fw-bold">R$ {{ resultado.resumo.valor_corrigido_total|floatformat:2|intcomma }}</td></tr>
+                                <tr><td>Juros ({{ resultado.resumo.percentual_juros_total|floatformat:2|intcomma }}%)</td><td class="text-end">(+)</td><td class="text-end">R$ {{ resultado.resumo.total_juros|floatformat:2|intcomma }}</td></tr>
+                                <tr><td>Multa ({{ form_data.multa_percentual|default_if_none:"0"|floatformat:2|intcomma }}%)</td><td class="text-end">(+)</td><td class="text-end">R$ {{ resultado.resumo.multa_valor|floatformat:2|intcomma }}</td></tr>
+                                <tr class="table-group-divider"><td class="fw-bold">Subtotal</td><td class="text-end">(=)</td><td class="text-end fw-bold">R$ {{ resultado.resumo.sub_total|floatformat:2|intcomma }}</td></tr>
+                                <tr><td>Honorários ({{ form_data.honorarios_percentual|default_if_none:"0"|floatformat:2|intcomma }}%)</td><td class="text-end">(+)</td><td class="text-end">R$ {{ resultado.resumo.honorarios_valor|floatformat:2|intcomma }}</td></tr>
+                            </table>
+                        </div>
+                        <div class="tab-pane fade" id="memorial-tab-pane" role="tabpanel">
+                            {% if resultado.memorial %}
+                            <div class="table-responsive"><table class="table table-sm table-hover table-bordered small"><thead class="table-light"><tr><th>Início</th><th>Fim</th><th>Índice (%)</th><th class="text-end">Valor (R$)</th></tr></thead><tbody>{% for linha in resultado.memorial %}<tr><td>{{ linha.termo_inicial|date:"d/m/y" }}</td><td>{{ linha.termo_final|date:"d/m/y" }}</td><td>{{ linha.variacao_periodo|floatformat:4|intcomma }}</td><td class="text-end">{{ linha.valor_atualizado_mes|floatformat:2|intcomma }}</td></tr>{% endfor %}</tbody></table></div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <div class="text-center p-5 d-flex flex-column justify-content-center align-items-center h-100">
+                    <i class="bi bi-file-earmark-binary" style="font-size: 4rem; color: #ced4da;"></i>
+                    <h5 class="mt-3 text-muted">Nenhum Resultado</h5>
+                    <p class="text-muted small">Realize um cálculo ou carregue um item do histórico para ver os detalhes aqui.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white"><h1 class="modal-title fs-5" id="confirmDeleteModalLabel">Confirmar Exclusão</h1><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button></div>
+      <div class="modal-body" id="confirmDeleteModalBody">Você tem certeza que deseja realizar esta exclusão? A ação não poderá ser desfeita.</div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form id="deleteForm" method="post" class="d-inline">{% csrf_token %}<button type="submit" class="btn btn-danger">Sim, Excluir Permanentemente</button></form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+
+{% block javascript %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Lógica do Modal de Exclusão
+    const confirmDeleteModal = document.getElementById('confirmDeleteModal');
+    if (confirmDeleteModal) {
+        confirmDeleteModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            const deleteUrl = button.getAttribute('data-delete-url');
+            const modalTitle = button.getAttribute('data-modal-title');
+            const modalBody = button.getAttribute('data-modal-body');
+            confirmDeleteModal.querySelector('#confirmDeleteModalLabel').textContent = modalTitle;
+            confirmDeleteModal.querySelector('#confirmDeleteModalBody').textContent = modalBody;
+            confirmDeleteModal.querySelector('#deleteForm').action = deleteUrl;
+        });
+    }
+
+    // Script para aplicar a classe de erro do Bootstrap dinamicamente
+    const form = document.getElementById('calculo-form');
+    if (form) {
+        // Itera sobre todos os campos com a classe 'form-control', 'form-select' ou 'form-check-input'
+        form.querySelectorAll('.form-control, .form-select, .form-check-input').forEach(function(field) {
+            // Encontra o container mais próximo que agrupa label, campo e erro
+            const fieldContainer = field.closest('.mb-3, .form-check');
+            if (fieldContainer) {
+                const errorDiv = fieldContainer.querySelector('.invalid-feedback');
+                // Se a div de erro tiver conteúdo, adiciona a classe 'is-invalid' ao campo
+                if (errorDiv && errorDiv.textContent.trim() !== '') {
+                    field.classList.add('is-invalid');
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

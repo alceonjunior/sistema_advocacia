@@ -1,0 +1,61 @@
+<div class="card-header d-flex justify-content-between align-items-center">
+    <h4 class="h5 mb-0">Movimentações e Tarefas do Serviço</h4>
+</div>
+<div class="card-body">
+    <div class="mb-4">
+        <h5>Adicionar Nova Movimentação</h5>
+        <form method="post">
+            {% csrf_token %}
+            {{ form_movimentacao.as_p }}
+            <button type="submit" class="btn btn-primary mt-2">Salvar Movimentação</button>
+        </form>
+    </div>
+    <hr>
+    <h5>Histórico</h5>
+    <div class="list-group">
+        {% for mov in servico.movimentacoes.all %}
+        <div class="list-group-item">
+            <div class="d-flex w-100 justify-content-between">
+                <h6 class="mb-1">{{ mov.titulo }}</h6>
+                <div class="d-flex gap-2">
+                    {% if mov.status != 'CONCLUIDA' and mov.status != 'CANCELADA' %}
+                        <form action="{% url 'concluir_movimentacao_servico' pk=mov.pk %}" method="post" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-success">Concluir</button>
+                        </form>
+                    {% endif %}
+                    <a href="{% url 'editar_movimentacao_servico' pk=mov.pk %}" class="btn btn-sm btn-outline-primary">Editar</a>
+                    <form action="{% url 'excluir_movimentacao_servico' pk=mov.pk %}" method="post" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir a movimentação \'{{ mov.titulo|escapejs }}\'?');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Excluir</button>
+                    </form>
+                </div>
+            </div>
+            <p class="mb-1">
+                <small class="text-muted">
+                    {{ mov.data_atividade|date:"d/m/Y" }} - Por: {{ mov.responsavel|default:'N/A' }} -
+                    Status: <span class="badge
+    {% if mov.status == 'CONCLUIDA' %}
+        bg-success
+    {% elif mov.status == 'EM_ANDAMENTO' %}
+        bg-warning text-dark
+    {% elif mov.status == 'PENDENTE' %}
+        bg-danger
+    {% else %}
+        bg-secondary
+    {% endif %}">
+    {{ mov.get_status_display }}
+</span>
+
+                </small>
+                {% if mov.prazo_final %}
+                    <small class="text-danger fw-bold ms-3">PRAZO: {{ mov.prazo_final|date:"d/m/Y" }}</small>
+                {% endif %}
+            </p>
+            <p><small>{{ mov.detalhes|linebreaksbr }}</small></p>
+        </div>
+        {% empty %}
+            <p class="text-muted">Nenhuma movimentação registrada para este serviço.</p>
+        {% endfor %}
+    </div>
+</div>

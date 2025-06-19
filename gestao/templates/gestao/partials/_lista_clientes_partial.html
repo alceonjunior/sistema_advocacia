@@ -1,0 +1,67 @@
+{% for cliente in filter.qs %}
+<div class="col-md-6 col-lg-4 mb-4">
+    <div class="card h-100 shadow-sm client-card">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-3">
+                <div class="avatar-circle
+                    {% if cliente.tipo_pessoa == 'PF' %}bg-primary-subtle text-primary{% else %}bg-secondary-subtle text-secondary{% endif %}">
+                    <i class="bi {% if cliente.tipo_pessoa == 'PF' %}bi-person-fill{% else %}bi-building-fill{% endif %} fs-5"></i>
+                </div>
+                <h5 class="card-title mb-0 fs-6 fw-bold">{{ cliente.nome_completo }}</h5>
+            </div>
+            <div>
+                <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2 btn-editar" data-pk="{{ cliente.pk }}" title="Editar Cliente">
+                    <i class="bi bi-pencil-fill"></i>
+                </button>
+
+                {% comment %}
+                  Aqui aplicamos a lógica recomendada:
+                  1. Verificamos se o cliente tem processos ou serviços ativos.
+                  2. Se tiver, o botão é renderizado como 'disabled' e com um 'title' explicativo.
+                  3. Senão, o botão normal de exclusão é renderizado.
+                {% endcomment %}
+                {% if cliente.processos_ativos_count > 0 or cliente.servicos_ativos_count > 0 %}
+                    <button type="button" class="btn btn-sm btn-outline-danger py-1 px-2"
+                            style="cursor: not-allowed;"
+                            disabled
+                            title="Não é possível excluir clientes com processos ou serviços ativos">
+                        <i class="bi bi-trash-fill"></i>
+                    </button>
+                {% else %}
+                    <button type="button" class="btn btn-sm btn-outline-danger py-1 px-2 btn-excluir"
+                            data-pk="{{ cliente.pk }}"
+                            data-nome="{{ cliente.nome_completo }}"
+                            title="Excluir Cliente">
+                        <i class="bi bi-trash-fill"></i>
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-body">
+            <p class="card-text text-muted small">
+                <i class="bi bi-person-badge"></i> {{ cliente.cpf_cnpj|default:"Não informado" }}<br>
+                <i class="bi bi-envelope-at"></i> {{ cliente.email|default:"Não informado" }}<br>
+                <i class="bi bi-telephone"></i> {{ cliente.telefone_principal|default:"Não informado" }}
+            </p>
+        </div>
+        <div class="card-footer bg-light-subtle d-flex justify-content-around small text-center">
+            <div>
+                <div class="fw-bold fs-5">{{ cliente.processos_ativos_count }}</div>
+                <div class="text-muted">Processo(s) Ativo(s)</div>
+            </div>
+            <div>
+                <div class="fw-bold fs-5">{{ cliente.servicos_ativos_count }}</div>
+                <div class="text-muted">Serviço(s) Ativo(s)</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% empty %}
+<div class="col-12">
+    <div class="text-center p-5 border rounded-3 bg-light">
+        <i class="bi bi-people fs-1 text-muted"></i>
+        <h5 class="mt-2">Nenhum cliente encontrado</h5>
+        <p class="text-muted">Tente ajustar os filtros ou adicione um novo cliente.</p>
+    </div>
+</div>
+{% endfor %}

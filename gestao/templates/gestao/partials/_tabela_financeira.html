@@ -1,0 +1,66 @@
+<table class="table table-sm table-striped table-hover">
+    <thead class="table-light">
+        <tr>
+            <th>Descrição</th>
+            <th>Vencimento</th>
+            <th>Valor Devido</th>
+            <th>Valor Pago</th>
+            <th class="text-danger">Saldo Devedor</th>
+            <th>Status</th>
+            <th>Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for lancamento in lancamentos %}
+            <tr data-bs-toggle="collapse" data-bs-target="#pagamentos-{{ lancamento.pk }}" aria-expanded="false" aria-controls="pagamentos-{{ lancamento.pk }}" style="cursor: pointer;" title="Clique para ver os pagamentos">
+                <td>{{ lancamento.descricao }}</td>
+                <td>{{ lancamento.data_vencimento|date:"d/m/Y" }}</td>
+                <td>R$ {{ lancamento.valor|floatformat:2 }}</td>
+                <td>R$ {{ lancamento.valor_pago|floatformat:2 }}</td>
+                <td class="fw-bold {% if lancamento.saldo_devedor > 0 %}text-danger{% else %}text-success{% endif %}">R$ {{ lancamento.saldo_devedor|floatformat:2 }}</td>
+                <td>
+                    <span class="badge {% if lancamento.status == 'PAGO' %}bg-success{% elif lancamento.status == 'ATRASADO' %}bg-danger{% elif lancamento.status == 'PARCIALMENTE_PAGO' %}bg-primary{% else %}bg-warning text-dark{% endif %}">{{ lancamento.get_status_display }}</span>
+                </td>
+                <td>
+                    <button type="button" class="btn btn-success btn-sm btn-registrar-pagamento" data-bs-toggle="modal" data-bs-target="#pagamentoModal" data-lancamento-id="{{ lancamento.pk }}" data-lancamento-descricao="{{ lancamento.descricao }}" data-saldo-devedor="{{ lancamento.saldo_devedor|floatformat:2 }}" data-form-url="{% url 'adicionar_pagamento' pk=lancamento.pk %}">
+                        + Pagamento
+                    </button>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="7" class="p-0" style="border:0;">
+                    <div class="collapse" id="pagamentos-{{ lancamento.pk }}">
+                        <div class="p-3 bg-light-subtle">
+                            <h6 class="ms-2">Extrato de Pagamentos</h6>
+                            {% if lancamento.pagamentos.all %}
+                                <table class="table table-sm table-borderless mb-0">
+                                    <tbody>
+                                        {% for pagamento in lancamento.pagamentos.all %}
+                                            <tr>
+                                                <td><small>Pago em: {{ pagamento.data_pagamento|date:"d/m/Y" }}</small></td>
+                                                <td><small>Valor: R$ {{ pagamento.valor_pago|floatformat:2 }}</small></td>
+                                                <td>
+                                                    <button type="button" class="btn btn-outline-primary btn-sm py-0 px-1 btn-editar-pagamento" data-bs-toggle="modal" data-bs-target="#pagamentoModal" data-form-url="{% url 'editar_pagamento' pk=pagamento.pk %}" data-valor-pago="{{ pagamento.valor_pago|stringformat:'f' }}" data-data-pagamento="{{ pagamento.data_pagamento|date:'Y-m-d' }}" data-forma-pagamento="{{ pagamento.forma_pagamento|default:'' }}" data-observacoes="{{ pagamento.observacoes|default:'' }}">
+                                                        Editar
+                                                    </button>
+                                                    <form method="post" action="{% url 'excluir_pagamento' pk=pagamento.pk %}" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir este pagamento?');">
+                                                        {% csrf_token %}
+                                                        <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-1">Excluir</button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            {% else %}
+                                <p class="text-muted mb-0 ms-2"><small>Nenhum pagamento registrado.</small></p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="7" class="text-muted text-center">Nenhum lançamento financeiro registrado.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>

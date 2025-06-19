@@ -1,0 +1,295 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Advocacia Manager{% endblock %}</title>
+
+    <!-- Estilos CSS -->
+    <!-- CORREÇÃO CRÍTICA: O atributo 'xintegrity' foi corrigido para 'integrity'. Este era o erro que quebrava a execução de scripts. -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" xintegrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+</head>
+<body class="bg-light">
+
+    <!-- Barra de Navegação Principal -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="{% url 'home' %}">Advocacia Manager</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item"><a class="nav-link" href="{% url 'dashboard' %}">Dashboard</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'lista_clientes' %}">Clientes</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'lista_processos' %}">Processos</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'lista_servicos' %}">Serviços</a></li>
+                </ul>
+                <span class="navbar-text text-white">Olá, {{ request.user.get_full_name|default:request.user.username }}</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Conteúdo Principal da Página -->
+    <main class="container mt-4">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- MODAL PRINCIPAL: Adicionar Serviço ou Contrato -->
+    <div class="modal fade" id="adicionarServicoModal" tabindex="-1" aria-labelledby="adicionarServicoModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="adicionarServicoModalLabel">Adicionar Novo Serviço ou Contrato</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="addServicoForm" action="{% url 'adicionar_servico' %}" method="post" novalidate>
+                    {% csrf_token %}
+                    <div class="modal-body">
+                        <h5 class="mb-3">1. Dados do Serviço</h5>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label" for="{{ form_servico.cliente.id_for_label }}">Cliente</label>
+                                <div class="input-group">
+                                    {{ form_servico.cliente }}
+                                    <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#adicionarClienteModal">+</button>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label" for="{{ form_servico.tipo_servico.id_for_label }}">Tipo de Serviço</label>
+                                <div class="input-group">
+                                    {{ form_servico.tipo_servico }}
+                                    <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#adicionarTipoServicoModal">+</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="{{ form_servico.responsavel.id_for_label }}" class="form-label">{{ form_servico.responsavel.label }}</label>
+                            {{ form_servico.responsavel }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="{{ form_servico.descricao.id_for_label }}" class="form-label">{{ form_servico.descricao.label }}</label>
+                            {{ form_servico.descricao }}
+                        </div>
+                        <div id="campo-prazo" class="mb-3">
+                            <label for="{{ form_servico.prazo.id_for_label }}" class="form-label">{{ form_servico.prazo.label }}</label>
+                            {{ form_servico.prazo }}
+                        </div>
+                        <div class="form-check mb-3">
+                            {{ form_servico.recorrente }}
+                            <label class="form-check-label" for="{{ form_servico.recorrente.id_for_label }}">É um serviço recorrente (assessoria, etc)?</label>
+                        </div>
+                        <hr>
+                        <h5 class="mb-3">2. Detalhes Financeiros (Honorários)</h5>
+                        {{ form_contrato.as_p }}
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Salvar Serviço</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL SECUNDÁRIO: Adicionar Cliente -->
+    <div class="modal fade" id="adicionarClienteModal" tabindex="-1" aria-labelledby="adicionarClienteModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5">Adicionar Novo Cliente</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="addClienteForm" action="{% url 'adicionar_cliente_modal' %}" method="post" novalidate>
+                    {% csrf_token %}
+                    <div class="modal-body">
+                        {{ form_cliente.as_p }}
+                        <div id="clienteFormErrors" class="text-danger small mt-2"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Salvar Cliente</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL SECUNDÁRIO: Adicionar Tipo de Serviço -->
+    <div class="modal fade" id="adicionarTipoServicoModal" tabindex="-1" aria-labelledby="adicionarTipoServicoModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5">Adicionar Novo Tipo de Serviço</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="addTipoServicoForm" action="{% url 'adicionar_tipo_servico_modal' %}" method="post" novalidate>
+                    {% csrf_token %}
+                    <div class="modal-body">
+                        {{ form_tipo_servico.as_p }}
+                        <div id="tipoServicoFormErrors" class="text-danger small mt-2"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Salvar Tipo</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+
+    {% block javascript %}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+
+        const servicoModalEl = document.getElementById('adicionarServicoModal');
+        const clienteModalEl = document.getElementById('adicionarClienteModal');
+        const tipoServicoModalEl = document.getElementById('adicionarTipoServicoModal');
+
+        const addClienteForm = document.getElementById('addClienteForm');
+        const addTipoServicoForm = document.getElementById('addTipoServicoForm');
+
+        function renderErrors(targetDiv, errorsObj) {
+            if (!targetDiv) return;
+            targetDiv.innerHTML = '';
+            if (!errorsObj) return;
+
+            let html = '<ul class="list-unstyled mb-0">';
+            for (const field in errorsObj) {
+                if (Array.isArray(errorsObj[field])) {
+                    errorsObj[field].forEach(e => {
+                        const message = typeof e === 'object' ? e.message : e;
+                        html += `<li><small>${message}</small></li>`;
+                    });
+                }
+            }
+            targetDiv.innerHTML = html + '</ul>';
+        }
+
+        function applyMasks() {
+            const cpfCnpjInput = $('#adicionarClienteModal #id_cpf_cnpj');
+            if (!cpfCnpjInput.length) return;
+            $('#adicionarClienteModal #id_telefone_principal').mask('(00) 00000-0000');
+            cpfCnpjInput.mask('000.000.000-00', {
+                onKeyPress: function(cpfcnpj, e, field, options) {
+                    const masks = ['000.000.000-009', '00.000.000/0000-00'];
+                    const mask = (cpfcnpj.length > 14) ? masks[1] : masks[0];
+                    cpfCnpjInput.mask(mask, options);
+                }
+            });
+        }
+
+        if (servicoModalEl) {
+            $(servicoModalEl).on('shown.bs.modal', function() {
+                $(this).find('#id_cliente, #id_tipo_servico, #id_responsavel').select2({
+                    theme: "bootstrap-5",
+                    width: '100%',
+                    dropdownParent: $(this)
+                });
+            });
+        }
+
+        if (clienteModalEl) {
+            clienteModalEl.addEventListener('shown.bs.modal', function () {
+                document.getElementById('addClienteForm')?.reset();
+                document.getElementById('clienteFormErrors').innerHTML = '';
+                applyMasks();
+            });
+
+            // Lógica para retornar ao modal principal
+            clienteModalEl.addEventListener('hidden.bs.modal', function() {
+                const servicoModalInstance = bootstrap.Modal.getInstance(servicoModalEl);
+                if (servicoModalInstance) {
+                    setTimeout(() => servicoModalInstance.show(), 150);
+                }
+            });
+        }
+
+        if (tipoServicoModalEl) {
+             tipoServicoModalEl.addEventListener('shown.bs.modal', function () {
+                document.getElementById('addTipoServicoForm')?.reset();
+                document.getElementById('tipoServicoFormErrors').innerHTML = '';
+            });
+
+            // Lógica para retornar ao modal principal
+            tipoServicoModalEl.addEventListener('hidden.bs.modal', function() {
+                 const servicoModalInstance = bootstrap.Modal.getInstance(servicoModalEl);
+                 if (servicoModalInstance) {
+                    setTimeout(() => servicoModalInstance.show(), 150);
+                 }
+            });
+        }
+
+        if (addClienteForm) {
+            addClienteForm.addEventListener('submit', function(e) {
+                e.preventDefault(); // Garante que a submissão AJAX aconteça
+                $('#adicionarClienteModal #id_telefone_principal').unmask();
+                $('#adicionarClienteModal #id_cpf_cnpj').unmask();
+
+                fetch(addClienteForm.action, {
+                    method: 'POST',
+                    body: new FormData(addClienteForm),
+                    headers: { 'X-CSRFToken': addClienteForm.querySelector('[name="csrfmiddlewaretoken"]').value }
+                })
+                .then(response => {
+                    if (!response.ok) return response.json().then(err => Promise.reject(err));
+                    return response.json();
+                })
+                .then(data => {
+                    const clienteSelect = document.getElementById('id_cliente');
+                    const newOption = new Option(data.nome, data.pk, true, true);
+                    $(clienteSelect).append(newOption).trigger('change');
+
+                    const clienteModalInstance = bootstrap.Modal.getInstance(clienteModalEl);
+                    clienteModalInstance?.hide(); // Esconde o modal de cliente, o que vai acionar o evento 'hidden.bs.modal'
+                })
+                .catch(errorData => {
+                    console.error("Erro no fetch do cliente:", errorData);
+                    renderErrors(document.getElementById('clienteFormErrors'), errorData.errors || { '__all__': [{ message: 'Erro de rede ou servidor.' }] });
+                    applyMasks();
+                });
+            });
+        }
+
+        if (addTipoServicoForm) {
+            addTipoServicoForm.addEventListener('submit', function(e) {
+                e.preventDefault(); // Garante que a submissão AJAX aconteça
+
+                fetch(addTipoServicoForm.action, {
+                    method: 'POST',
+                    body: new FormData(addTipoServicoForm),
+                    headers: { 'X-CSRFToken': addTipoServicoForm.querySelector('[name="csrfmiddlewaretoken"]').value }
+                })
+                .then(response => {
+                   if (!response.ok) return response.json().then(err => Promise.reject(err));
+                   return response.json();
+                })
+                .then(data => {
+                    const tipoServicoSelect = document.getElementById('id_tipo_servico');
+                    const newOption = new Option(data.nome, data.pk, true, true);
+                    $(tipoServicoSelect).append(newOption).trigger('change');
+
+                    const tipoServicoModalInstance = bootstrap.Modal.getInstance(tipoServicoModalEl);
+                    tipoServicoModalInstance?.hide(); // Esconde o modal de tipo de serviço, o que vai acionar o evento 'hidden.bs.modal'
+                })
+                .catch(errorData => {
+                    console.error("Erro no fetch do tipo de serviço:", errorData);
+                    renderErrors(document.getElementById('tipoServicoFormErrors'), errorData.errors || { '__all__': [{ message: 'Erro de rede ou servidor.' }] });
+                });
+            });
+        }
+    });
+    </script>
+    {% endblock %}
+
+</body>
+</html>

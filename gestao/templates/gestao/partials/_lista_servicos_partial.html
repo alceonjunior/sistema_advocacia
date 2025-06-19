@@ -1,0 +1,51 @@
+{% for servico in filter.qs %}
+    {# A lógica de status agora está dentro do atributo class, corrigindo o erro de sintaxe #}
+    <div class="card service-card mb-3 shadow-sm {% if servico.concluido %}status-concluido{% elif servico.recorrente and servico.ativo %}status-recorrente{% elif not servico.ativo %}status-inativo{% else %}status-andamento{% endif %}">
+        <a href="{% url 'detalhe_servico' pk=servico.pk %}" class="stretched-link text-decoration-none text-dark"></a>
+        <div class="card-body p-3">
+            <div class="row g-0">
+                <div class="col-lg-9">
+                    <h5 class="mb-1">{{ servico.descricao }}</h5>
+                    <p class="mb-3 text-muted">
+                        <i class="bi bi-person"></i> Cliente: <strong>{{ servico.cliente.nome_completo }}</strong>
+                    </p>
+
+                    <dl class="row small text-muted mb-0">
+                        <dt class="col-sm-4 col-md-3" title="Tipo de Serviço"><i class="bi bi-bookmark-star"></i> Tipo:</dt>
+                        <dd class="col-sm-8 col-md-9">{{ servico.tipo_servico.nome }}</dd>
+
+                        <dt class="col-sm-4 col-md-3" title="Responsável pelo Serviço"><i class="bi bi-person-check"></i> Responsável:</dt>
+                        <dd class="col-sm-8 col-md-9">{{ servico.responsavel.get_full_name|default:servico.responsavel.username|default:"N/A" }}</dd>
+                    </dl>
+                </div>
+
+                <div class="col-lg-3 status-prazo-block d-flex flex-column justify-content-center">
+                    <div class="mb-2">
+                        <h6 class="text-muted small mb-1">STATUS</h6>
+                        {% if servico.concluido %}
+                            <span class="badge fs-6 bg-success-subtle text-success-emphasis rounded-pill w-100" title="Serviço finalizado">Concluído</span>
+                        {% elif servico.recorrente and servico.ativo %}
+                            <span class="badge fs-6 bg-info-subtle text-info-emphasis rounded-pill w-100" title="Serviço de pagamento recorrente e ativo">Recorrente</span>
+                        {% elif not servico.ativo %}
+                            <span class="badge fs-6 bg-danger-subtle text-danger-emphasis rounded-pill w-100" title="Contrato de serviço inativo">Inativo</span>
+                        {% else %}
+                            <span class="badge fs-6 bg-primary-subtle text-primary-emphasis rounded-pill w-100" title="Serviço em execução">Em Andamento</span>
+                        {% endif %}
+                    </div>
+                    {% if servico.prazo and not servico.concluido %}
+                        <div class="mt-2">
+                            <h6 class="text-muted small mb-1">PRAZO FINAL</h6>
+                            <p class="mb-0 fw-bold text-danger"><i class="bi bi-alarm"></i> {{ servico.prazo|date:"d/m/Y" }}</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+{% empty %}
+    <div class="text-center p-5 border rounded-3 bg-light">
+        <i class="bi bi-inbox fs-1 text-muted"></i>
+        <h5 class="mt-2">Nenhum serviço encontrado</h5>
+        <p class="text-muted">Tente ajustar os filtros ou adicione um novo serviço.</p>
+    </div>
+{% endfor %}

@@ -1,0 +1,106 @@
+{% extends 'gestao/base.html' %}
+
+{% block title %}Meus Processos{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<style>
+    /* Estilos para o estado de carregamento e melhor visual dos cards */
+    .process-card { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
+    .process-card:hover { transform: translateY(-5px); box-shadow: 0 0.5rem 1.5rem rgba(0,0,0,0.1); }
+    #process-list-container.loading { opacity: 0.5; position: relative; transition: opacity 0.3s; min-height: 200px; }
+    #process-list-container.loading::after {
+        content: ''; position: absolute; top: 40%; left: 50%; width: 3rem; height: 3rem; margin-left: -1.5rem;
+        border: 5px solid #f3f3f3; border-top: 5px solid #0d6efd; border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h2 d-flex align-items-center gap-2">
+        <i class="bi bi-folder-fill text-primary"></i> Painel de Processos
+    </h1>
+    <a href="{% url 'adicionar_processo' %}" class="btn btn-primary">+ Adicionar Novo Processo</a>
+</div>
+
+<div class="row mb-4">
+    <div class="col-6 col-lg-3 mb-3"><div class="card text-center h-100"><div class="card-body"><h6 class="text-muted small">TOTAL</h6><div class="fs-2 fw-bold">{{ stats.total }}</div></div></div></div>
+    <div class="col-6 col-lg-3 mb-3"><div class="card text-center h-100"><div class="card-body"><h6 class="text-muted small">ATIVOS</h6><div class="fs-2 fw-bold text-success">{{ stats.ativos }}</div></div></div></div>
+    <div class="col-6 col-lg-3 mb-3"><div class="card text-center h-100"><div class="card-body"><h6 class="text-muted small">SUSPENSOS</h6><div class="fs-2 fw-bold text-warning">{{ stats.suspensos }}</div></div></div></div>
+    <div class="col-6 col-lg-3 mb-3"><div class="card text-center h-100"><div class="card-body"><h6 class="text-muted small">ARQUIVADOS</h6><div class="fs-2 fw-bold text-secondary">{{ stats.arquivados }}</div></div></div></div>
+</div>
+
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0 d-flex align-items-center gap-2"><i class="bi bi-funnel-fill"></i> Filtros e Busca</h5>
+    </div>
+    <div class="card-body">
+        <form id="filter-form" class="row g-3 align-items-end">
+            <div class="col-md-5">
+                <label for="{{ filter.form.busca_geral.id_for_label }}" class="form-label">Busca Geral por Nº ou Parte</label>
+                {{ filter.form.busca_geral }}
+            </div>
+            <div class="col-md-3">
+                <label for="{{ filter.form.status_processo.id_for_label }}" class="form-label">Status</label>
+                {{ filter.form.status_processo }}
+            </div>
+            <div class="col-md-4">
+                <label for="{{ filter.form.tipo_acao__area.id_for_label }}" class="form-label">Área</label>
+                {{ filter.form.tipo_acao__area }}
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="process-list-container" class="row">
+    {% include 'gestao/partials/_lista_processos_partial.html' %}
+</div>
+
+{% endblock %}
+
+
+{% block javascript %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const filterForm = document.getElementById('filter-form');
+    const processListContainer = document.getElementById('process-list-container');
+    let debounceTimer;
+
+    function updateProcessList() {
+        processListContainer.classList.add('loading');
+        const formData = new FormData(filterForm);
+        const params = new URLSearchParams(formData);
+        const url = `{% url 'lista_processos' %}?${params.toString()}`;
+
+        // Atualiza a URL no navegador sem recarregar a página
+        history.pushState(null, '', url);
+
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(response => response.text())
+            .then(html => {
+                // Atualiza APENAS o container com os cards
+                processListContainer.innerHTML = html;
+            })
+            .finally(() => {
+                processListContainer.classList.remove('loading');
+            });
+    }
+
+    if (filterForm) {
+        filterForm.querySelectorAll('input, select').forEach(input => {
+            // Usa 'input' para campos de texto e 'change' para selects
+            const eventType = input.tagName.toLowerCase() === 'select' ? 'change' : 'input';
+
+            input.addEventListener(eventType, function() {
+                clearTimeout(debounceTimer);
+                // Debounce para evitar requisições a cada tecla digitada
+                debounceTimer = setTimeout(updateProcessList, 400);
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

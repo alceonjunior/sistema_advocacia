@@ -1,0 +1,77 @@
+{# gestao/templates/gestao/partials/_scripts_modais.html #}
+{# Este arquivo contém toda a lógica JS para os modais globais #}
+
+// --- INSTÂNCIAS DOS MODAIS E ELEMENTOS ---
+const servicoModalEl = document.getElementById('adicionarServicoModal');
+const clienteModalEl = document.getElementById('adicionarClienteModal');
+const tipoServicoModalEl = document.getElementById('adicionarTipoServicoModal');
+
+const servicoModal = servicoModalEl ? new bootstrap.Modal(servicoModalEl) : null;
+const clienteModal = clienteModalEl ? new bootstrap.Modal(clienteModalEl) : null;
+const tipoServicoModal = tipoServicoModalEl ? new bootstrap.Modal(tipoServicoModalEl) : null;
+
+// --- ATIVAÇÃO DO SELECT2 ---
+if (servicoModalEl) {
+    $(servicoModalEl).on('shown.bs.modal', function () {
+        $(this).find('#id_cliente, #id_tipo_servico').select2({
+            theme: "bootstrap-5",
+            dropdownParent: $(this)
+        });
+    });
+}
+
+// --- LÓGICA DO SUB-MODAL DE CLIENTE ---
+const addClienteForm = document.getElementById('addClienteForm');
+const saveClienteBtn = document.getElementById('saveClienteBtn');
+if (saveClienteBtn && addClienteForm) {
+    saveClienteBtn.addEventListener('click', function() {
+        const clienteSelect = $('#addServicoForm #id_cliente');
+        const clienteFormErrors = document.getElementById('clienteFormErrors');
+        const url = "{% url 'adicionar_cliente_modal' %}";
+
+        fetch(url, {
+            method: 'POST',
+            body: new FormData(addClienteForm),
+            headers: {'X-CSRFToken': addClienteForm.querySelector('[name="csrfmiddlewaretoken"]').value}
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const newOption = new Option(data.nome, data.pk, true, true);
+                clienteSelect.append(newOption).trigger('change');
+                clienteModal.hide();
+            } else {
+                clienteFormErrors.innerHTML = '<small>'+JSON.parse(data.errors).cpf_cnpj[0].message+'</small>';
+            }
+        });
+    });
+}
+
+// --- LÓGICA DO SUB-MODAL DE TIPO DE SERVIÇO ---
+const saveTipoServicoBtn = document.getElementById('saveTipoServicoBtn');
+if (saveTipoServicoBtn) {
+    saveTipoServicoBtn.addEventListener('click', function() {
+        const addTipoServicoForm = document.getElementById('addTipoServicoForm');
+        const tipoServicoSelect = $('#addServicoForm #id_tipo_servico');
+        const url = "{% url 'adicionar_tipo_servico_modal' %}";
+        fetch(url, {
+            method: 'POST', body: new FormData(addTipoServicoForm),
+            headers: {'X-CSRFToken': addTipoServicoForm.querySelector('[name="csrfmiddlewaretoken"]').value}
+        })
+        .then(r => r.json()).then(d => {
+            if (d.status === 'success') {
+                const newOption = new Option(d.nome, d.pk, true, true);
+                tipoServicoSelect.append(newOption).trigger('change');
+                tipoServicoModal.hide();
+            } else { /* lógica de erro */ }
+        });
+    });
+}
+
+// --- LÓGICA PARA REABRIR O MODAL PAI ---
+if (clienteModalEl && servicoModal) {
+    clienteModalEl.addEventListener('hidden.bs.modal', () => setTimeout(() => servicoModal.show(), 150));
+}
+if (tipoServicoModalEl && servicoModal) {
+    tipoServicoModalEl.addEventListener('hidden.bs.modal', () => setTimeout(() => servicoModal.show(), 150));
+}

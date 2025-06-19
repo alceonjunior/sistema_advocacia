@@ -1,0 +1,134 @@
+{% extends 'gestao/base.html' %}
+
+{% block title %}Adicionar Novo Processo{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+<form method="post" novalidate>
+    {% csrf_token %}
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2 d-flex align-items-center gap-2">
+            <i class="bi bi-folder-plus text-primary"></i>
+            Adicionar Novo Processo
+        </h1>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">1. Informações Gerais do Processo</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">{{ form.tipo_acao.label_tag }}{{ form.tipo_acao }}</div>
+                <div class="col-md-4">{{ form.numero_processo.label_tag }}{{ form.numero_processo }}</div>
+            </div>
+            <div class="mt-3">{{ form.descricao_caso.label_tag }}{{ form.descricao_caso }}</div>
+            </div>
+    </div>
+
+    {{ formset.management_form }}
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-success-subtle d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 text-success-emphasis">2. Polo Ativo (Autores)</h5>
+                    <button type="button" id="add-autor-form" class="btn btn-sm btn-success">
+                        <i class="bi bi-plus-circle"></i> Adicionar Autor
+                    </button>
+                </div>
+                <div class="card-body" id="autores-form-list">
+                    </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-danger-subtle d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 text-danger-emphasis">3. Polo Passivo (Réus)</h5>
+                    <button type="button" id="add-reu-form" class="btn btn-sm btn-danger">
+                        <i class="bi bi-plus-circle"></i> Adicionar Réu
+                    </button>
+                </div>
+                <div class="card-body" id="reus-form-list">
+                    </div>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="d-flex justify-content-end gap-2 mt-4">
+        <a href="{% url 'lista_processos' %}" class="btn btn-secondary">Cancelar</a>
+        <button type="submit" class="btn btn-primary px-4">Salvar Processo</button>
+    </div>
+</form>
+
+<div id="empty-form" style="display: none;">
+    <div class="parte-form mb-3 p-3 border rounded bg-light position-relative">
+        <button type="button" class="btn-close position-absolute top-0 end-0 p-2" aria-label="Close" onclick="this.closest('.parte-form').remove()"></button>
+        {{ formset.empty_form.as_p }}
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block javascript %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Seleciona os botões e os containers
+    const addAutorButton = document.getElementById('add-autor-form');
+    const addReuButton = document.getElementById('add-reu-form');
+    const autoresList = document.getElementById('autores-form-list');
+    const reusList = document.getElementById('reus-form-list');
+
+    // Pega o template do formulário vazio e o input de gerenciamento
+    const emptyFormTemplate = document.getElementById('empty-form').innerHTML;
+    const totalFormsInput = document.querySelector('#id_partes-TOTAL_FORMS');
+    let formNum = parseInt(totalFormsInput.value);
+
+    // Função reutilizável para adicionar um novo formulário de parte
+    function addForm(container, tipoParticipacao) {
+        // Substitui o prefixo no template do formulário
+        let newFormHtml = emptyFormTemplate.replace(/__prefix__/g, formNum);
+
+        // Cria um elemento temporário para manipular o novo formulário
+        let tempDiv = document.createElement('div');
+        tempDiv.innerHTML = newFormHtml;
+
+        // Encontra o campo 'tipo_participacao' e define o valor (AUTOR ou REU)
+        let tipoSelect = tempDiv.querySelector('select[name$="tipo_participacao"]');
+        if (tipoSelect) {
+            tipoSelect.value = tipoParticipacao;
+            // Opcional: Desabilitar o campo para o usuário não mudar
+            // tipoSelect.disabled = true;
+        }
+
+        // Adiciona o novo formulário ao container correto
+        container.append(tempDiv.firstElementChild);
+
+        // Atualiza a contagem de formulários no formset de gerenciamento
+        formNum++;
+        totalFormsInput.value = formNum;
+    }
+
+    // Adiciona os eventos de clique aos botões
+    addAutorButton.addEventListener('click', () => addForm(autoresList, 'AUTOR'));
+    addReuButton.addEventListener('click', () => addForm(reusList, 'REU'));
+
+    // Inicia a tela com um formulário para autor e um para réu
+    addForm(autoresList, 'AUTOR');
+    addForm(reusList, 'REU');
+
+    // Remove o formulário "extra" original que o Django cria, pois já o usamos como template
+    const initialExtraForm = document.querySelector('#partes-form-list .parte-form');
+    if(initialExtraForm) {
+        // Este passo é um pouco mais complexo, a lógica acima já o substitui.
+        // O JS agora cria os formulários iniciais, ignorando o 'extra=1' do Django.
+    }
+});
+</script>
+{% endblock %}

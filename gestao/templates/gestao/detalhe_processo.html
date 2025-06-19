@@ -1,0 +1,222 @@
+{% extends 'gestao/base.html' %}
+
+{% block title %}Detalhe do Processo {{ processo.numero_processo|default:"N/A" }}{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h2 mb-0">Detalhes do Processo</h1>
+        <p class="text-muted mb-0">Nº: {{ processo.numero_processo|default:"Ainda sem número" }}</p>
+    </div>
+    <div>
+        <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#gerenciarPartesModal" data-form-url="{% url 'gerenciar_partes' processo_pk=processo.pk %}">
+            Gerenciar Partes
+        </button>
+        <a href="{% url 'pagina_de_calculos' processo_pk=processo.pk %}" class="btn btn-success">
+    <i class="bi bi-calculator"></i> Cálculos Judiciais
+</a>
+
+
+
+
+        <a href="{% url 'editar_processo' pk=processo.pk %}" class="btn btn-warning">Editar Dados Gerais</a>
+        <a href="{% url 'lista_processos' %}" class="btn btn-secondary">Voltar</a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-7">
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0">Dados Gerais</h5></div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-2"><strong>Tipo de Ação:</strong><br>{{ processo.tipo_acao|default:"Não especificado" }}</div>
+                    <div class="col-md-6 mb-2"><strong>Status:</strong><br><span class="badge bg-primary">{{ processo.get_status_processo_display }}</span></div>
+                    <div class="col-md-6 mb-2"><strong>Adv. Responsável:</strong><br>
+                        {% if processo.advogado_responsavel %}
+                            {{ processo.advogado_responsavel.get_full_name|default:processo.advogado_responsavel.username }}
+                        {% else %}
+                            Não definido
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6 mb-2"><strong>Vara/Comarca:</strong><br>{{ processo.vara_comarca_orgao|default:"N/A" }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="partes-card-container" class="card mb-4">
+            {% include 'gestao/partials/_card_partes_envolvidas.html' %}
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">Visão Geral e Ações</h5></div>
+            <div class="list-group list-group-flush">
+                <a href="#financeiro" class="list-group-item list-group-item-action">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h6 class="mb-1">Financeiro</h6>
+                        <span class="badge bg-secondary rounded-pill">{{ processo.lancamentos.count }} lançamento(s)</span>
+                    </div>
+                    <small>Consultar extrato e registrar pagamentos.</small>
+                </a>
+                <a href="#movimentacoes" class="list-group-item list-group-item-action">
+                     <div class="d-flex w-100 justify-content-between">
+                        <h6 class="mb-1">Movimentações</h6>
+                        <span class="badge bg-secondary rounded-pill">{{ processo.movimentacoes.count }} registro(s)</span>
+                    </div>
+                    <small>Ver histórico e adicionar andamentos.</small>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<hr class="my-4">
+
+<div class="card mb-4" id="financeiro">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h4 class="h5 mb-0">Lançamentos Financeiros</h4>
+        <div>
+            <a href="{% url 'adicionar_contrato_processo' processo_pk=processo.pk %}" class="btn btn-sm btn-outline-success">+ Contrato</a>
+        </div>
+    </div>
+    <div class="card-body px-2 py-2">
+        {% with processo.lancamentos.all as lancamentos %}
+            {% include 'gestao/partials/_tabela_financeira.html' %}
+        {% endwith %}
+    </div>
+</div>
+
+<div class="card" id="movimentacoes">
+    {% with processo.movimentacoes.all as movimentacoes %}
+        {% include 'gestao/partials/_historico_movimentacoes.html' %}
+    {% endwith %}
+</div>
+
+<div class="modal fade" id="gerenciarPartesModal" tabindex="-1" aria-labelledby="gerenciarPartesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h1 class="modal-title fs-5" id="gerenciarPartesModalLabel">Gerenciar Partes do Processo</h1>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="gerenciarPartesModalBody">
+                <div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include 'gestao/partials/_modal_pagamento.html' %}
+
+{% endblock %}
+
+
+{% block javascript %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const gerenciarPartesModal = document.getElementById('gerenciarPartesModal');
+    const modalBody = document.getElementById('gerenciarPartesModalBody');
+
+    // Função que será chamada DEPOIS que o conteúdo do modal for carregado
+    function setupModalForm() {
+        const form = document.getElementById('gerenciarPartesForm');
+        if (!form) return;
+
+        const addButtons = form.querySelectorAll('.btn-add-parte');
+        const emptyFormTemplateHtml = document.getElementById('empty-form-template')?.innerHTML;
+        const totalFormsInput = form.querySelector('input[name="partes-TOTAL_FORMS"]');
+
+        // Adiciona evento aos botões de ADICIONAR
+        addButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tipo = btn.dataset.tipo;
+                const targetList = (tipo === 'AUTOR') ? form.querySelector('#autores-list') : form.querySelector('#reus-list');
+                let formNum = parseInt(totalFormsInput.value);
+
+                let newFormHtml = emptyFormTemplateHtml.replace(/__prefix__/g, formNum);
+                targetList.insertAdjacentHTML('beforeend', newFormHtml);
+
+                const newFormElement = targetList.lastElementChild;
+                newFormElement.querySelector('select[name$="tipo_participacao"]').value = tipo;
+
+                $(newFormElement).find('.form-select').select2({
+                    theme: "bootstrap-5",
+                    width: '100%',
+                    dropdownParent: $('#gerenciarPartesModal')
+                });
+
+                totalFormsInput.value = formNum + 1;
+            });
+        });
+
+        // Adiciona evento para os botões de REMOVER (usando delegação)
+        form.addEventListener('click', function(e) {
+            if (e.target && e.target.classList.contains('btn-remove-parte')) {
+                const cardToRemove = e.target.closest('.parte-card');
+                const deleteCheckbox = cardToRemove.querySelector('input[type="checkbox"][name$="DELETE"]');
+                if (deleteCheckbox) {
+                    deleteCheckbox.checked = true;
+                    cardToRemove.style.display = 'none';
+                } else {
+                    cardToRemove.remove();
+                }
+            }
+        });
+
+        // Inicializa o Select2 nos campos já existentes
+        $(form).find('.form-select').select2({
+            theme: "bootstrap-5",
+            width: '100%',
+            dropdownParent: $('#gerenciarPartesModal')
+        });
+    }
+
+    if (gerenciarPartesModal) {
+        // 1. Carregar o formulário no modal quando ele for aberto
+        gerenciarPartesModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const formUrl = button.getAttribute('data-form-url');
+            modalBody.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+
+            fetch(formUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(response => response.text())
+                .then(html => {
+                    modalBody.innerHTML = html;
+                    // 2. SOMENTE DEPOIS que o HTML foi inserido, chama a função para ativar os botões
+                    setupModalForm();
+                });
+        });
+
+        // 3. Lidar com o envio do formulário DENTRO do modal via AJAX
+        modalBody.addEventListener('submit', function(e) {
+            if (e.target.id === 'gerenciarPartesForm') {
+                e.preventDefault();
+                const form = e.target;
+                const formData = new FormData(form);
+                fetch(form.action, { method: 'POST', body: formData, headers: {'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': formData.get('csrfmiddlewaretoken')} })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        bootstrap.Modal.getInstance(gerenciarPartesModal).hide();
+                        const partialUrl = "{% url 'detalhe_processo_partes_partial' processo_pk=processo.pk %}";
+                        fetch(partialUrl)
+                            .then(response => response.text())
+                            .then(html => {
+                                document.getElementById('partes-card-container').innerHTML = html;
+                            });
+                    } else {
+                        alert('Houve erros no formulário.');
+                        console.error('Erros:', data.errors);
+                    }
+                });
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,110 @@
+{% extends 'gestao/base.html' %}
+
+{% block title %}Editar Serviço{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3>Editar Serviço: {{ servico.descricao }}</h3>
+        <p class="mb-0 text-muted">Cliente: {{ servico.cliente }} | Tipo: {{ servico.tipo_servico }}</p>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+
+            {{ form.non_field_errors }}
+
+            <!-- Campos Principais -->
+            <div class="mb-3">
+                <label for="{{ form.responsavel.id_for_label }}" class="form-label">Responsável pelo Serviço</label>
+                {{ form.responsavel }}
+            </div>
+
+            <div class="mb-3">
+                <label for="{{ form.descricao.id_for_label }}" class="form-label">Descrição</label>
+                {{ form.descricao }}
+            </div>
+
+            <div class="mb-3">
+                <label for="{{ form.data_inicio.id_for_label }}" class="form-label">Data de Início</label>
+                {{ form.data_inicio }}
+            </div>
+
+            <hr>
+
+            <!-- Lógica de campos condicionais -->
+            <div class="form-check mb-3">
+                {{ form.recorrente }}
+                <label for="{{ form.recorrente.id_for_label }}" class="form-check-label fw-bold">É um serviço recorrente (mensal)?</label>
+            </div>
+
+            <!-- Campos para SERVIÇO ÚNICO (não recorrente) -->
+            <div id="campo-nao-recorrente">
+                <div class="mb-3">
+                    <label for="{{ form.prazo.id_for_label }}" class="form-label">Prazo de Conclusão</label>
+                    {{ form.prazo }}
+                </div>
+            </div>
+
+            <!-- Campos para SERVIÇO RECORRENTE -->
+            <div id="campos-recorrente">
+                <div class="mb-3">
+                    <label for="{{ form.data_encerramento.id_for_label }}" class="form-label">Data Final do Contrato</label>
+                    {{ form.data_encerramento }}
+                </div>
+            </div>
+
+            <hr>
+
+            <!-- Status do Serviço -->
+            <div class="d-flex gap-4">
+                <div class="form-check form-switch">
+                    {{ form.concluido }}
+                    <label class="form-check-label" for="{{ form.concluido.id_for_label }}">Serviço Concluído</label>
+                </div>
+                <div class="form-check form-switch">
+                    {{ form.ativo }}
+                    <label class="form-check-label" for="{{ form.ativo.id_for_label }}">Contrato Ativo</label>
+                </div>
+            </div>
+
+            <!-- Botões -->
+            <div class="mt-4">
+                <button type="submit" class="btn btn-success">Salvar Alterações</button>
+                <a href="{% url 'detalhe_servico' pk=servico.pk %}" class="btn btn-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block javascript %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const recorrenteCheckbox = document.getElementById('id_recorrente');
+    const camposNaoRecorrente = document.getElementById('campo-nao-recorrente');
+    const camposRecorrente = document.getElementById('campos-recorrente');
+
+    function toggleServicoFields() {
+        if (!recorrenteCheckbox) return;
+
+        if (recorrenteCheckbox.checked) {
+            // Se for recorrente, exibe os campos de mensalidade e oculta o de prazo único
+            camposNaoRecorrente.style.display = 'none';
+            camposRecorrente.style.display = 'block';
+        } else {
+            // Se NÃO for recorrente, exibe o prazo único e oculta os de mensalidade
+            camposNaoRecorrente.style.display = 'block';
+            camposRecorrente.style.display = 'none';
+        }
+    }
+
+    // Garante que a lógica seja executada ao carregar a página e ao clicar no checkbox
+    if (recorrenteCheckbox) {
+        toggleServicoFields();
+        recorrenteCheckbox.addEventListener('change', toggleServicoFields);
+    }
+});
+</script>
+{% endblock %}

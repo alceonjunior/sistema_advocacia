@@ -1,0 +1,20 @@
+{% extends 'gestao/base.html' %}
+
+{% block title %}Editar Processo{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3>Editar Processo: {{ processo.numero_processo|default:"Sem Número" }}</h3>
+        <p class="mb-0">Cliente: {{ processo.cliente.nome_completo }}</p>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit" class="btn btn-success mt-3">Salvar Alterações</button>
+            <a href="{% url 'detalhe_processo' pk=processo.pk %}" class="btn btn-secondary mt-3">Cancelar</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

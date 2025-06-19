@@ -1,0 +1,45 @@
+{% for processo in filter.qs %}
+<div class="col-md-6 mb-4">
+    <div class="card h-100 shadow-sm process-card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 text-primary fw-bold">
+                <i class="bi bi-folder2-open"></i>
+                {{ processo.numero_processo|default:"Processo Sem Número" }}
+            </h5>
+            {% if processo.status_processo == 'ATIVO' %}
+                <span class="badge bg-success-subtle border border-success-subtle text-success-emphasis rounded-pill fs-6">Ativo</span>
+            {% elif processo.status_processo == 'SUSPENSO' %}
+                <span class="badge bg-warning-subtle border border-warning-subtle text-warning-emphasis rounded-pill fs-6">Suspenso</span>
+            {% elif processo.status_processo == 'ARQUIVADO' %}
+                <span class="badge bg-secondary-subtle border border-secondary-subtle text-secondary-emphasis rounded-pill fs-6">Arquivado</span>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            <p class="card-text mb-2">
+                <strong class="text-success">Polo Ativo:</strong> {{ processo.get_polo_ativo_display|default:"Não definido" }}
+            </p>
+            <p class="card-text">
+                <strong class="text-danger">Polo Passivo:</strong> {{ processo.get_polo_passivo_display|default:"Não definido" }}
+            </p>
+            <hr>
+            <div class="small text-muted">
+                <p class="mb-1"><i class="bi bi-bookmark-star me-2"></i><strong>Ação:</strong> {{ processo.tipo_acao|default:"Não especificado" }}</p>
+                <p class="mb-0"><i class="bi bi-person-check me-2"></i><strong>Responsável:</strong> {{ processo.advogado_responsavel|default:"N/A" }}</p>
+            </div>
+        </div>
+        <div class="card-footer bg-light text-center">
+            <a href="{% url 'detalhe_processo' pk=processo.pk %}" class="btn btn-sm btn-outline-primary stretched-link">
+                Ver Detalhes do Processo
+            </a>
+        </div>
+    </div>
+</div>
+{% empty %}
+<div class="col-12">
+    <div class="text-center p-5 border rounded-3 bg-light">
+        <i class="bi bi-inbox fs-1 text-muted"></i>
+        <h5 class="mt-2">Nenhum processo encontrado</h5>
+        <p class="text-muted">Tente ajustar os filtros ou adicione um novo processo.</p>
+    </div>
+</div>
+{% endfor %}

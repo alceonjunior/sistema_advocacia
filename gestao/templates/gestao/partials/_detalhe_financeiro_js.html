@@ -1,0 +1,30 @@
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const pagamentoModal = document.getElementById('pagamentoModal');
+    if (pagamentoModal) {
+        pagamentoModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const modalTitle = pagamentoModal.querySelector('.modal-title');
+            const modalForm = pagamentoModal.querySelector('#pagamentoForm');
+            const modalSaldoDevedorContainer = pagamentoModal.querySelector('#modalSaldoDevedorContainer');
+            const modalSaldoDevedor = pagamentoModal.querySelector('#modalSaldoDevedor');
+            modalForm.reset();
+
+            if (button.classList.contains('btn-editar-pagamento')) {
+                modalTitle.textContent = 'Editar Pagamento';
+                modalSaldoDevedorContainer.style.display = 'none';
+                modalForm.setAttribute('action', button.getAttribute('data-form-url'));
+                modalForm.querySelector('#id_valor_pago').value = parseFloat(button.getAttribute('data-valor-pago')).toFixed(2);
+                modalForm.querySelector('#id_data_pagamento').value = button.getAttribute('data-data-pagamento');
+                modalForm.querySelector('#id_forma_pagamento').value = button.getAttribute('data-forma-pagamento');
+                modalForm.querySelector('#id_observacoes').value = button.getAttribute('data-observacoes');
+            } else {
+                modalTitle.textContent = 'Registrar Pagamento para: ' + button.getAttribute('data-lancamento-descricao');
+                modalSaldoDevedorContainer.style.display = 'block';
+                modalForm.setAttribute('action', button.getAttribute('data-form-url'));
+                modalSaldoDevedor.textContent = 'R$ ' + button.getAttribute('data-saldo-devedor');
+            }
+        });
+    }
+});
+</script>

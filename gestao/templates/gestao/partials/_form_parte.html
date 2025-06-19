@@ -1,0 +1,18 @@
+{# gestao/templates/gestao/partials/_form_parte.html #}
+<div class="card mb-2 parte-card" data-form-index="{{ form.prefix }}">
+    <div class="card-body p-2 position-relative">
+        <div class="row g-2">
+            <div class="col-12" style="display:none;">{{ form.id }}</div>
+            <div class="col-12">{{ form.cliente.label_tag }}{{ form.cliente }}</div>
+            <div class="col-12" style="display:none;">{{ form.tipo_participacao }}</div>
+            <div class="col-12">{{ form.representado_por.label_tag }}{{ form.representado_por }}</div>
+        </div>
+
+        {% if form.instance.pk %}
+            <div style="display:none;">{{ form.DELETE }}</div>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-parte position-absolute top-0 end-0 m-1" title="Remover Parte" style="width: 2rem; height: 2rem; border-radius: 50%;">&times;</button>
+        {% else %}
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-parte position-absolute top-0 end-0 m-1" title="Remover Parte" style="width: 2rem; height: 2rem; border-radius: 50%;">&times;</button>
+        {% endif %}
+    </div>
+</div>

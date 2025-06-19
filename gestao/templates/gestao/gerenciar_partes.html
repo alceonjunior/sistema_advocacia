@@ -1,0 +1,63 @@
+{% extends is_modal|yesno:"gestao/partials/_base_modal.html,gestao/base.html" %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+<form id="gerenciarPartesForm" method="post" action="{% url 'gerenciar_partes' processo_pk=processo.pk %}" novalidate>
+    {% csrf_token %}
+    {{ formset.management_form }}
+
+    {% if not is_modal %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 d-flex align-items-center gap-2"><i class="bi bi-people-fill text-primary"></i> Gerenciar Partes</h1>
+            <p class="text-muted">Processo Nº: {{ processo.numero_processo|default:"Sem Número" }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-success-subtle d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 text-success-emphasis">Polo Ativo (Autores)</h6>
+                    <button type="button" class="btn btn-sm btn-success btn-add-parte" data-tipo="AUTOR"><i class="bi bi-plus-circle"></i> Adicionar</button>
+                </div>
+                <div class="card-body" id="autores-list">
+                    {% for form_parte in formset %}
+                        {% if form_parte.initial.tipo_participacao == 'AUTOR' %}
+                            {% include 'gestao/partials/_form_parte.html' with form=form_parte %}
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-danger-subtle d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 text-danger-emphasis">Polo Passivo (Réus)</h6>
+                    <button type="button" class="btn btn-sm btn-danger btn-add-parte" data-tipo="REU"><i class="bi bi-plus-circle"></i> Adicionar</button>
+                </div>
+                <div class="card-body" id="reus-list">
+                    {% for form_parte in formset %}
+                        {% if form_parte.initial.tipo_participacao == 'REU' %}
+                            {% include 'gestao/partials/_form_parte.html' with form=form_parte %}
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="empty-form-template" style="display: none;">
+        {% include 'gestao/partials/_form_parte.html' with form=formset.empty_form %}
+    </div>
+
+    <div class="modal-footer mt-4">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+    </div>
+</form>
+{% endblock %}
+
+{# NENHUM BLOCO JAVASCRIPT AQUI #}
