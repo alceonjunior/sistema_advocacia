@@ -176,7 +176,11 @@ class ServicoConcluirForm(forms.ModelForm):
         model = Servico
         fields = ['data_encerramento']
         widgets = {
-            'data_encerramento': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+            # CORREÇÃO APLICADA AQUI: Adicionado o 'format'
+            'data_encerramento': forms.DateInput(
+                format='%Y-%m-%d',
+                attrs={'type': 'date', 'class': 'form-control'}
+            ),
         }
 
     def __init__(self, *args, **kwargs):

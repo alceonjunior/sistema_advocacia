@@ -28,7 +28,7 @@ class CalculadoraMonetaria:
                  juros_data_inicio=None, juros_data_fim=None, correcao_pro_rata=False,
                  multa_taxa=0, multa_sobre_juros=False, honorarios_taxa=0):
 
-        # --- 1. CÁLCULO DA CORREÇÃO MONETÁRIA (ITERATIVO) ---
+        # ... (A seção de cálculo da CORREÇÃO MONETÁRIA permanece a mesma) ...
         saldo_corrigido = self.valor_original
         fator_correcao_acumulado = Decimal('1.0')
         data_corrente = date(self.data_inicio.year, self.data_inicio.month, 1)
@@ -40,14 +40,10 @@ class CalculadoraMonetaria:
             chave_indice = data_corrente.strftime('%Y-%m')
             fator_correcao_mes = self.indices_periodo.get(chave_indice, Decimal('0')) / 100
 
-            # ================================================================= #
-            # === LÓGICA PRO-RATA REESCRITA PARA MAIOR PRECISÃO E CLAREZA === #
-            # ================================================================= #
             if correcao_pro_rata:
                 dias_no_mes = self._get_dias_no_mes(data_corrente)
                 fator_diario = fator_correcao_mes / dias_no_mes
 
-                # Caso 1: O período inteiro está contido dentro do mês corrente
                 if (self.data_inicio.year == data_corrente.year and self.data_inicio.month == data_corrente.month and
                         self.data_fim.year == data_corrente.year and self.data_fim.month == data_corrente.month):
                     dias_a_corrigir = (self.data_fim - self.data_inicio).days
@@ -55,13 +51,11 @@ class CalculadoraMonetaria:
                     termo_inicial_mes = self.data_inicio
                     termo_final_mes = self.data_fim
 
-                # Caso 2: É o primeiro mês de um período maior
                 elif self.data_inicio.year == data_corrente.year and self.data_inicio.month == data_corrente.month:
                     dias_a_corrigir = dias_no_mes - self.data_inicio.day + 1
                     fator_correcao_mes = fator_diario * dias_a_corrigir
                     termo_inicial_mes = self.data_inicio
 
-                # Caso 3: É o último mês de um período maior
                 elif self.data_fim.year == data_corrente.year and self.data_fim.month == data_corrente.month:
                     dias_a_corrigir = self.data_fim.day
                     fator_correcao_mes = fator_diario * dias_a_corrigir
@@ -81,20 +75,20 @@ class CalculadoraMonetaria:
 
         # --- 2. CÁLCULO DOS JUROS (APÓS A CORREÇÃO TOTAL) ---
         total_juros = Decimal('0')
+        # CORREÇÃO APLICADA AQUI: Inicializamos a variável com um valor padrão
+        dias_corridos_juros = 0
         juros_inicio = juros_data_inicio or self.data_inicio
         juros_fim = juros_data_fim or self.data_fim
 
         if juros_taxa and juros_taxa > 0:
             taxa_juros_decimal = Decimal(juros_taxa) / 100
 
-            # === CÁLCULO DE JUROS APRIMORADO E ALINHADO COM CALCULADORAS DE REFERÊNCIA ===
             if juros_periodo == 'ANUAL':
                 taxa_juros_decimal_mensal = taxa_juros_decimal / 12
             else:  # MENSAL
                 taxa_juros_decimal_mensal = taxa_juros_decimal
 
             dias_corridos_juros = (juros_fim - juros_inicio).days
-            # Simplificação comum: considera-se o mês comercial de 30 dias para cálculo de juros.
             numero_meses = Decimal(dias_corridos_juros) / Decimal('30.0')
 
             if juros_tipo == 'SIMPLES':

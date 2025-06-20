@@ -3,108 +3,119 @@
 {% block title %}Editar Serviço{% endblock %}
 
 {% block content %}
-<div class="card">
-    <div class="card-header">
-        <h3>Editar Serviço: {{ servico.descricao }}</h3>
-        <p class="mb-0 text-muted">Cliente: {{ servico.cliente }} | Tipo: {{ servico.tipo_servico }}</p>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h2 mb-0">Editar Detalhes do Serviço</h1>
+        <p class="text-muted mb-0">Ajuste as informações para: <strong>{{ servico.descricao|truncatechars:50 }}</strong></p>
     </div>
-    <div class="card-body">
-        <form method="post">
-            {% csrf_token %}
-
-            {{ form.non_field_errors }}
-
-            <!-- Campos Principais -->
-            <div class="mb-3">
-                <label for="{{ form.responsavel.id_for_label }}" class="form-label">Responsável pelo Serviço</label>
-                {{ form.responsavel }}
-            </div>
-
-            <div class="mb-3">
-                <label for="{{ form.descricao.id_for_label }}" class="form-label">Descrição</label>
-                {{ form.descricao }}
-            </div>
-
-            <div class="mb-3">
-                <label for="{{ form.data_inicio.id_for_label }}" class="form-label">Data de Início</label>
-                {{ form.data_inicio }}
-            </div>
-
-            <hr>
-
-            <!-- Lógica de campos condicionais -->
-            <div class="form-check mb-3">
-                {{ form.recorrente }}
-                <label for="{{ form.recorrente.id_for_label }}" class="form-check-label fw-bold">É um serviço recorrente (mensal)?</label>
-            </div>
-
-            <!-- Campos para SERVIÇO ÚNICO (não recorrente) -->
-            <div id="campo-nao-recorrente">
-                <div class="mb-3">
-                    <label for="{{ form.prazo.id_for_label }}" class="form-label">Prazo de Conclusão</label>
-                    {{ form.prazo }}
-                </div>
-            </div>
-
-            <!-- Campos para SERVIÇO RECORRENTE -->
-            <div id="campos-recorrente">
-                <div class="mb-3">
-                    <label for="{{ form.data_encerramento.id_for_label }}" class="form-label">Data Final do Contrato</label>
-                    {{ form.data_encerramento }}
-                </div>
-            </div>
-
-            <hr>
-
-            <!-- Status do Serviço -->
-            <div class="d-flex gap-4">
-                <div class="form-check form-switch">
-                    {{ form.concluido }}
-                    <label class="form-check-label" for="{{ form.concluido.id_for_label }}">Serviço Concluído</label>
-                </div>
-                <div class="form-check form-switch">
-                    {{ form.ativo }}
-                    <label class="form-check-label" for="{{ form.ativo.id_for_label }}">Contrato Ativo</label>
-                </div>
-            </div>
-
-            <!-- Botões -->
-            <div class="mt-4">
-                <button type="submit" class="btn btn-success">Salvar Alterações</button>
-                <a href="{% url 'detalhe_servico' pk=servico.pk %}" class="btn btn-secondary">Cancelar</a>
-            </div>
-        </form>
+    <div>
+        <a href="{% url 'detalhe_servico' pk=servico.pk %}" class="btn btn-secondary"><i class="bi bi-x-lg"></i> Cancelar</a>
     </div>
 </div>
+
+<form method="post" novalidate>
+    {% csrf_token %}
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-person-check-fill text-primary me-2"></i>Atribuição e Descrição</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <label for="{{ form.responsavel.id_for_label }}" class="form-label">{{ form.responsavel.label }}</label>
+                        {{ form.responsavel }}
+                    </div>
+                    <div>
+                        <label for="{{ form.descricao.id_for_label }}" class="form-label">{{ form.descricao.label }}</label>
+                        {{ form.descricao }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                 <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-calendar-range text-primary me-2"></i>Prazos e Período</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.data_inicio.id_for_label }}" class="form-label">{{ form.data_inicio.label }}</label>
+                            {{ form.data_inicio }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.prazo.id_for_label }}" class="form-label">{{ form.prazo.label }}</label>
+                            {{ form.prazo }}
+                        </div>
+                         <div class="col-md-6" id="container-data-encerramento">
+                            <label for="{{ form.data_encerramento.id_for_label }}" class="form-label">{{ form.data_encerramento.label }}</label>
+                            {{ form.data_encerramento }}
+                            <div class="form-text">Apenas para serviços recorrentes. Preencha quando o contrato for encerrado.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                 <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-toggles text-primary me-2"></i>Status e Configurações</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="form-check form-switch form-check-lg mb-3">
+                        {{ form.concluido }}
+                        <label class="form-check-label" for="{{ form.concluido.id_for_label }}">{{ form.concluido.label }}</label>
+                    </div>
+                    <div class="form-check form-switch form-check-lg mb-3">
+                        {{ form.ativo }}
+                        <label class="form-check-label" for="{{ form.ativo.id_for_label }}">{{ form.ativo.label }}</label>
+                    </div>
+                    <div class="form-check form-switch form-check-lg">
+                        {{ form.recorrente }}
+                        <label class="form-check-label" for="{{ form.recorrente.id_for_label }}">{{ form.recorrente.label }}</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4 text-end">
+        <a href="{% url 'detalhe_servico' pk=servico.pk %}" class="btn btn-secondary">Cancelar</a>
+        <button type="submit" class="btn btn-primary px-4">Salvar Alterações</button>
+    </div>
+</form>
+
 {% endblock %}
+
 
 {% block javascript %}
 {{ block.super }}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const recorrenteCheckbox = document.getElementById('id_recorrente');
-    const camposNaoRecorrente = document.getElementById('campo-nao-recorrente');
-    const camposRecorrente = document.getElementById('campos-recorrente');
+document.addEventListener('DOMContentLoaded', function () {
+    // === NOVO SCRIPT PARA CAMPO CONDICIONAL ===
 
-    function toggleServicoFields() {
-        if (!recorrenteCheckbox) return;
+    // 1. Seleciona os elementos do formulário
+    const recorrenteSwitch = document.getElementById('{{ form.recorrente.id_for_label }}');
+    const dataEncerramentoContainer = document.getElementById('container-data-encerramento');
 
-        if (recorrenteCheckbox.checked) {
-            // Se for recorrente, exibe os campos de mensalidade e oculta o de prazo único
-            camposNaoRecorrente.style.display = 'none';
-            camposRecorrente.style.display = 'block';
+    // 2. Cria uma função para verificar e alternar a visibilidade
+    function toggleDataEncerramento() {
+        if (recorrenteSwitch.checked) {
+            dataEncerramentoContainer.style.display = 'block'; // Mostra o campo
         } else {
-            // Se NÃO for recorrente, exibe o prazo único e oculta os de mensalidade
-            camposNaoRecorrente.style.display = 'block';
-            camposRecorrente.style.display = 'none';
+            dataEncerramentoContainer.style.display = 'none';  // Esconde o campo
         }
     }
 
-    // Garante que a lógica seja executada ao carregar a página e ao clicar no checkbox
-    if (recorrenteCheckbox) {
-        toggleServicoFields();
-        recorrenteCheckbox.addEventListener('change', toggleServicoFields);
+    // 3. Adiciona um "ouvinte" para o evento de mudança no switch
+    if (recorrenteSwitch) {
+        recorrenteSwitch.addEventListener('change', toggleDataEncerramento);
     }
+
+    // 4. Executa a função uma vez quando a página carrega para definir o estado inicial
+    toggleDataEncerramento();
 });
 </script>
 {% endblock %}

@@ -1,112 +1,259 @@
 {% extends 'gestao/base.html' %}
+{% load humanize %}
 
-{% block title %}Detalhe do Serviço: {{ servico.descricao }}{% endblock %}
+{% block title %}Painel do Serviço - {{ servico.descricao|truncatechars:30 }}{% endblock %}
 
 {% block content %}
+<style>
+    /* Estilos para o painel de controle e linha do tempo */
+    .stat-card { background-color: var(--bs-tertiary-bg); }
+    .timeline { list-style-type: none; padding-left: 20px; position: relative; }
+    .timeline:before {
+        content: ' ';
+        background: #d4d9df;
+        display: inline-block;
+        position: absolute;
+        left: 4px;
+        width: 2px;
+        height: 100%;
+        z-index: 400;
+    }
+    .timeline-item {
+        margin-bottom: 20px;
+    }
+    .timeline-marker {
+        position: absolute;
+        left: -5px;
+        top: 5px;
+        width: 18px;
+        height: 18px;
+        background-color: #0d6efd;
+        border: 3px solid #fff;
+        border-radius: 50%;
+        z-index: 500;
+    }
+    .timeline-content {
+        padding-left: 25px;
+    }
+</style>
 
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-
+<!-- CABEÇALHO E AÇÕES PRINCIPAIS -->
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="h2 d-flex align-items-center gap-2">
-        <i class="bi bi-briefcase-fill text-primary"></i>
-        Serviço: {{ servico.descricao }}
-    </h1>
-    <div class="d-flex gap-2">
+    <div>
+        <h1 class="h2 mb-0">Painel do Serviço</h1>
+        <p class="text-muted mb-0" title="{{ servico.descricao }}">{{ servico.descricao|truncatechars:70 }}</p>
+    </div>
+    <div>
+        <!-- Botão para Concluir o Serviço (condicional) -->
         {% if not servico.concluido %}
-        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#concluirServicoModal" data-form-url="{% url 'concluir_servico' pk=servico.pk %}">
-            <i class="bi bi-check-circle-fill"></i> Concluir
+        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#concluirServicoModal">
+            <i class="bi bi-check-circle-fill"></i> Concluir Serviço
         </button>
         {% endif %}
-        <a href="{% url 'editar_servico' pk=servico.pk %}" class="btn btn-warning"><i class="bi bi-pencil-fill"></i> Editar</a>
+        <a href="{% url 'editar_servico' pk=servico.pk %}" class="btn btn-outline-secondary"><i class="bi bi-pencil"></i> Editar</a>
         <a href="{% url 'lista_servicos' %}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle"></i> Voltar</a>
     </div>
 </div>
 
-<div class="row">
-
-    <div class="col-lg-8">
-        <div class="card mb-4" id="movimentacoes">
-            {% include 'gestao/partials/_historico_movimentacoes_servico.html' %}
-        </div>
-
-        <div class="card" id="financeiro">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h4 class="h5 mb-0 d-flex align-items-center gap-2"><i class="bi bi-cash-coin"></i> Lançamentos Financeiros</h4>
-                <div>
-                    <a href="{% url 'adicionar_contrato_servico' servico_pk=servico.pk %}" class="btn btn-sm btn-outline-success">+ Contrato</a>
+<!-- PAINEL DE CONTROLE (DASHBOARD) DO SERVIÇO -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body p-4">
+        <div class="row g-4 align-items-center">
+            <!-- Coluna de Informações Principais -->
+            <div class="col-lg-7 border-end">
+                <div class="row">
+                    <div class="col-md-7 mb-4">
+                        <p class="text-muted small mb-1">CLIENTE</p>
+                        <h5 class="mb-0 d-flex align-items-center gap-2"><i class="bi bi-person-circle text-primary"></i>{{ servico.cliente.nome_completo }}</h5>
+                    </div>
+                    <div class="col-md-5 mb-4">
+                        <p class="text-muted small mb-1">TIPO DE SERVIÇO</p>
+                        <h6 class="mb-0">{{ servico.tipo_servico.nome }}</h6>
+                    </div>
+                    <div class="col-md-4">
+                        <p class="text-muted small mb-1">STATUS</p>
+                        {% if servico.concluido %}<span class="badge fs-6 bg-success-subtle text-success-emphasis">Concluído</span>
+                        {% elif not servico.ativo %}<span class="badge fs-6 bg-secondary-subtle text-secondary-emphasis">Inativo</span>
+                        {% else %}<span class="badge fs-6 bg-primary-subtle text-primary-emphasis">Em Andamento</span>{% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <p class="text-muted small mb-1">PRAZO FINAL</p>
+                        <h6 class="mb-0 {% if servico.prazo and servico.prazo < today and not servico.concluido %}text-danger{% endif %}">
+                            <i class="bi bi-calendar-check"></i> {{ servico.prazo|date:"d/m/Y"|default:"N/D" }}
+                        </h6>
+                    </div>
+                    <div class="col-md-4">
+                        <p class="text-muted small mb-1">RESPONSÁVEL</p>
+                        <h6 class="mb-0">
+                            <i class="bi bi-person-badge"></i>
+                            {% if servico.responsavel %}
+                                {{ servico.responsavel.get_full_name|default:servico.responsavel.username }}
+                            {% else %}
+                                Não Definido
+                            {% endif %}
+                        </h6>
+                    </div>
                 </div>
             </div>
-            <div class="card-body px-2 py-2">
+            <!-- Coluna de Resumo Financeiro -->
+            <div class="col-lg-5">
+                <p class="text-muted small mb-2">RESUMO FINANCEIRO</p>
+                <div class="d-flex justify-content-between align-items-baseline">
+                    <span class="fw-bold">R$ {{ financeiro.total_pago|floatformat:2|intcomma }}</span>
+                    <span class="text-muted">de R$ {{ financeiro.valor_total|floatformat:2|intcomma }}</span>
+                </div>
+                <!-- Barra de Progresso Empilhada Corrigida -->
+                <div class="progress mt-1" style="height: 10px;">
+                    <div class="progress-bar bg-success" role="progressbar" style="width: {{ financeiro.percentual_pago_css }}%;"
+                         aria-valuenow="{{ financeiro.percentual_pago }}" aria-valuemin="0" aria-valuemax="100"
+                         title="Pago: R$ {{ financeiro.total_pago|floatformat:2|intcomma }} ({{ financeiro.percentual_pago|floatformat:2 }}%)">
+                    </div>
+                    <div class="progress-bar bg-danger" role="progressbar" style="width: {{ financeiro.percentual_devedor_css }}%;"
+                         aria-valuenow="{{ financeiro.percentual_devedor }}" aria-valuemin="0" aria-valuemax="100"
+                         title="Saldo Devedor: R$ {{ financeiro.saldo_devedor|floatformat:2|intcomma }} ({{ financeiro.percentual_devedor|floatformat:2 }}%)">
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between small mt-1">
+                    <span>Pago</span>
+                    <span>Saldo devedor: <strong>R$ {{ financeiro.saldo_devedor|floatformat:2|intcomma }}</strong></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ABAS COM DETALHES -->
+<ul class="nav nav-tabs nav-tabs-bordered mb-3" id="serviceTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="andamento-tab" data-bs-toggle="tab" data-bs-target="#andamento-tab-pane" type="button" role="tab"><i class="bi bi-list-check me-2"></i>Andamento</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="financeiro-tab" data-bs-toggle="tab" data-bs-target="#financeiro-tab-pane" type="button" role="tab"><i class="bi bi-wallet2 me-2"></i>Financeiro Detalhado</button>
+    </li>
+</ul>
+<div class="tab-content" id="serviceTabContent">
+    <div class="tab-pane fade show active" id="andamento-tab-pane" role="tabpanel">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Histórico de Atividades</h5>
+                <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addAndamentoModal"><i class="bi bi-plus-circle"></i> Adicionar Andamento</button>
+            </div>
+            <div class="card-body pt-3">
+                {% include 'gestao/partials/_historico_movimentacoes_servico.html' %}
+            </div>
+        </div>
+    </div>
+    <div class="tab-pane fade" id="financeiro-tab-pane" role="tabpanel">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Lançamentos Financeiros</h5>
+                <a href="{% url 'adicionar_contrato_servico' servico_pk=servico.pk %}" class="btn btn-sm btn-outline-success">+ Contrato</a>
+            </div>
+            <div class="card-body p-2">
                 {% with servico.lancamentos.all as lancamentos %}
                     {% include 'gestao/partials/_tabela_financeira.html' %}
                 {% endwith %}
             </div>
         </div>
     </div>
-
-    <div class="col-lg-4">
-        <div class="card mb-4 text-center {% if servico.concluido %}border-success{% else %}border-primary{% endif %}">
-            <div class="card-body">
-                {% if servico.concluido %}
-                    <i class="bi bi-check-circle-fill fs-1 text-success"></i>
-                    <h4 class="card-title mt-2">Concluído</h4>
-                    <p class="card-text text-muted">
-                        Em {{ servico.data_encerramento|date:"d/m/Y"|default:"data não informada" }}
-                    </p>
-                {% else %}
-                    <i class="bi bi-play-circle-fill fs-1 text-primary"></i>
-                    <h4 class="card-title mt-2">Em Andamento</h4>
-                    <p class="card-text text-muted">Serviço ativo</p>
-                {% endif %}
-            </div>
-        </div>
-
-        {% if servico.prazo and not servico.concluido %}
-        <div class="card mb-4 text-center bg-light-danger border-danger">
-             <div class="card-body">
-                 <i class="bi bi-alarm-fill fs-2 text-danger"></i>
-                <h6 class="card-title mt-2 text-danger-emphasis">PRAZO FINAL</h6>
-                <p class="card-text fs-4 fw-bold">{{ servico.prazo|date:"d / M / Y" }}</p>
-            </div>
-        </div>
-        {% endif %}
-
-        <div class="card">
-            <div class="card-header"><h5 class="mb-0 d-flex align-items-center gap-2"><i class="bi bi-info-circle"></i> Detalhes Essenciais</h5></div>
-            <ul class="list-group list-group-flush">
-                <li class="list-group-item d-flex align-items-center gap-3">
-                    <i class="bi bi-person-fill fs-4 text-muted"></i>
-                    <div>
-                        <small class="text-muted">Cliente</small>
-                        <p class="mb-0 fw-bold">{{ servico.cliente }}</p>
-                    </div>
-                </li>
-                <li class="list-group-item d-flex align-items-center gap-3">
-                    <i class="bi bi-bookmark-star-fill fs-4 text-muted"></i>
-                    <div>
-                        <small class="text-muted">Tipo de Serviço</small>
-                        <p class="mb-0 fw-bold">{{ servico.tipo_servico }}</p>
-                    </div>
-                </li>
-                <li class="list-group-item d-flex align-items-center gap-3">
-                    <i class="bi bi-person-check-fill fs-4 text-muted"></i>
-                    <div>
-                        <small class="text-muted">Responsável</small>
-                        <p class="mb-0 fw-bold">{{ servico.responsavel.get_full_name|default:servico.responsavel.username|default:"Não definido" }}</p>
-                    </div>
-                </li>
-            </ul>
-        </div>
-    </div>
 </div>
 
+<!-- ========================================================== -->
+<!-- === SEÇÃO DE MODAIS ===================================== -->
+<!-- ========================================================== -->
 
-{% include 'gestao/partials/_modal_pagamento.html' %}
+<!-- MODAL PARA ADICIONAR ANDAMENTO -->
+<div class="modal fade" id="addAndamentoModal" tabindex="-1" aria-labelledby="addAndamentoModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="modal-title fs-5" id="addAndamentoModalLabel">Adicionar Novo Andamento</h1>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post">
+          {% csrf_token %}
+          <div class="modal-body">
+                <div class="mb-3">{{ form_movimentacao.titulo.label_tag }} {{ form_movimentacao.titulo }}</div>
+                <div class="mb-3">{{ form_movimentacao.detalhes.label_tag }} {{ form_movimentacao.detalhes }}</div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">{{ form_movimentacao.data_atividade.label_tag }} {{ form_movimentacao.data_atividade }}</div>
+                    <div class="col-md-6 mb-3">{{ form_movimentacao.status.label_tag }} {{ form_movimentacao.status }}</div>
+                </div>
+                 <div class="mb-3">{{ form_movimentacao.responsavel.label_tag }} {{ form_movimentacao.responsavel }}</div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" name="submit_movimentacao_servico" class="btn btn-primary">Salvar Atividade</button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PARA CONCLUIR SERVIÇO -->
+<div class="modal fade" id="concluirServicoModal" tabindex="-1" aria-labelledby="concluirServicoModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="modal-title fs-5" id="concluirServicoModalLabel">Concluir Serviço</h1>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form action="{% url 'concluir_servico' pk=servico.pk %}" method="post">
+          {% csrf_token %}
+          <div class="modal-body">
+              <p>Você tem certeza que deseja marcar este serviço como concluído? Esta ação pode ser revertida na tela de edição.</p>
+              <div class="mb-3">
+                  <label for="{{ form_concluir.data_encerramento.id_for_label }}" class="form-label"><strong>{{ form_concluir.data_encerramento.label }}</strong></label>
+                  {{ form_concluir.data_encerramento }}
+              </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-success">Sim, Concluir Serviço</button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% block javascript %}
+{{ block.super }} {# Mantém scripts do template pai, se houver #}
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // === NOVO SCRIPT PARA PREENCHER A DATA DO MODAL 'CONCLUIR' ===
+
+    const concluirModalEl = document.getElementById('concluirServicoModal');
+
+    // Verifica se o elemento do modal existe na página
+    if (concluirModalEl) {
+        // Adiciona um "ouvinte" para o evento 'show.bs.modal', que ocorre
+        // toda vez que o modal de conclusão é aberto.
+        concluirModalEl.addEventListener('show.bs.modal', function (event) {
+
+            // 1. Encontra o campo de data dentro do modal
+            const dataInput = concluirModalEl.querySelector('#id_data_encerramento');
+
+            // 2. Cria uma string para a data de hoje no formato YYYY-MM-DD
+            const hoje = new Date();
+            const ano = hoje.getFullYear();
+            // Adiciona um zero à esquerda se o mês/dia for menor que 10
+            const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+            const dia = String(hoje.getDate()).padStart(2, '0');
+            const dataDeHojeString = `${ano}-${mes}-${dia}`;
+
+            // 3. Define o valor do campo de data
+            if (dataInput) {
+                dataInput.value = dataDeHojeString;
+            }
+        });
+    }
+
+    // O resto do seu JavaScript (se houver) pode vir aqui...
+
+});
+</script>
 
 {% endblock %}
 
-
-{% block javascript %}
-    {{ block.super }}
-    {% include 'gestao/partials/_detalhe_financeiro_js.html' %}
+{% include 'gestao/partials/_modal_pagamento.html' %}
 {% endblock %}

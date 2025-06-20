@@ -3,13 +3,15 @@
 # Imports do Django
 from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
 from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from datetime import date
+from decimal import Decimal
+
 import datetime
 
 # Imports de Filtros e Formulários deste App
@@ -248,9 +250,9 @@ def lista_servicos(request):
 
 @login_required
 def detalhe_servico(request, pk):
-    """Exibe os detalhes de um serviço e processa a adição de novas tarefas."""
-    servico = get_object_or_404(Servico, pk=pk)
-    if request.method == 'POST':
+    servico = get_object_or_404(Servico.objects.prefetch_related('lancamentos__pagamentos'), pk=pk)
+
+    if request.method == 'POST' and 'submit_movimentacao_servico' in request.POST:
         form_movimentacao = MovimentacaoServicoForm(request.POST)
         if form_movimentacao.is_valid():
             nova_movimentacao = form_movimentacao.save(commit=False)
@@ -261,10 +263,38 @@ def detalhe_servico(request, pk):
     else:
         form_movimentacao = MovimentacaoServicoForm()
 
+    # --- LÓGICA FINANCEIRA APRIMORADA PARA CSS ---
+    lancamentos = servico.lancamentos.all()
+    valor_total_contratado = lancamentos.aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
+    total_pago = lancamentos.aggregate(total=Sum('pagamentos__valor_pago'))['total'] or Decimal('0.00')
+    saldo_devedor = valor_total_contratado - total_pago
+
+    if valor_total_contratado > 0:
+        percentual_pago = (total_pago / valor_total_contratado * 100)
+    else:
+        percentual_pago = 0
+
+    percentual_devedor = 100 - percentual_pago
+
     context = {
         'servico': servico,
-        'form_movimentacao': form_movimentacao,
+        'form_movimentacao': MovimentacaoServicoForm(),
         'form_pagamento': PagamentoForm(),
+        'today': date.today(),
+        'financeiro': {
+            'valor_total': valor_total_contratado,
+            'total_pago': total_pago,
+            'saldo_devedor': saldo_devedor,
+            'percentual_pago': percentual_pago,  # Para exibição no tooltip
+            'percentual_devedor': percentual_devedor,  # Para exibição no tooltip
+            # ADIÇÃO: Formata os percentuais como string com ponto para o CSS
+            'percentual_pago_css': f"{percentual_pago:.2f}".replace(",", "."),
+            'percentual_devedor_css': f"{percentual_devedor:.2f}".replace(",", "."),
+            'form_concluir': ServicoConcluirForm(initial={'data_encerramento': date.today()}),
+
+
+        }
+
     }
     return render(request, 'gestao/detalhe_servico.html', context)
 

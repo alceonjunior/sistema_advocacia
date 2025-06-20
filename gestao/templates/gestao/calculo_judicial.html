@@ -57,6 +57,32 @@
     input.is-invalid {
         border-color: #dc3545;
     }
+
+    /* Estilo do memorial para a TELA */
+    .memorial-container {
+        max-height: 400px; /* Altura fixa com rolagem na tela */
+        overflow-y: auto;
+    }
+
+    /* Estilos específicos para a IMPRESSÃO */
+    @media print {
+        /* Remove a altura fixa e a rolagem ao imprimir o memorial */
+        .memorial-container {
+            max-height: none !important;
+            overflow-y: visible !important;
+        }
+
+        /* Garante que o corpo do card não seja cortado pela rolagem da coluna */
+        .card-body {
+            overflow-y: visible !important;
+        }
+
+        /* Opcional: Remove a sombra do card na impressão para economizar tinta */
+        .card {
+            box-shadow: none !important;
+            border: 1px solid #dee2e6 !important;
+        }
+    }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-4 d-print-none">
@@ -83,6 +109,7 @@
 
 <div class="row g-4 main-row">
 
+    <!-- === COLUNA 1: HISTÓRICO DE CÁLCULOS (AÇÕES) === -->
     <div class="col-lg-3 d-print-none main-column">
         <div class="card shadow-sm">
             <div class="card-header bg-light">
@@ -115,6 +142,7 @@
         </div>
     </div>
 
+    <!-- === COLUNA 2: FORMULÁRIO DE PARÂMETROS === -->
     <div class="col-lg-5 d-print-none main-column">
         <div class="card shadow-sm form-card">
             <div class="card-header">
@@ -229,50 +257,141 @@
         </div>
     </div>
 
+    <!-- === COLUNA 3: RESULTADOS === -->
     <div class="col-lg-4 d-print-inline main-column">
         <div class="card shadow-sm flex-grow-1">
-             <div class="card-header"><h5 class="mb-0"><i class="bi bi-file-earmark-ruled-fill"></i> Resultado do Cálculo</h5></div>
+             <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-ruled-fill"></i> Resumo do Cálculo</h5>
+            </div>
              <div class="card-body" style="overflow-y: auto;">
                 {% if error %}
                     <div class="alert alert-danger"><h5 class="alert-heading">Erro no Cálculo</h5><p>{{ error }}</p></div>
                 {% elif resultado %}
-                    <div class="text-center mb-4"><h6 class="text-muted">VALOR TOTAL ATUALIZADO</h6><p class="result-value">R$ {{ resultado.resumo.valor_final|floatformat:2|intcomma }}</p></div>
-                    <ul class="nav nav-tabs nav-fill mb-3" id="myTab" role="tablist">
-                        <li class="nav-item" role="presentation"><button class="nav-link active" id="resumo-tab" data-bs-toggle="tab" data-bs-target="#resumo-tab-pane" type="button" role="tab">Resumo</button></li>
-                        <li class="nav-item" role="presentation"><button class="nav-link" id="memorial-tab" data-bs-toggle="tab" data-bs-target="#memorial-tab-pane" type="button" role="tab" {% if not resultado.memorial %}disabled{% endif %}>Memorial</button></li>
-                    </ul>
-                    <div class="tab-content" id="myTabContent">
-                        <div class="tab-pane fade show active" id="resumo-tab-pane" role="tabpanel">
-                            <table class="table table-sm table-borderless small">
-                                <tr><td colspan="3" class="text-muted fw-bold">Dados Iniciais</td></tr>
-                                <tr><td>Valor Nominal</td><td class="text-end" colspan="2">R$ {{ form_data.valor_original|floatformat:2|intcomma }}</td></tr>
-                                <tr><td>Período da Correção</td><td class="text-end" colspan="2">{{ form_data.data_inicio|date:"d/m/Y" }} a {{ form_data.data_fim|date:"d/m/Y" }}</td></tr>
-                                <tr class="table-group-divider"><td colspan="3" class="text-muted fw-bold pt-3">Valores Calculados</td></tr>
-                                <tr><td>Valor Corrigido</td><td class="text-end">(=)</td><td class="text-end fw-bold">R$ {{ resultado.resumo.valor_corrigido_total|floatformat:2|intcomma }}</td></tr>
-                                <tr><td>Juros ({{ resultado.resumo.percentual_juros_total|floatformat:2|intcomma }}%)</td><td class="text-end">(+)</td><td class="text-end">R$ {{ resultado.resumo.total_juros|floatformat:2|intcomma }}</td></tr>
-                                <tr><td>Multa ({{ form_data.multa_percentual|default_if_none:"0"|floatformat:2|intcomma }}%)</td><td class="text-end">(+)</td><td class="text-end">R$ {{ resultado.resumo.multa_valor|floatformat:2|intcomma }}</td></tr>
-                                <tr class="table-group-divider"><td class="fw-bold">Subtotal</td><td class="text-end">(=)</td><td class="text-end fw-bold">R$ {{ resultado.resumo.sub_total|floatformat:2|intcomma }}</td></tr>
-                                <tr><td>Honorários ({{ form_data.honorarios_percentual|default_if_none:"0"|floatformat:2|intcomma }}%)</td><td class="text-end">(+)</td><td class="text-end">R$ {{ resultado.resumo.honorarios_valor|floatformat:2|intcomma }}</td></tr>
+                    <h6 class="text-muted border-bottom pb-2 mb-3">Dados básicos informados para cálculo</h6>
+                    <table class="table table-sm table-borderless mb-4 small">
+                        <tbody>
+                            <tr>
+                                <td style="width: 50%;"><strong>Valor Nominal</strong></td>
+                                <td class="text-end">R$ {{ form_data.valor_original|floatformat:2|intcomma }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Indexador e metodologia</strong></td>
+                                <td class="text-end">{{ resultado.resumo.indice_display_name }}{% if form_data.correcao_pro_rata %} - Pro-rata die{% else %} - Mês a mês{% endif %}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Período da correção</strong></td>
+                                <td class="text-end">{{ form_data.data_inicio|date:"d/m/Y" }} a {{ form_data.data_fim|date:"d/m/Y" }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Taxa de juros (%)</strong></td>
+                                <td class="text-end">
+                                    {% if form_data.juros_taxa > 0 %}
+                                        {{ form_data.juros_taxa|floatformat:4|default:"0" }}% a.m. {{ form_data.juros_tipo|lower|capfirst }}
+                                    {% else %}
+                                        Não aplicado
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Período dos juros</strong></td>
+                                <td class="text-end">{{ form_data.juros_data_inicio|default:form_data.data_inicio|date:"d/m/Y" }} a {{ form_data.juros_data_fim|default:form_data.data_fim|date:"d/m/Y" }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Multa (%)</strong></td>
+                                <td class="text-end">{{ form_data.multa_percentual|floatformat:2|default:"0,00" }}%</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Honorários (%)</strong></td>
+                                <td class="text-end">{{ form_data.honorarios_percentual|floatformat:2|default:"0,00" }}%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h6 class="text-muted border-bottom pb-2 mb-3">Dados calculados</h6>
+                    <table class="table table-sm table-borderless">
+                        <tbody>
+                            <tr>
+                                <td>Fator de correção do período ({{ resultado.resumo.dias_corridos }} dias)</td>
+                                <td class="text-end" colspan="2">{{ resultado.resumo.fator_correcao_periodo|floatformat:6|intcomma }}</td>
+                            </tr>
+                            <tr>
+                                <td>Percentual correspondente</td>
+                                <td class="text-end" colspan="2">{{ resultado.resumo.percentual_correcao_periodo|floatformat:4|intcomma }} %</td>
+                            </tr>
+                            <tr class="table-group-divider">
+                                <td>Valor corrigido para {{ form_data.data_fim|date:"d/m/Y" }}</td>
+                                <td class="text-end">(=)</td>
+                                <td class="text-end fw-bold">R$ {{ resultado.resumo.valor_corrigido_total|floatformat:2|intcomma }}</td>
+                            </tr>
+                            <tr>
+                                <td>Juros ({{ resultado.resumo.dias_juros }} dias)</td>
+                                <td class="text-end">(+)</td>
+                                <td class="text-end">R$ {{ resultado.resumo.total_juros|floatformat:2|intcomma }}</td>
+                            </tr>
+                            <tr>
+                                <td>Multa ({{ form_data.multa_percentual|floatformat:2|default:"0,00" }}%)</td>
+                                <td class="text-end">(+)</td>
+                                <td class="text-end">R$ {{ resultado.resumo.multa_valor|floatformat:2|intcomma }}</td>
+                            </tr>
+                            <tr class="fw-bold">
+                                <td>Sub Total</td>
+                                <td class="text-end">(=)</td>
+                                <td class="text-end">R$ {{ resultado.resumo.sub_total|floatformat:2|intcomma }}</td>
+                            </tr>
+                            <tr>
+                                <td>Honorários ({{ form_data.honorarios_percentual|floatformat:2|default:"0,00" }}%)</td>
+                                <td class="text-end">(+)</td>
+                                <td class="text-end">R$ {{ resultado.resumo.honorarios_valor|floatformat:2|intcomma }}</td>
+                            </tr>
+                        </tbody>
+                        <tfoot class="table-group-divider">
+                            <tr class="fs-5">
+                                <td class="fw-bold">Valor total</td>
+                                <td class="text-end fw-bold">(=)</td>
+                                <td class="text-end fw-bold text-success">R$ {{ resultado.resumo.valor_final|floatformat:2|intcomma }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+
+                    {% if form_data.gerar_memorial and resultado.memorial %}
+                        <h6 class="text-muted border-bottom pb-2 mb-3 mt-4">Memória Analítica do Cálculo</h6>
+                        <div class="table-responsive memorial-container">
+                            <table class="table table-sm table-hover table-bordered small">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th>Termo inicial</th>
+                                        <th>Termo final</th>
+                                        <th class="text-end">Variação (%)</th>
+                                        <th class="text-end">Valor (R$)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for linha in resultado.memorial %}
+                                    <tr>
+                                        <td>{{ linha.termo_inicial|date:"d/m/Y" }}</td>
+                                        <td>{{ linha.termo_final|date:"d/m/Y" }}</td>
+                                        <td class="text-end">{{ linha.variacao_periodo|floatformat:4|intcomma }}</td>
+                                        <td class="text-end">R$ {{ linha.valor_atualizado_mes|floatformat:2|intcomma }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
                             </table>
                         </div>
-                        <div class="tab-pane fade" id="memorial-tab-pane" role="tabpanel">
-                            {% if resultado.memorial %}
-                            <div class="table-responsive"><table class="table table-sm table-hover table-bordered small"><thead class="table-light"><tr><th>Início</th><th>Fim</th><th>Índice (%)</th><th class="text-end">Valor (R$)</th></tr></thead><tbody>{% for linha in resultado.memorial %}<tr><td>{{ linha.termo_inicial|date:"d/m/y" }}</td><td>{{ linha.termo_final|date:"d/m/y" }}</td><td>{{ linha.variacao_periodo|floatformat:4|intcomma }}</td><td class="text-end">{{ linha.valor_atualizado_mes|floatformat:2|intcomma }}</td></tr>{% endfor %}</tbody></table></div>
-                            {% endif %}
-                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="text-center p-5 d-flex flex-column justify-content-center align-items-center h-100">
+                        <i class="bi bi-file-earmark-binary" style="font-size: 4rem; color: #ced4da;"></i>
+                        <h5 class="mt-3 text-muted">Nenhum Resultado</h5>
+                        <p class="text-muted small">Realize um cálculo ou carregue um item do histórico para ver os detalhes aqui.</p>
                     </div>
-                </div>
-            {% else %}
-                <div class="text-center p-5 d-flex flex-column justify-content-center align-items-center h-100">
-                    <i class="bi bi-file-earmark-binary" style="font-size: 4rem; color: #ced4da;"></i>
-                    <h5 class="mt-3 text-muted">Nenhum Resultado</h5>
-                    <p class="text-muted small">Realize um cálculo ou carregue um item do histórico para ver os detalhes aqui.</p>
-                </div>
-            {% endif %}
+                {% endif %}
+            </div>
         </div>
     </div>
 </div>
 
+
+<!-- === MODAL DE CONFIRMAÇÃO DE EXCLUSÃO === -->
 <div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -309,13 +428,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // Script para aplicar a classe de erro do Bootstrap dinamicamente
     const form = document.getElementById('calculo-form');
     if (form) {
-        // Itera sobre todos os campos com a classe 'form-control', 'form-select' ou 'form-check-input'
         form.querySelectorAll('.form-control, .form-select, .form-check-input').forEach(function(field) {
-            // Encontra o container mais próximo que agrupa label, campo e erro
             const fieldContainer = field.closest('.mb-3, .form-check');
             if (fieldContainer) {
                 const errorDiv = fieldContainer.querySelector('.invalid-feedback');
-                // Se a div de erro tiver conteúdo, adiciona a classe 'is-invalid' ao campo
                 if (errorDiv && errorDiv.textContent.trim() !== '') {
                     field.classList.add('is-invalid');
                 }
