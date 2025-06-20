@@ -5,95 +5,147 @@
 {% block content %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
-<div class="d-flex justify-content-between align-items-center mb-4">
+<style>
+    /* Estilo para garantir que o conteúdo das abas não tenha padding duplo */
+    .tab-content .card-body {
+        padding: 1.5rem;
+    }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
-        <h1 class="h2 mb-0">Detalhes do Processo</h1>
+        <h1 class="h2 mb-0 d-flex align-items-center gap-2">
+            <i class="bi bi-folder2-open text-primary"></i> Detalhes do Processo
+        </h1>
         <p class="text-muted mb-0">Nº: {{ processo.numero_processo|default:"Ainda sem número" }}</p>
     </div>
-    <div>
-        <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#gerenciarPartesModal" data-form-url="{% url 'gerenciar_partes' processo_pk=processo.pk %}">
-            Gerenciar Partes
-        </button>
-        <a href="{% url 'pagina_de_calculos' processo_pk=processo.pk %}" class="btn btn-success">
-    <i class="bi bi-calculator"></i> Cálculos Judiciais
-</a>
-
-
-
-
-        <a href="{% url 'editar_processo' pk=processo.pk %}" class="btn btn-warning">Editar Dados Gerais</a>
-        <a href="{% url 'lista_processos' %}" class="btn btn-secondary">Voltar</a>
+    <div class="d-flex gap-2">
+        <a href="{% url 'pagina_de_calculos' processo_pk=processo.pk %}" class="btn btn-outline-success">
+            <i class="bi bi-calculator"></i> Cálculos
+        </a>
+        <div class="dropdown">
+            <button class="btn btn-primary dropdown-toggle" type="button" id="acoesDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-gear-fill"></i> Ações
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="acoesDropdown">
+                <li><a class="dropdown-item" href="{% url 'editar_processo' pk=processo.pk %}">Editar Dados Gerais</a></li>
+                <li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#gerenciarPartesModal">Gerenciar Partes</button></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item text-danger" href="#">Arquivar Processo</a></li>
+            </ul>
+        </div>
+        <a href="{% url 'lista_processos' %}" class="btn btn-secondary">
+             <i class="bi bi-arrow-left-circle"></i> Voltar
+        </a>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-lg-7">
-        <div class="card mb-4">
-            <div class="card-header"><h5 class="mb-0">Dados Gerais</h5></div>
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header d-flex align-items-center gap-2 bg-light">
+                <i class="bi bi-info-circle-fill text-primary"></i>
+                <h5 class="mb-0">Dados Gerais</h5>
+            </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6 mb-2"><strong>Tipo de Ação:</strong><br>{{ processo.tipo_acao|default:"Não especificado" }}</div>
-                    <div class="col-md-6 mb-2"><strong>Status:</strong><br><span class="badge bg-primary">{{ processo.get_status_processo_display }}</span></div>
-                    <div class="col-md-6 mb-2"><strong>Adv. Responsável:</strong><br>
-                        {% if processo.advogado_responsavel %}
-                            {{ processo.advogado_responsavel.get_full_name|default:processo.advogado_responsavel.username }}
-                        {% else %}
-                            Não definido
-                        {% endif %}
-                    </div>
-                    <div class="col-md-6 mb-2"><strong>Vara/Comarca:</strong><br>{{ processo.vara_comarca_orgao|default:"N/A" }}</div>
-                </div>
+                <p class="mb-2"><strong>Tipo de Ação:</strong><br>{{ processo.tipo_acao|default:"Não especificado" }}</p>
+                <p class="mb-2"><strong>Status:</strong><br><span class="badge bg-primary">{{ processo.get_status_processo_display }}</span></p>
+                <p class="mb-2"><strong>Adv. Responsável:</strong><br>
+                    {% if processo.advogado_responsavel %}
+                        {{ processo.advogado_responsavel.get_full_name|default:processo.advogado_responsavel.username }}
+                    {% else %}
+                        Não definido
+                    {% endif %}
+                </p>
+                <p class="mb-0"><strong>Vara/Comarca:</strong><br>{{ processo.vara_comarca_orgao|default:"N/A" }}</p>
             </div>
         </div>
-
-        <div id="partes-card-container" class="card mb-4">
+        <div id="partes-card-container" class="card shadow-sm">
             {% include 'gestao/partials/_card_partes_envolvidas.html' %}
         </div>
     </div>
 
-    <div class="col-lg-5">
-        <div class="card">
-            <div class="card-header"><h5 class="mb-0">Visão Geral e Ações</h5></div>
-            <div class="list-group list-group-flush">
-                <a href="#financeiro" class="list-group-item list-group-item-action">
-                    <div class="d-flex w-100 justify-content-between">
-                        <h6 class="mb-1">Financeiro</h6>
-                        <span class="badge bg-secondary rounded-pill">{{ processo.lancamentos.count }} lançamento(s)</span>
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <ul class="nav nav-tabs nav-fill" id="myTab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="movimentacoes-tab" data-bs-toggle="tab" data-bs-target="#movimentacoes-pane" type="button" role="tab" aria-controls="movimentacoes-pane" aria-selected="true">
+                        <i class="bi bi-list-ol me-1"></i> Movimentações
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="documentos-tab" data-bs-toggle="tab" data-bs-target="#documentos-pane" type="button" role="tab" aria-controls="documentos-pane" aria-selected="false">
+                        <i class="bi bi-file-earmark-text me-1"></i> Documentos
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="financeiro-tab" data-bs-toggle="tab" data-bs-target="#financeiro-pane" type="button" role="tab" aria-controls="financeiro-pane" aria-selected="false">
+                        <i class="bi bi-cash-coin me-1"></i> Financeiro
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="myTabContent">
+                <div class="tab-pane fade show active" id="movimentacoes-pane" role="tabpanel" aria-labelledby="movimentacoes-tab" tabindex="0">
+                    {% with processo.movimentacoes.all as movimentacoes %}
+                        {% include 'gestao/partials/_historico_movimentacoes.html' %}
+                    {% endwith %}
+                </div>
+
+                <div class="tab-pane fade" id="documentos-pane" role="tabpanel" aria-labelledby="documentos-tab" tabindex="0">
+                    <div class="card-body">
+                        <div class="p-3 mb-4 rounded bg-light border">
+                            <h5 class="mb-3">Gerar Novo Documento</h5>
+                            <form id="formGerarDocumento" class="d-flex flex-wrap gap-2">
+                                <div class="flex-grow-1">
+                                    <select id="selectModelo" class="form-select" aria-label="Selecione um modelo">
+                                        <option value="" selected>Selecione um modelo...</option>
+                                        {% for modelo in todos_modelos %}
+                                        <option value="{% url 'gerar_documento' processo_pk=processo.pk modelo_pk=modelo.pk %}">{{ modelo.titulo }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn btn-primary"><i class="bi bi-play-circle-fill"></i> Gerar</button>
+                            </form>
+                        </div>
+
+                        <h5 class="mb-3">Documentos Vinculados</h5>
+                        <div class="list-group">
+                            {% for doc in processo.documentos.all %}
+                            <a href="{% url 'editar_documento' pk=doc.pk %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                <div>
+                                    <p class="mb-1 fw-bold">{{ doc.titulo }}</p>
+                                    <small class="text-muted">
+                                        {% if doc.modelo_origem %}
+                                            Baseado em: {{ doc.modelo_origem.titulo }}
+                                        {% else %}
+                                            Documento avulso
+                                        {% endif %}
+                                    </small>
+                                </div>
+                                <span class="text-muted small">Modificado em {{ doc.data_modificacao|date:"d/m/Y" }}</span>
+                            </a>
+                            {% empty %}
+                            <div class="list-group-item text-center text-muted">Nenhum documento gerado para este processo.</div>
+                            {% endfor %}
+                        </div>
                     </div>
-                    <small>Consultar extrato e registrar pagamentos.</small>
-                </a>
-                <a href="#movimentacoes" class="list-group-item list-group-item-action">
-                     <div class="d-flex w-100 justify-content-between">
-                        <h6 class="mb-1">Movimentações</h6>
-                        <span class="badge bg-secondary rounded-pill">{{ processo.movimentacoes.count }} registro(s)</span>
+                </div>
+
+                <div class="tab-pane fade" id="financeiro-pane" role="tabpanel" aria-labelledby="financeiro-tab" tabindex="0">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Lançamentos Financeiros</h5>
+                        <a href="{% url 'adicionar_contrato_processo' processo_pk=processo.pk %}" class="btn btn-sm btn-outline-success">+ Contrato</a>
                     </div>
-                    <small>Ver histórico e adicionar andamentos.</small>
-                </a>
+                    <div class="card-body p-0">
+                        {% with processo.lancamentos.all as lancamentos %}
+                            {% include 'gestao/partials/_tabela_financeira.html' %}
+                        {% endwith %}
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-</div>
-
-<hr class="my-4">
-
-<div class="card mb-4" id="financeiro">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h4 class="h5 mb-0">Lançamentos Financeiros</h4>
-        <div>
-            <a href="{% url 'adicionar_contrato_processo' processo_pk=processo.pk %}" class="btn btn-sm btn-outline-success">+ Contrato</a>
-        </div>
-    </div>
-    <div class="card-body px-2 py-2">
-        {% with processo.lancamentos.all as lancamentos %}
-            {% include 'gestao/partials/_tabela_financeira.html' %}
-        {% endwith %}
-    </div>
-</div>
-
-<div class="card" id="movimentacoes">
-    {% with processo.movimentacoes.all as movimentacoes %}
-        {% include 'gestao/partials/_historico_movimentacoes.html' %}
-    {% endwith %}
 </div>
 
 <div class="modal fade" id="gerenciarPartesModal" tabindex="-1" aria-labelledby="gerenciarPartesModalLabel" aria-hidden="true">
@@ -104,12 +156,10 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="gerenciarPartesModalBody">
-                <div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>
-            </div>
+                </div>
         </div>
     </div>
 </div>
-
 {% include 'gestao/partials/_modal_pagamento.html' %}
 
 {% endblock %}
@@ -119,104 +169,104 @@
 {{ block.super }}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // ---- LÓGICA MODAL GERENCIAR PARTES (CORRIGIDA) ----
     const gerenciarPartesModal = document.getElementById('gerenciarPartesModal');
-    const modalBody = document.getElementById('gerenciarPartesModalBody');
+    if (gerenciarPartesModal) {
+        // Evento que dispara QUANDO O MODAL COMEÇA A ABRIR
+        gerenciarPartesModal.addEventListener('show.bs.modal', function() {
+            const modalBody = gerenciarPartesModal.querySelector('.modal-body');
+            const formUrl = "{% url 'gerenciar_partes' processo_pk=processo.pk %}";
 
-    // Função que será chamada DEPOIS que o conteúdo do modal for carregado
-    function setupModalForm() {
-        const form = document.getElementById('gerenciarPartesForm');
-        if (!form) return;
+            modalBody.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
 
-        const addButtons = form.querySelectorAll('.btn-add-parte');
-        const emptyFormTemplateHtml = document.getElementById('empty-form-template')?.innerHTML;
-        const totalFormsInput = form.querySelector('input[name="partes-TOTAL_FORMS"]');
+            // 1. Carrega o formulário de gerenciamento de partes via AJAX
+            fetch(formUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(response => response.text())
+            .then(html => {
+                modalBody.innerHTML = html;
 
-        // Adiciona evento aos botões de ADICIONAR
-        addButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
-                const tipo = btn.dataset.tipo;
-                const targetList = (tipo === 'AUTOR') ? form.querySelector('#autores-list') : form.querySelector('#reus-list');
-                let formNum = parseInt(totalFormsInput.value);
+                // 2. SOMENTE APÓS carregar, ativa os botões e a lógica do formulário
+                const form = modalBody.querySelector('#gerenciarPartesForm');
+                if (!form) return;
 
-                let newFormHtml = emptyFormTemplateHtml.replace(/__prefix__/g, formNum);
-                targetList.insertAdjacentHTML('beforeend', newFormHtml);
+                // Ativa os botões "+ Adicionar"
+                form.querySelectorAll('.btn-add-parte').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const tipo = btn.dataset.tipo;
+                        const targetList = form.querySelector(tipo === 'AUTOR' ? '#autores-list' : '#reus-list');
+                        const totalFormsInput = form.querySelector('input[name="partes-TOTAL_FORMS"]');
+                        const emptyFormTemplate = form.querySelector('#empty-form-template');
+                        if (!targetList || !totalFormsInput || !emptyFormTemplate) return;
 
-                const newFormElement = targetList.lastElementChild;
-                newFormElement.querySelector('select[name$="tipo_participacao"]').value = tipo;
+                        let formNum = parseInt(totalFormsInput.value);
+                        let newFormHtml = emptyFormTemplate.innerHTML.replace(/__prefix__/g, formNum);
 
-                $(newFormElement).find('.form-select').select2({
-                    theme: "bootstrap-5",
-                    width: '100%',
-                    dropdownParent: $('#gerenciarPartesModal')
+                        targetList.insertAdjacentHTML('beforeend', newFormHtml);
+                        targetList.lastElementChild.querySelector('select[name$="tipo_participacao"]').value = tipo;
+
+                        totalFormsInput.value = formNum + 1;
+                    });
                 });
 
-                totalFormsInput.value = formNum + 1;
+                // Ativa os botões "x" para remover
+                form.addEventListener('click', function(e) {
+                    if (e.target.classList.contains('btn-remove-parte')) {
+                        const formCard = e.target.closest('.parte-card');
+                        if (formCard) {
+                            const deleteCheckbox = formCard.querySelector('input[type="checkbox"][name$="DELETE"]');
+                            if (deleteCheckbox) {
+                                deleteCheckbox.checked = true;
+                                formCard.style.display = 'none';
+                            } else {
+                                formCard.remove();
+                            }
+                        }
+                    }
+                });
             });
         });
 
-        // Adiciona evento para os botões de REMOVER (usando delegação)
-        form.addEventListener('click', function(e) {
-            if (e.target && e.target.classList.contains('btn-remove-parte')) {
-                const cardToRemove = e.target.closest('.parte-card');
-                const deleteCheckbox = cardToRemove.querySelector('input[type="checkbox"][name$="DELETE"]');
-                if (deleteCheckbox) {
-                    deleteCheckbox.checked = true;
-                    cardToRemove.style.display = 'none';
-                } else {
-                    cardToRemove.remove();
-                }
-            }
-        });
-
-        // Inicializa o Select2 nos campos já existentes
-        $(form).find('.form-select').select2({
-            theme: "bootstrap-5",
-            width: '100%',
-            dropdownParent: $('#gerenciarPartesModal')
-        });
-    }
-
-    if (gerenciarPartesModal) {
-        // 1. Carregar o formulário no modal quando ele for aberto
-        gerenciarPartesModal.addEventListener('show.bs.modal', function(event) {
-            const button = event.relatedTarget;
-            const formUrl = button.getAttribute('data-form-url');
-            modalBody.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
-
-            fetch(formUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-                .then(response => response.text())
-                .then(html => {
-                    modalBody.innerHTML = html;
-                    // 2. SOMENTE DEPOIS que o HTML foi inserido, chama a função para ativar os botões
-                    setupModalForm();
-                });
-        });
-
-        // 3. Lidar com o envio do formulário DENTRO do modal via AJAX
-        modalBody.addEventListener('submit', function(e) {
+        // 3. Lógica para submeter o formulário de partes via AJAX
+        gerenciarPartesModal.addEventListener('submit', function(e) {
             if (e.target.id === 'gerenciarPartesForm') {
                 e.preventDefault();
                 const form = e.target;
-                const formData = new FormData(form);
-                fetch(form.action, { method: 'POST', body: formData, headers: {'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': formData.get('csrfmiddlewaretoken')} })
+                fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: {'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value}
+                })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
                         bootstrap.Modal.getInstance(gerenciarPartesModal).hide();
                         const partialUrl = "{% url 'detalhe_processo_partes_partial' processo_pk=processo.pk %}";
                         fetch(partialUrl)
-                            .then(response => response.text())
-                            .then(html => {
-                                document.getElementById('partes-card-container').innerHTML = html;
-                            });
+                            .then(res => res.text())
+                            .then(html => document.getElementById('partes-card-container').innerHTML = html);
                     } else {
-                        alert('Houve erros no formulário.');
+                        alert('Houve um erro ao salvar as partes. Verifique os dados.');
                         console.error('Erros:', data.errors);
                     }
                 });
             }
         });
     }
+
+    // ---- LÓGICA FORMULÁRIO GERAR DOCUMENTO ----
+    const formGerarDocumento = document.getElementById('formGerarDocumento');
+    if(formGerarDocumento) {
+        formGerarDocumento.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const select = document.getElementById('selectModelo');
+            if (select.value) {
+                window.location.href = select.value;
+            } else {
+                alert("Por favor, selecione um modelo de documento.");
+            }
+        });
+    }
 });
 </script>
+{% include 'gestao/partials/_detalhe_financeiro_js.html' %}
 {% endblock %}

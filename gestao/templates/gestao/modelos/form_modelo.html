@@ -1,0 +1,138 @@
+{% extends 'gestao/base.html' %}
+
+{% block title %}{{ titulo_pagina }}{% endblock %}
+
+{% block content %}
+<style>
+    /* Estilos para a caixa de ferramentas de variáveis */
+    .variavel-item {
+        cursor: pointer;
+        transition: background-color 0.2s ease-in-out;
+        border: 1px solid #dee2e6;
+    }
+    .variavel-item:hover {
+        background-color: #e9ecef;
+    }
+    .variavel-valor {
+        font-family: monospace;
+        font-size: 0.85em;
+        color: #d63384;
+    }
+</style>
+
+<form method="post">
+    {% csrf_token %}
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">{{ titulo_pagina }}</h1>
+        <div>
+            <a href="{% url 'lista_modelos' %}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-success">Salvar Modelo</button>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <label for="{{ form.titulo.id_for_label }}" class="form-label fs-5">Título do Modelo</label>
+                        {{ form.titulo }}
+                    </div>
+                    <div class="mb-4">
+                        <label for="{{ form.descricao.id_for_label }}" class="form-label">Descrição / Instruções de Uso</label>
+                        {{ form.descricao }}
+                    </div>
+
+                    <hr>
+
+                    <div class="mb-4">
+                        <h5 class="mb-3">Cabeçalho (Opcional)</h5>
+                        {{ form.cabecalho }}
+                    </div>
+
+                    <div class="mb-4">
+                        <h5 class="mb-3">Corpo Principal do Documento</h5>
+                        {{ form.conteudo }}
+                    </div>
+
+                    <div class="mb-4">
+                        <h5 class="mb-3">Rodapé (Opcional)</h5>
+                        {{ form.rodape }}
+                    </div>
+
+                    {{ form.media }} {# ESSENCIAL para carregar o JS/CSS do CKEditor #}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm sticky-top" style="top: 20px;">
+                <div class="card-header d-flex align-items-center gap-2">
+                    <i class="bi bi-box-fill text-primary"></i>
+                    <h5 class="mb-0">Caixa de Variáveis</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">Clique em uma variável para inseri-la no editor de texto no local do cursor.</p>
+
+                    <div class="accordion" id="accordionVariaveis">
+                        {% for categoria, lista_variaveis in variaveis.items %}
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="heading-{{ forloop.counter }}">
+                                <button class="accordion-button {% if not forloop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ forloop.counter }}">
+                                    <strong>Dados de: {{ categoria }}</strong>
+                                </button>
+                            </h2>
+                            <div id="collapse-{{ forloop.counter }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" data-bs-parent="#accordionVariaveis">
+                                <ul class="list-group list-group-flush">
+                                    {% for item in lista_variaveis %}
+                                    <li class="list-group-item variavel-item p-3" data-valor="{{ item.valor }}">
+                                        <div class="fw-bold">{{ item.label }}</div>
+                                        <div class="variavel-valor">{{ item.valor }}</div>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block javascript %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Esta função insere o texto da variável no editor CKEditor ativo.
+    function inserirVariavel(texto) {
+        // CKEDITOR.instances contém todas as instâncias do editor na página.
+        // Verificamos qual está com foco para inserir o texto no lugar certo.
+        let editorAtivo = CKEDITOR.currentInstance;
+        if (editorAtivo) {
+            editorAtivo.insertText(texto);
+        } else {
+            // Se nenhum editor estiver focado, insere no primeiro por padrão (geralmente o 'conteudo').
+            // Você pode adicionar uma lógica mais sofisticada se necessário.
+            const primeiroEditor = CKEDITOR.instances['id_conteudo'] || Object.values(CKEDITOR.instances)[0];
+            if(primeiroEditor) {
+               primeiroEditor.insertText(texto);
+            } else {
+                alert("Por favor, clique em um dos campos de texto (Cabeçalho, Corpo ou Rodapé) antes de inserir uma variável.");
+            }
+        }
+    }
+
+    // Adiciona o evento de clique a todos os itens de variável.
+    document.querySelectorAll('.variavel-item').forEach(item => {
+        item.addEventListener('click', function() {
+            const valorVariavel = this.getAttribute('data-valor');
+            inserirVariavel(valorVariavel);
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -1,57 +1,60 @@
+{% comment %}
+Arquivo: gestao/partials/_lista_clientes_partial.html
+Este template renderiza a grade de cards de clientes e é projetado para
+ser incluído na página principal ou carregado via AJAX.
+{% endcomment %}
+
 {% for cliente in filter.qs %}
 <div class="col-md-6 col-lg-4 mb-4">
     <div class="card h-100 shadow-sm client-card">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <div class="d-flex align-items-center gap-3">
-                <div class="avatar-circle
-                    {% if cliente.tipo_pessoa == 'PF' %}bg-primary-subtle text-primary{% else %}bg-secondary-subtle text-secondary{% endif %}">
+            <div class="d-flex align-items-center gap-3" style="min-width: 0;">
+                <div class="avatar-circle flex-shrink-0 {% if cliente.tipo_pessoa == 'PF' %}bg-primary-subtle text-primary{% else %}bg-secondary-subtle text-secondary{% endif %}">
                     <i class="bi {% if cliente.tipo_pessoa == 'PF' %}bi-person-fill{% else %}bi-building-fill{% endif %} fs-5"></i>
                 </div>
-                <h5 class="card-title mb-0 fs-6 fw-bold">{{ cliente.nome_completo }}</h5>
+                <h5 class="card-title mb-0 fs-6 fw-bold text-truncate" title="{{ cliente.nome_completo }}">{{ cliente.nome_completo }}</h5>
             </div>
-            <div>
-                <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2 btn-editar" data-pk="{{ cliente.pk }}" title="Editar Cliente">
+            <div class="d-flex align-items-center flex-shrink-0">
+                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 btn-editar" data-pk="{{ cliente.pk }}" title="Editar Cliente">
                     <i class="bi bi-pencil-fill"></i>
                 </button>
 
-                {% comment %}
-                  Aqui aplicamos a lógica recomendada:
-                  1. Verificamos se o cliente tem processos ou serviços ativos.
-                  2. Se tiver, o botão é renderizado como 'disabled' e com um 'title' explicativo.
-                  3. Senão, o botão normal de exclusão é renderizado.
-                {% endcomment %}
+                {# ===== INÍCIO DA LÓGICA CORRIGIDA ===== #}
                 {% if cliente.processos_ativos_count > 0 or cliente.servicos_ativos_count > 0 %}
-                    <button type="button" class="btn btn-sm btn-outline-danger py-1 px-2"
-                            style="cursor: not-allowed;"
-                            disabled
-                            title="Não é possível excluir clientes com processos ou serviços ativos">
-                        <i class="bi bi-trash-fill"></i>
-                    </button>
+                    <span class="d-inline-block ms-1" tabindex="0" data-bs-toggle="tooltip"
+                          title="Não pode ser excluído. Vínculos ativos:
+{% if cliente.processos_ativos_count > 0 %}- {{ cliente.processos_ativos_count }} Processo(s)
+{% endif %}{% if cliente.servicos_ativos_count > 0 %}- {{ cliente.servicos_ativos_count }} Serviço(s){% endif %}">
+                        <button class="btn btn-sm btn-outline-danger py-0 px-2" type="button" disabled style="pointer-events: none;">
+                            <i class="bi bi-trash-fill"></i>
+                        </button>
+                    </span>
                 {% else %}
-                    <button type="button" class="btn btn-sm btn-outline-danger py-1 px-2 btn-excluir"
-                            data-pk="{{ cliente.pk }}"
-                            data-nome="{{ cliente.nome_completo }}"
-                            title="Excluir Cliente">
+                    <button class="btn btn-sm btn-outline-danger py-0 px-2 ms-1" type="button"
+                            data-bs-toggle="modal" data-bs-target="#deleteClienteModal"
+                            data-delete-url="{% url 'excluir_cliente' pk=cliente.pk %}"
+                            data-nome="{{ cliente.nome_completo }}">
                         <i class="bi bi-trash-fill"></i>
                     </button>
+
                 {% endif %}
+
+                {# ===== FIM DA LÓGICA CORRIGIDA ===== #}
             </div>
         </div>
-        <div class="card-body">
-            <p class="card-text text-muted small">
-                <i class="bi bi-person-badge"></i> {{ cliente.cpf_cnpj|default:"Não informado" }}<br>
-                <i class="bi bi-envelope-at"></i> {{ cliente.email|default:"Não informado" }}<br>
-                <i class="bi bi-telephone"></i> {{ cliente.telefone_principal|default:"Não informado" }}
-            </p>
+        <div class="card-body small">
+            <p class="card-text text-muted mb-2"><i class="bi bi-person-badge me-2"></i>{{ cliente.cpf_cnpj|default:"Não informado" }}</p>
+            <p class="card-text text-muted mb-2"><i class="bi bi-envelope-at me-2"></i>{{ cliente.email|default:"Não informado" }}</p>
+            <p class="card-text text-muted mb-0"><i class="bi bi-telephone me-2"></i>{{ cliente.telefone_principal|default:"Não informado" }}</p>
         </div>
         <div class="card-footer bg-light-subtle d-flex justify-content-around small text-center">
             <div>
-                <div class="fw-bold fs-5">{{ cliente.processos_ativos_count }}</div>
-                <div class="text-muted">Processo(s) Ativo(s)</div>
+                <div class="fw-bold fs-5">{{ cliente.processos_ativos_count|default:0 }}</div>
+                <div class="text-muted">Processos Ativos</div>
             </div>
             <div>
-                <div class="fw-bold fs-5">{{ cliente.servicos_ativos_count }}</div>
-                <div class="text-muted">Serviço(s) Ativo(s)</div>
+                <div class="fw-bold fs-5">{{ cliente.servicos_ativos_count|default:0 }}</div>
+                <div class="text-muted">Serviços Ativos</div>
             </div>
         </div>
     </div>

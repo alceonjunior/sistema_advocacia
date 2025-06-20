@@ -10,7 +10,9 @@ from .models import (
     TipoServico,
     MovimentacaoServico,
     TipoMovimentacao,
-    ContratoHonorarios
+    ContratoHonorarios,
+    ModeloDocumento,
+    Documento
 )
 from datetime import date
 
@@ -346,3 +348,23 @@ class CalculoForm(forms.Form):
         widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
     )
 
+
+class ModeloDocumentoForm(forms.ModelForm):
+    """Formulário para criar e editar Modelos de Documentos."""
+    class Meta:
+        model = ModeloDocumento
+        fields = ['titulo', 'descricao', 'cabecalho', 'conteudo', 'rodape']
+        widgets = {
+            'titulo': forms.TextInput(attrs={'class': 'form-control'}),
+            'descricao': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        }
+
+class DocumentoForm(forms.ModelForm):
+    """Formulário para editar um documento gerado."""
+    class Meta:
+        model = Documento
+        fields = ['titulo', 'conteudo']
+        widgets = {
+            'titulo': forms.TextInput(attrs={'class': 'form-control'}),
+            # O campo 'conteudo' usará o CKEditor automaticamente
+        }

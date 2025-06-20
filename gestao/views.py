@@ -18,7 +18,7 @@ from .forms import (
     ProcessoForm, MovimentacaoForm, PagamentoForm, ServicoForm,
     ClienteForm, TipoServicoForm, ServicoEditForm, MovimentacaoServicoForm,
     ContratoHonorariosForm, ServicoConcluirForm, ProcessoCreateForm, ParteProcessoFormSet,
-    CalculoForm # <<< ADICIONE ESTA LINHA
+    CalculoForm,ModeloDocumentoForm, DocumentoForm
 )
 
 from .services import ServicoIndices
@@ -28,8 +28,12 @@ from .calculators import CalculadoraMonetaria
 # Imports dos Modelos deste App
 from .models import (
     Processo, Movimentacao, LancamentoFinanceiro, Pagamento,
-    Servico, MovimentacaoServico, Cliente, TipoServico, CalculoJudicial
+    Servico, MovimentacaoServico, Cliente, TipoServico, CalculoJudicial, ModeloDocumento, Documento,
 )
+
+from django.template import Context, Template # Adicione este import
+
+from .utils import data_por_extenso
 
 
 # =================================================================
@@ -192,23 +196,40 @@ def lista_processos(request):
 
 @login_required
 def detalhe_processo(request, pk):
-    """Exibe os detalhes de um processo e processa a adição de novas movimentações."""
-    processo = get_object_or_404(Processo, pk=pk)
+    """
+    Exibe os detalhes de um processo, lida com a adição de novas movimentações
+    e prepara o contexto com os formulários e dados necessários para a página.
+    """
+    # Busca o objeto principal da página, o processo.
+    # Adicionamos prefetch_related para otimizar a busca dos documentos vinculados.
+    processo = get_object_or_404(Processo.objects.prefetch_related('documentos'), pk=pk)
+
+    # Lida com a submissão do formulário de uma nova movimentação.
     if request.method == 'POST' and 'submit_movimentacao' in request.POST:
         form_movimentacao = MovimentacaoForm(request.POST)
         if form_movimentacao.is_valid():
             nova_movimentacao = form_movimentacao.save(commit=False)
             nova_movimentacao.processo = processo
             nova_movimentacao.save()
+            # Redireciona para a mesma página para evitar reenvio do formulário.
             return redirect('detalhe_processo', pk=processo.pk)
     else:
+        # Se não for POST, cria um formulário de movimentação em branco.
         form_movimentacao = MovimentacaoForm()
 
+    # --- CORREÇÃO APLICADA AQUI ---
+    # Busca todos os modelos de documentos disponíveis no banco de dados.
+    # Esta linha define a variável que estava faltando.
+    todos_modelos = ModeloDocumento.objects.all()
+
+    # Monta o contexto final que será enviado para o template.
     context = {
         'processo': processo,
         'form_movimentacao': form_movimentacao,
-        'form_pagamento': PagamentoForm(),
+        'form_pagamento': PagamentoForm(),  # Formulário para o modal de pagamento.
+        'todos_modelos': todos_modelos,  # Lista de modelos para a nova funcionalidade.
     }
+
     return render(request, 'gestao/detalhe_processo.html', context)
 
 
@@ -479,6 +500,10 @@ def detalhe_processo_partes_partial(request, processo_pk):
 
 @login_required
 def lista_clientes(request):
+    """
+    Exibe a lista de clientes, anotando a contagem de processos e serviços ATIVOS
+    para determinar se a exclusão é permitida.
+    """
     base_queryset = Cliente.objects.annotate(
         processos_ativos_count=Count('participacoes__processo',
                                      filter=Q(participacoes__processo__status_processo='ATIVO'), distinct=True),
@@ -487,10 +512,15 @@ def lista_clientes(request):
 
     cliente_filter = ClienteFilter(request.GET, queryset=base_queryset)
 
+    # A lógica para requisições AJAX permanece a mesma
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return render(request, 'gestao/partials/_lista_clientes_partial.html', {'filter': cliente_filter})
 
-    context = {'filter': cliente_filter, 'form': ClienteForm()}
+    # A view principal também permanece a mesma
+    context = {
+        'filter': cliente_filter,
+        'form': ClienteForm()
+    }
     return render(request, 'gestao/lista_clientes.html', context)
 
 
@@ -730,3 +760,153 @@ def excluir_todos_calculos(request, processo_pk):
     processo = get_object_or_404(Processo, pk=processo_pk)
     processo.calculos.all().delete()
     return redirect('pagina_de_calculos', processo_pk=processo.pk)
+
+
+@login_required
+def lista_modelos(request):
+    modelos = ModeloDocumento.objects.all()
+    return render(request, 'gestao/modelos/lista_modelos.html', {'modelos': modelos})
+
+
+# Lista de placeholders que será usada nas views de criação/edição de modelos.
+# Esta lista pode ser expandida no futuro.
+VARIAVEIS_DOCUMENTO = {
+    'Cliente': [
+        {'label': 'Nome Completo', 'valor': '{{ cliente.nome_completo }}'},
+        {'label': 'CPF/CNPJ', 'valor': '{{ cliente.cpf_cnpj }}'},
+        {'label': 'E-mail', 'valor': '{{ cliente.email }}'},
+        {'label': 'Telefone Principal', 'valor': '{{ cliente.telefone_principal }}'},
+        # Adicionar mais campos do cliente conforme necessário (Nacionalidade, Estado Civil, etc.)
+    ],
+    'Processo': [
+        {'label': 'Número do Processo', 'valor': '{{ processo.numero_processo }}'},
+        {'label': 'Tipo da Ação', 'valor': '{{ processo.tipo_acao.nome }}'},
+        {'label': 'Vara/Comarca', 'valor': '{{ processo.vara_comarca_orgao }}'},
+        {'label': 'Valor da Causa (formatado)', 'valor': '{{ processo.valor_causa|floatformat:2|intcomma }}'},
+        {'label': 'Polo Ativo (Nomes)', 'valor': '{{ processo.get_polo_ativo_display }}'},
+        {'label': 'Polo Passivo (Nomes)', 'valor': '{{ processo.get_polo_passivo_display }}'},
+    ],
+    'Advogado': [
+        {'label': 'Nome do Adv. Responsável', 'valor': '{{ processo.advogado_responsavel.get_full_name }}'},
+        # Adicionar mais campos do perfil do advogado se existirem (OAB, etc.)
+    ],
+    'Geral': [
+        {'label': 'Data Atual por Extenso', 'valor': '{{ data_extenso }}'},
+        {'label': 'Cidade do Escritório', 'valor': '{{ cidade_escritorio }}'},
+    ]
+}
+
+
+@login_required
+def adicionar_modelo(request):
+    if request.method == 'POST':
+        form = ModeloDocumentoForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('lista_modelos')
+    else:
+        form = ModeloDocumentoForm()
+
+    context = {
+        'form': form,
+        'titulo_pagina': 'Adicionar Novo Modelo',
+        'variaveis': VARIAVEIS_DOCUMENTO  # Injetando as variáveis no contexto
+    }
+    return render(request, 'gestao/modelos/form_modelo.html', context)
+
+
+@login_required
+def editar_modelo(request, pk):
+    modelo = get_object_or_404(ModeloDocumento, pk=pk)
+    if request.method == 'POST':
+        form = ModeloDocumentoForm(request.POST, instance=modelo)
+        if form.is_valid():
+            form.save()
+            return redirect('lista_modelos')
+    else:
+        form = ModeloDocumentoForm(instance=modelo)
+
+    context = {
+        'form': form,
+        'titulo_pagina': 'Editar Modelo',
+        'variaveis': VARIAVEIS_DOCUMENTO  # Injetando as variáveis no contexto
+    }
+    return render(request, 'gestao/modelos/form_modelo.html', context)
+
+
+@require_POST
+@login_required
+def excluir_modelo(request, pk):
+    modelo = get_object_or_404(ModeloDocumento, pk=pk)
+    modelo.delete()
+    return redirect('lista_modelos')
+
+
+@login_required
+def gerar_documento(request, processo_pk, modelo_pk):
+    """
+    Gera o conteúdo de um documento a partir de um modelo e um processo,
+    e exibe em um formulário para edição e salvamento.
+    """
+    processo = get_object_or_404(Processo, pk=processo_pk)
+    modelo = get_object_or_404(ModeloDocumento, pk=modelo_pk)
+
+    # Monta o contexto de variáveis para o template
+    cliente_principal = processo.partes.filter(tipo_participacao='AUTOR').first().cliente if processo.partes.filter(
+        tipo_participacao='AUTOR').exists() else None
+
+    # Validação para garantir que o cliente principal existe
+    if not cliente_principal:
+        # messages.error(request, "Não é possível gerar documentos. O processo não possui um cliente no polo ativo.")
+        return redirect('detalhe_processo', pk=processo.pk)
+
+
+    contexto_variaveis = Context({
+        'cliente': cliente_principal,
+        'processo': processo,
+        'data_extenso': data_por_extenso(date.today()),
+        'cidade_escritorio': 'Sua Cidade, UF'  # Idealmente viria de um settings
+    })
+
+    # Renderiza o conteúdo do modelo com as variáveis
+    conteudo_renderizado = Template(modelo.conteudo).render(contexto_variaveis)
+
+    # Preenche o formulário com os dados gerados
+    form = DocumentoForm(initial={
+        'titulo': f"{modelo.titulo} - {cliente_principal.nome_completo}",
+        'conteudo': conteudo_renderizado
+    })
+
+    if request.method == 'POST':
+        form = DocumentoForm(request.POST)
+        if form.is_valid():
+            documento = form.save(commit=False)
+            documento.processo = processo
+            documento.modelo_origem = modelo
+            documento.save()
+            return redirect('detalhe_processo', pk=processo.pk)
+
+    return render(request, 'gestao/documentos/form_documento.html', {
+        'form': form,
+        'processo': processo,
+        'titulo_pagina': 'Gerar Documento'
+    })
+
+
+@login_required
+def editar_documento(request, pk):
+    """ Edita um documento já salvo. """
+    documento = get_object_or_404(Documento, pk=pk)
+    if request.method == 'POST':
+        form = DocumentoForm(request.POST, instance=documento)
+        if form.is_valid():
+            form.save()
+            return redirect('detalhe_processo', pk=documento.processo.pk)
+    else:
+        form = DocumentoForm(instance=documento)
+
+    return render(request, 'gestao/documentos/form_documento.html', {
+        'form': form,
+        'processo': documento.processo,
+        'titulo_pagina': 'Editar Documento'
+    })

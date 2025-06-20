@@ -6,43 +6,17 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
 <style>
-    .client-card {
-        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-    }
-    .client-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.1);
-    }
-    .avatar-circle {
-        height: 40px;
-        width: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-    }
-    #client-list-container.loading {
-        opacity: 0.5;
-        position: relative;
-        transition: opacity 0.3s;
-    }
+    /* Estilos visuais da página (sem alterações) */
+    .client-card { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
+    .client-card:hover { transform: translateY(-5px); box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.1); }
+    .avatar-circle { height: 40px; width: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+    #client-list-container.loading { opacity: 0.5; position: relative; transition: opacity 0.3s; min-height: 200px; }
     #client-list-container.loading::after {
-        content: '';
-        position: absolute;
-        top: 40%;
-        left: 50%;
-        width: 3rem;
-        height: 3rem;
-        margin-left: -1.5rem;
-        border: 5px solid #f3f3f3;
-        border-top: 5px solid #0d6efd;
-        border-radius: 50%;
+        content: ''; position: absolute; top: 40%; left: 50%; width: 3rem; height: 3rem; margin-left: -1.5rem;
+        border: 5px solid #f3f3f3; border-top: 5px solid #0d6efd; border-radius: 50%;
         animation: spin 1s linear infinite;
     }
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -69,6 +43,7 @@
     {% include 'gestao/partials/_lista_clientes_partial.html' %}
 </div>
 
+<!-- Modal para Adicionar/Editar Cliente -->
 <div class="modal fade" id="clienteModal" tabindex="-1" aria-labelledby="clienteModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -79,8 +54,14 @@
             <form id="clienteForm" method="post" novalidate>
                 {% csrf_token %}
                 <div class="modal-body">
-                    {{ form.as_p }}
-                    <div id="form-errors" class="text-danger small mt-2"></div>
+                    <div id="form-errors-non-field" class="alert alert-danger d-none"></div>
+                    {% for field in form %}
+                        <div class="mb-3">
+                            {{ field.label_tag }}
+                            {{ field }}
+                            <div class="invalid-feedback">{{ field.errors|striptags }}</div>
+                        </div>
+                    {% endfor %}
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -91,12 +72,13 @@
     </div>
 </div>
 
-<div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+<!-- Modal de Confirmação de Exclusão -->
+<div class="modal fade" id="deleteClienteModal" tabindex="-1" aria-labelledby="deleteClienteModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header">
-                <h1 class="modal-title fs-5" id="confirmDeleteModalLabel">Confirmar Exclusão</h1>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <div class="modal-header bg-danger text-white">
+                <h1 class="modal-title fs-5" id="deleteClienteModalLabel">Confirmar Exclusão</h1>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <p>Você tem certeza que deseja excluir o cliente <strong id="clienteNomeDelete"></strong>?</p>
@@ -104,7 +86,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <form id="deleteForm" method="post">
+                <form id="deleteForm" method="post" class="d-inline">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-danger">Sim, Excluir</button>
                 </form>
@@ -117,139 +99,151 @@
 {% block javascript %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    // --- SELEÇÃO DE ELEMENTOS ---
-    const clienteModal = new bootstrap.Modal(document.getElementById('clienteModal'));
-    const deleteModal = new bootstrap.Modal(document.getElementById('confirmDeleteModal'));
-    const clienteForm = document.getElementById('clienteForm');
-    const modalLabel = document.getElementById('clienteModalLabel');
-    const clientListContainer = document.getElementById('client-list-container');
-    const formErrors = document.getElementById('form-errors');
-    const telefoneInput = $('#clienteModal #id_telefone_principal');
+    // --- SELEÇÃO DE ELEMENTOS E INSTÂNCIAS DE MODAIS ---
+    const clienteModalEl = document.getElementById('clienteModal');
+    const clienteModal = clienteModalEl ? new bootstrap.Modal(clienteModalEl) : null;
+    const deleteModalEl = document.getElementById('deleteClienteModal');
+    const deleteModal = deleteModalEl ? new bootstrap.Modal(deleteModalEl) : null;
 
-    // --- LÓGICA DE FILTRAGEM DINÂMICA ---
+    const clienteForm = document.getElementById('clienteForm');
+    const clientListContainer = document.getElementById('client-list-container');
     const filterForm = document.getElementById('filter-form');
-    const searchInput = filterForm.querySelector('input[name="busca_geral"]');
-    const typeSelect = filterForm.querySelector('select[name="tipo_pessoa"]');
     let debounceTimer;
 
+    // --- FUNÇÃO PARA ATUALIZAR A LISTA DE CLIENTES E REINICIAR TOOLTIPS ---
     function updateClientList() {
+        if (!clientListContainer) return;
         clientListContainer.classList.add('loading');
-        const formData = new FormData(filterForm);
-        const params = new URLSearchParams(formData);
-        const url = `{% url 'lista_clientes' %}?${params.toString()}`;
-        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        const params = new URLSearchParams(new FormData(filterForm));
+        fetch(`{% url 'lista_clientes' %}?${params.toString()}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(response => response.text())
             .then(html => {
                 clientListContainer.innerHTML = html;
+                const tooltipTriggerList = [].slice.call(clientListContainer.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                tooltipTriggerList.map(function (tooltipTriggerEl) { return new bootstrap.Tooltip(tooltipTriggerEl); });
             })
-            .finally(() => {
-                clientListContainer.classList.remove('loading');
-            });
+            .finally(() => clientListContainer.classList.remove('loading'));
     }
 
-    searchInput.addEventListener('input', () => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(updateClientList, 400);
-    });
-    typeSelect.addEventListener('change', updateClientList);
+    // --- EVENTOS DE FILTRAGEM ---
+    if (filterForm) {
+        filterForm.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(updateClientList, 400);
+        });
+    }
 
-    // --- LÓGICA PARA ABRIR OS MODAIS ---
+    // --- DELEGAÇÃO DE EVENTOS PARA OS BOTÕES DE AÇÃO ---
+    document.body.addEventListener('click', function (e) {
+        // Lógica para o botão de ADICIONAR CLIENTE
+        if (e.target.closest('.btn-adicionar')) {
+            document.getElementById('clienteModalLabel').textContent = 'Adicionar Cliente';
+            clienteForm.action = "{% url 'adicionar_cliente' %}";
+            clienteForm.reset();
+            clearFormErrors(clienteForm);
+            clienteModal?.show();
+        }
 
-    // Botão "+ Adicionar Cliente"
-    document.querySelector('.btn-adicionar').addEventListener('click', function () {
-        modalLabel.textContent = 'Adicionar Cliente';
-        clienteForm.action = "{% url 'adicionar_cliente' %}";
-        clienteForm.reset();
-        formErrors.innerHTML = '';
-        telefoneInput.mask('(00) 0000-00009');
-        clienteModal.show();
-    });
-
-    // Botões "Editar" e "Excluir" (usando delegação de eventos)
-    clientListContainer.addEventListener('click', function (e) {
+        // Lógica para o botão de EDITAR CLIENTE
         const editButton = e.target.closest('.btn-editar');
-        const deleteButton = e.target.closest('.btn-excluir');
-
         if (editButton) {
-            e.preventDefault();
             const pk = editButton.dataset.pk;
-            formErrors.innerHTML = '';
+            clearFormErrors(clienteForm);
             fetch(`/clientes/${pk}/json/`)
                 .then(response => response.json())
                 .then(data => {
-                    modalLabel.textContent = 'Editar Cliente';
+                    document.getElementById('clienteModalLabel').textContent = 'Editar Cliente';
                     clienteForm.action = `/clientes/${pk}/salvar/`;
                     for (const key in data) {
-                        if (clienteForm.elements[key]) {
-                            clienteForm.elements[key].value = data[key];
-                        }
+                        if (clienteForm.elements[key]) clienteForm.elements[key].value = data[key];
                     }
-                    telefoneInput.mask('(00) 0000-00009');
-                    clienteModal.show();
+                    clienteModal?.show();
                 });
         }
 
+        // --- LÓGICA CORRETA E FINAL PARA O BOTÃO DE EXCLUIR ---
+        const deleteButton = e.target.closest('button[data-bs-target="#deleteClienteModal"]');
         if (deleteButton) {
             e.preventDefault();
-            const pk = deleteButton.dataset.pk;
-            const nome = deleteButton.dataset.nome;
-            document.getElementById('clienteNomeDelete').textContent = nome;
-            document.getElementById('deleteForm').action = `/clientes/${pk}/excluir/`;
-            deleteModal.show();
+            const deleteUrl = deleteButton.dataset.deleteUrl;
+            const clientName = deleteButton.dataset.nome;
+            document.getElementById('deleteForm').action = deleteUrl;
+            document.getElementById('clienteNomeDelete').textContent = clientName || 'este cliente';
+            deleteModal?.show();
         }
     });
 
-    // --- LÓGICA PARA ENVIAR OS FORMULÁRIOS VIA AJAX ---
+    // --- LÓGICA PARA SUBMETER FORMULÁRIOS VIA AJAX ---
 
-    // Envio do formulário Salvar (Adicionar/Editar)
-    clienteForm.addEventListener('submit', function (e) {
-        e.preventDefault();
-        telefoneInput.unmask();
-        const formData = new FormData(clienteForm);
-        telefoneInput.mask('(00) 0000-00009');
-
-        fetch(clienteForm.action, {
-            method: 'POST',
-            body: formData,
-            headers: { 'X-CSRFToken': formData.get('csrfmiddlewaretoken') }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                clienteModal.hide();
-                updateClientList(); // Atualiza a lista dinamicamente
-            } else {
-                let errorHtml = '<ul class="list-unstyled">';
-                for (const field in data.errors) {
-                    data.errors[field].forEach(error => {
-                        errorHtml += `<li>${field}: ${error.message}</li>`;
-                    });
+    // Formulário de Adicionar/Editar
+    if (clienteForm) {
+        clienteForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            clearFormErrors(this);
+            fetch(this.action, { method: 'POST', body: new FormData(this) })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    clienteModal.hide();
+                    updateClientList();
+                } else {
+                    displayFormErrors(this, data.errors);
                 }
-                errorHtml += '</ul>';
-                formErrors.innerHTML = errorHtml;
-            }
+            }).catch(err => console.error("Erro ao salvar cliente:", err));
         });
-    });
+    }
 
-    // Envio do formulário Excluir
-    document.getElementById('deleteForm').addEventListener('submit', function (e) {
-        e.preventDefault();
-        const formData = new FormData(this);
-        fetch(this.action, {
-            method: 'POST',
-            body: formData,
-            headers: { 'X-CSRFToken': formData.get('csrfmiddlewaretoken') }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                deleteModal.hide();
-                updateClientList(); // Atualiza a lista dinamicamente
-            } else {
-                alert('Erro ao excluir: ' + data.message);
-            }
+    // Formulário de Exclusão
+    const deleteForm = document.getElementById('deleteForm');
+    if (deleteForm) {
+        deleteForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            fetch(this.action, { method: 'POST', body: new FormData(this) })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    deleteModal.hide();
+                    updateClientList();
+                } else {
+                    alert('Erro ao excluir: ' + (data.message || 'Erro desconhecido.'));
+                    deleteModal.hide();
+                }
+            }).catch(err => console.error("Erro ao excluir cliente:", err));
         });
-    });
+    }
+
+    // --- FUNÇÕES AUXILIARES PARA MANIPULAR ERROS DE FORMULÁRIO ---
+    function clearFormErrors(form) {
+        form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+        const nonFieldErrorsDiv = form.querySelector('#form-errors-non-field');
+        if (nonFieldErrorsDiv) {
+            nonFieldErrorsDiv.innerHTML = '';
+            nonFieldErrorsDiv.classList.add('d-none');
+        }
+    }
+
+    function displayFormErrors(form, errors) {
+        for (const fieldName in errors) {
+            if (fieldName === '__all__') {
+                const nonFieldErrorsDiv = form.querySelector('#form-errors-non-field');
+                if (nonFieldErrorsDiv) {
+                    nonFieldErrorsDiv.innerHTML = errors[fieldName].map(e => `<p class="mb-0">${e.message || e}</p>`).join('');
+                    nonFieldErrorsDiv.classList.remove('d-none');
+                }
+            } else {
+                const field = form.querySelector(`[name="${fieldName}"]`);
+                if (field) {
+                    field.classList.add('is-invalid');
+                    const errorDiv = field.closest('.mb-3')?.querySelector('.invalid-feedback');
+                    if (errorDiv) errorDiv.textContent = errors[fieldName].map(e => e.message || e).join(' ');
+                }
+            }
+        }
+    }
+
+    // --- INICIALIZAÇÃO DE TOOLTIPS NA CARGA INICIAL DA PÁGINA ---
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) { return new bootstrap.Tooltip(tooltipTriggerEl); });
 });
 </script>
 {% endblock %}

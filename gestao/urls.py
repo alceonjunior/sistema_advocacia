@@ -2,6 +2,10 @@
 
 from django.urls import path
 from . import views
+from django.urls import path, include # Adicione 'include'
+from django.conf import settings # Adicione esta linha
+from django.conf.urls.static import static # Adicione esta linha
+
 
 urlpatterns = [
     # --- GERAL ---
@@ -64,4 +68,20 @@ urlpatterns = [
     # --- ROTAS INTERNAS PARA MODAIS (AJAX) ---
     path('cliente/adicionar/modal/', views.adicionar_cliente_modal, name='adicionar_cliente_modal'),
     path('tiposervico/adicionar/modal/', views.adicionar_tipo_servico_modal, name='adicionar_tipo_servico_modal'),
+
+    path('ckeditor/', include('ckeditor_uploader.urls')),  # Rota para o upload de imagens
+
+    # --- ROTAS PARA MODELOS DE DOCUMENTOS ---
+    path('modelos/', views.lista_modelos, name='lista_modelos'),
+    path('modelos/adicionar/', views.adicionar_modelo, name='adicionar_modelo'),
+    path('modelos/<int:pk>/editar/', views.editar_modelo, name='editar_modelo'),
+    path('modelos/<int:pk>/excluir/', views.excluir_modelo, name='excluir_modelo'),
+
+    path('processo/<int:processo_pk>/gerar-documento/<int:modelo_pk>/', views.gerar_documento, name='gerar_documento'),
+    path('documento/<int:pk>/editar/', views.editar_documento, name='editar_documento'),
+
 ]
+
+# Adiciona a rota para servir arquivos de mídia em modo de desenvolvimento
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

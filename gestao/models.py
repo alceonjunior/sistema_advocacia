@@ -13,6 +13,9 @@ from django.urls import reverse  # <<< ADICIONE ESTA LINHA
 
 from datetime import date
 
+from ckeditor_uploader.fields import RichTextUploadingField
+
+
 # --- Modelos de Base (Entidades Principais) ---
 
 class Cliente(models.Model):
@@ -352,3 +355,59 @@ class CalculoJudicial(models.Model):
 
     class Meta:
         ordering = ['-data_calculo']
+
+
+class ModeloDocumento(models.Model):
+    """
+    Representa um modelo de documento (template) que pode ser reutilizado.
+    Ex: Contratos, Petições, Procurações.
+    """
+    class Meta:
+        verbose_name = "Modelo de Documento"
+        verbose_name_plural = "Modelos de Documentos"
+        ordering = ['titulo']
+
+    titulo = models.CharField(max_length=255, verbose_name="Título do Modelo")
+    descricao = models.TextField(blank=True, null=True, verbose_name="Descrição / Instruções de Uso")
+
+    # Usamos o RichTextUploadingField para ter o editor completo com upload de imagem
+    cabecalho = RichTextUploadingField(verbose_name="Cabeçalho", blank=True, null=True)
+    conteudo = RichTextUploadingField(verbose_name="Corpo do Documento")
+    rodape = RichTextUploadingField(verbose_name="Rodapé", blank=True, null=True)
+
+    data_criacao = models.DateTimeField(auto_now_add=True)
+    data_modificacao = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.titulo
+
+
+class Documento(models.Model):
+    """
+    Representa um documento específico vinculado a um Processo.
+    Pode ser gerado a partir de um ModeloDocumento ou ser um upload avulso.
+    """
+
+    class Meta:
+        verbose_name = "Documento"
+        verbose_name_plural = "Documentos"
+        ordering = ['-data_criacao']
+
+    processo = models.ForeignKey(Processo, on_delete=models.CASCADE, related_name="documentos")
+    modelo_origem = models.ForeignKey(ModeloDocumento, on_delete=models.SET_NULL, null=True, blank=True,
+                                      verbose_name="Gerado a partir do Modelo")
+
+    titulo = models.CharField(max_length=255, verbose_name="Título do Documento")
+
+    # O conteúdo final, já com as variáveis preenchidas, que ainda pode ser editado.
+    conteudo = RichTextUploadingField(verbose_name="Conteúdo do Documento")
+
+    data_criacao = models.DateTimeField(auto_now_add=True)
+    data_modificacao = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.titulo
+
+    def get_absolute_url(self):
+        # URL para a view de edição/visualização do documento
+        return reverse('editar_documento', kwargs={'pk': self.pk})

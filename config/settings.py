@@ -94,6 +94,8 @@ INSTALLED_APPS = [
     'django.contrib.humanize',  # <-- GARANTA QUE ESTA LINHA EXISTA
     'gestao.apps.GestaoConfig',
     'simple_history',
+    'ckeditor',
+    'ckeditor_uploader',
 ]
 
 
@@ -145,3 +147,6 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = '/admin/login/'
+
+# Configuração do CKEditor para upload de imagens
+CKEDITOR_UPLOAD_PATH = "uploads/"
