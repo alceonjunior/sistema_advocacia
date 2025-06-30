@@ -1,102 +1,243 @@
 # gestao/forms.py
-import json
+
+# -----------------------------------------------------------------------------
+# IMPORTS NECESSÁRIOS
+# -----------------------------------------------------------------------------
+# Módulos padrão do Django e Python
 from django import forms
-from .models import (
-    Movimentacao,
-    Processo,
-    Pagamento,
-    Servico,
-    Cliente,
-    TipoServico,
-    MovimentacaoServico,
-    TipoMovimentacao,
-    ContratoHonorarios,
-    ModeloDocumento,
-    Documento
-)
 from datetime import date
+from django.contrib.auth.models import Group
 
-from django.forms import inlineformset_factory # <<< ADICIONE ESTE IMPORT
-from .models import Processo, ParteProcesso # <<< ADICIONE ParteProcesso
+# Modelos de dados do aplicativo 'gestao'
+# A importação explícita de cada modelo torna o código mais legível e previne
+# potenciais conflitos de nomes ou importações circulares.
+from .models import (
+    Processo, Cliente, TipoAcao, Movimentacao, TipoMovimentacao,
+    Pagamento, Servico, TipoServico, MovimentacaoServico, ContratoHonorarios,
+    ModeloDocumento, Documento, ParteProcesso, Recurso, Incidente, EscritorioConfiguracao, AreaProcesso, UsuarioPerfil
+)
 
+# Ferramenta do Django para criar conjuntos de formulários (formsets) a partir de
+# um modelo, essencial para editar múltiplos objetos relacionados em uma única tela.
+from django.forms import inlineformset_factory
+from django.contrib.auth.forms import UserCreationForm, UserChangeForm
+from django.contrib.auth.models import User
 
+# -----------------------------------------------------------------------------
+# FORMULÁRIOS DE PROCESSO
+# -----------------------------------------------------------------------------
 
-class MovimentacaoForm(forms.ModelForm):
-    """Formulário para movimentações em Processos."""
+class ProcessoForm(forms.ModelForm):
+    """
+    Formulário principal e abrangente para a CRIAÇÃO e EDIÇÃO de um Processo.
+    Este formulário utiliza ModelForm para se conectar diretamente ao modelo 'Processo',
+    reduzindo a duplicação de código. Os widgets são definidos explicitamente para
+    garantir uma renderização consistente e estilizada com Bootstrap.
+    """
+
     class Meta:
-        model = Movimentacao
-        fields = [
-            'tipo_movimentacao', 'titulo', 'detalhes',
-            'data_publicacao', 'dias_prazo', 'data_prazo_final',
-            'responsavel', 'status'
-        ]
+        """
+        Configurações do ModelForm, ligando-o ao modelo 'Processo' e especificando
+        os campos e widgets a serem utilizados.
+        """
+        # Modelo base para o formulário
+        model = Processo
+        # Inclui todos os campos do modelo 'Processo' no formulário
+        fields = '__all__'
+
+        # Dicionário de widgets para customizar a aparência e o comportamento
+        # dos campos no HTML. As classes CSS ('form-control', 'form-select', etc.)
+        # são padrão do Bootstrap 5 para estilização.
         widgets = {
-            'data_publicacao': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
-            'data_prazo_final': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
-            'titulo': forms.TextInput(attrs={'class': 'form-control'}),
-            'detalhes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'dias_prazo': forms.NumberInput(attrs={'class': 'form-control'}),
-            'tipo_movimentacao': forms.Select(attrs={'class': 'form-select'}),
-            'responsavel': forms.Select(attrs={'class': 'form-select'}),
-            'status': forms.Select(attrs={'class': 'form-select'}),
+            # Campos de Texto e URL
+            'numero_processo': forms.TextInput(attrs={'class': 'form-control'}),
+            'vara_comarca_orgao': forms.TextInput(attrs={'class': 'form-control'}),
+            'juiz_responsavel': forms.TextInput(attrs={'class': 'form-control'}),
+            'numero_sei': forms.TextInput(attrs={'class': 'form-control'}),
+            'numero_outro_sistema': forms.TextInput(attrs={'class': 'form-control'}),
+            'link_acesso': forms.URLInput(attrs={'class': 'form-control'}),
+
+            # Campos de Seleção (Dropdown)
+            'tipo_acao': forms.Select(attrs={'class': 'form-select'}),
+            'fase': forms.Select(attrs={'class': 'form-select'}),
+            'status_processo': forms.Select(attrs={'class': 'form-select'}),
+            'tribunal': forms.Select(attrs={'class': 'form-select'}),
+            'grau_jurisdicao': forms.Select(attrs={'class': 'form-select'}),
+            'advogado_responsavel': forms.Select(attrs={'class': 'form-select'}),
+            'resultado': forms.Select(attrs={'class': 'form-select'}),
+
+            # Campos de Data
+            'data_distribuicao': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+            'data_transito_em_julgado': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+
+            # Campos Numéricos
+            'valor_causa': forms.NumberInput(attrs={'class': 'form-control'}),
+            'valor_executado': forms.NumberInput(attrs={'class': 'form-control'}),
+
+            # Campos de Texto Longo (Textarea)
+            'descricao_caso': forms.Textarea(attrs={'rows': 4, 'class': 'form-control'}),
+            'observacoes_internas': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+            'bloqueios_penhoras': forms.Textarea(attrs={'rows': 3, 'class': 'form-control', 'placeholder': 'Formato JSON: [{"sistema": "SISBAJUD", "valor": 1500.00}]'}),
+
+            # Campos Booleanos (Checkbox)
+            'segredo_justica': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'justica_gratuita': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'prioridade_tramitacao': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'execucao_iniciada': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+
+            # Campos de Múltipla Escolha
+            'advogados_envolvidos': forms.SelectMultiple(attrs={'class': 'form-select select2'}),
+            'nivel_permissao': forms.RadioSelect(), # RadioSelect é ideal para poucas opções
+        }
+
+# Por simplicidade e consistência, o formulário de criação pode ser o mesmo da edição.
+ProcessoCreateForm = ProcessoForm
+
+# -----------------------------------------------------------------------------
+# FORMSETS (Conjuntos de Formulários)
+# -----------------------------------------------------------------------------
+
+class ParteProcessoForm(forms.ModelForm):
+    """
+    Formulário customizado para uma única Parte do Processo.
+    A customização no __init__ é crucial para filtrar dinamicamente
+    o campo 'representado_por'.
+    """
+
+    class Meta:
+        model = ParteProcesso
+        fields = ['cliente', 'tipo_participacao', 'representado_por']
+        widgets = {
+            'cliente': forms.Select(attrs={'class': 'form-select'}),
+            'tipo_participacao': forms.Select(attrs={'class': 'form-select'}),
+            'representado_por': forms.Select(attrs={'class': 'form-select'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        dias_sugeridos_data = {
-            tipo.pk: tipo.sugestao_dias_prazo
-            for tipo in self.fields['tipo_movimentacao'].queryset if tipo.sugestao_dias_prazo
-        }
-        self.fields['tipo_movimentacao'].widget.attrs['data-dias-sugeridos'] = json.dumps(dias_sugeridos_data)
+
+        if self.instance and self.instance.pk and self.instance.processo:
+            processo_atual = self.instance.processo
+            partes_elegiveis = ParteProcesso.objects.filter(processo=processo_atual).exclude(pk=self.instance.pk)
+            self.fields['representado_por'].queryset = partes_elegiveis
+        else:
+            self.fields['representado_por'].queryset = ParteProcesso.objects.none()
 
 
-class ProcessoForm(forms.ModelForm):
-    """Formulário para editar detalhes de um Processo."""
-    class Meta:
-        model = Processo
-        fields = [
-            'status_processo', 'valor_causa', 'advogado_responsavel',
-            'vara_comarca_orgao', 'descricao_caso', 'observacoes_internas'
-        ]
-        widgets = {
-            'status_processo': forms.Select(attrs={'class': 'form-select'}),
-            'valor_causa': forms.NumberInput(attrs={'class': 'form-control'}),
-            'advogado_responsavel': forms.Select(attrs={'class': 'form-select'}),
-            'vara_comarca_orgao': forms.TextInput(attrs={'class': 'form-control'}),
-            'descricao_caso': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
-            'observacoes_internas': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
-        }
+ParteProcessoFormSet = inlineformset_factory(
+    Processo,
+    ParteProcesso,
+    form=ParteProcessoForm,
+    fk_name='processo',
+    extra=1,
+    can_delete=True
+)
 
 
-class PagamentoForm(forms.ModelForm):
-    """Formulário para registrar pagamentos."""
-    class Meta:
-        model = Pagamento
-        fields = ['data_pagamento', 'valor_pago', 'forma_pagamento', 'observacoes']
-        widgets = {
-            'data_pagamento': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
-            'valor_pago': forms.NumberInput(attrs={'class': 'form-control'}),
-            'forma_pagamento': forms.TextInput(attrs={'class': 'form-control'}),
-            'observacoes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-        }
-
+# -----------------------------------------------------------------------------
+# FORMULÁRIOS DE ENTIDADES RELACIONADAS
+# -----------------------------------------------------------------------------
 
 class ClienteForm(forms.ModelForm):
-    """Formulário para adicionar Cliente via modal."""
+    """Formulário para criar e editar um Cliente, com todos os novos campos."""
+
     class Meta:
         model = Cliente
-        fields = ['nome_completo', 'tipo_pessoa', 'cpf_cnpj', 'email', 'telefone_principal']
+        # Lista explícita de todos os campos para garantir a ordem
+        fields = [
+            'nome_completo', 'tipo_pessoa', 'cpf_cnpj', 'email', 'telefone_principal',
+            'data_nascimento', 'nacionalidade', 'estado_civil', 'profissao',
+            'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'estado',
+            'representante_legal', 'cpf_representante_legal'
+        ]
+
+        # Widgets para estilização com Bootstrap
         widgets = {
+            # Bloco 1
             'nome_completo': forms.TextInput(attrs={'class': 'form-control'}),
             'tipo_pessoa': forms.Select(attrs={'class': 'form-select'}),
             'cpf_cnpj': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'telefone_principal': forms.TextInput(attrs={'class': 'form-control'}),
+            # Bloco 2
+            'data_nascimento': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+            'nacionalidade': forms.TextInput(attrs={'class': 'form-control'}),
+            'estado_civil': forms.Select(attrs={'class': 'form-select'}),
+            'profissao': forms.TextInput(attrs={'class': 'form-control'}),
+            # Bloco 3
+            'cep': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Apenas números'}),
+            'logradouro': forms.TextInput(attrs={'class': 'form-control'}),
+            'numero': forms.TextInput(attrs={'class': 'form-control'}),
+            'complemento': forms.TextInput(attrs={'class': 'form-control'}),
+            'bairro': forms.TextInput(attrs={'class': 'form-control'}),
+            'cidade': forms.TextInput(attrs={'class': 'form-control'}),
+            'estado': forms.Select(attrs={'class': 'form-select'}),
+            # Bloco 4
+            'representante_legal': forms.TextInput(attrs={'class': 'form-control'}),
+            'cpf_representante_legal': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+
+
+class DocumentoForm(forms.ModelForm):
+    """Formulário para gerar ou editar documentos vinculados a um processo."""
+    class Meta:
+        model = Documento
+        # O campo 'conteudo' é um RichTextUploadingField, que já vem com seu próprio widget.
+        # Por isso, não precisa ser especificado aqui, a menos que se queira sobrescrevê-lo.
+        fields = ['titulo', 'tipo_documento', 'data_protocolo', 'arquivo_upload', 'conteudo']
+        widgets = {
+            'titulo': forms.TextInput(attrs={'class': 'form-control'}),
+            'tipo_documento': forms.Select(attrs={'class': 'form-select'}),
+            'data_protocolo': forms.DateTimeInput(format='%Y-%m-%dT%H:%M', attrs={'type': 'datetime-local', 'class': 'form-control'}),
+            'arquivo_upload': forms.FileInput(attrs={'class': 'form-control'}),
+        }
+
+class RecursoForm(forms.ModelForm):
+    """Formulário para registrar recursos interpostos em um processo."""
+    class Meta:
+        model = Recurso
+        fields = ['tipo', 'data_interposicao', 'resultado', 'detalhes']
+        widgets = {
+            'tipo': forms.Select(attrs={'class': 'form-select'}),
+            'data_interposicao': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+            'resultado': forms.TextInput(attrs={'class': 'form-control'}),
+            'detalhes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        }
+
+class IncidenteForm(forms.ModelForm):
+    """Formulário para registrar incidentes processuais."""
+    class Meta:
+        model = Incidente
+        fields = ['tipo', 'descricao', 'status', 'data_ocorrido']
+        widgets = {
+            'tipo': forms.TextInput(attrs={'class': 'form-control'}),
+            'descricao': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'status': forms.Select(attrs={'class': 'form-select'}),
+            'data_ocorrido': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+        }
+
+# -----------------------------------------------------------------------------
+# FORMULÁRIOS DE SERVIÇOS EXTRAJUDICIAIS
+# -----------------------------------------------------------------------------
+
+class AreaProcessoForm(forms.ModelForm):
+    class Meta:
+        model = AreaProcesso
+        fields = ['nome']
+        widgets = {'nome': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nome da nova área'})}
+
+class TipoAcaoForm(forms.ModelForm):
+    class Meta:
+        model = TipoAcao
+        fields = ['area', 'nome']
+        widgets = {
+            'area': forms.Select(attrs={'class': 'form-select'}),
+            'nome': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nome do novo tipo de ação'}),
         }
 
 
 class TipoServicoForm(forms.ModelForm):
-    """Formulário para adicionar Tipo de Serviço via modal."""
+    """Formulário simples para adicionar tipos de serviço (usado em modais)."""
     class Meta:
         model = TipoServico
         fields = ['nome']
@@ -104,59 +245,41 @@ class TipoServicoForm(forms.ModelForm):
 
 
 class ServicoForm(forms.ModelForm):
-    """Formulário para os dados básicos de um NOVO Serviço."""
+    """Formulário para o cadastro de um serviço extrajudicial."""
+
     class Meta:
         model = Servico
         fields = ['cliente', 'tipo_servico', 'responsavel', 'descricao', 'recorrente', 'prazo']
         widgets = {
-            'cliente': forms.Select(attrs={'class': 'form-select'}),
-            'tipo_servico': forms.Select(attrs={'class': 'form-select'}),
-            'responsavel': forms.Select(attrs={'class': 'form-select'}),
-            'descricao': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ex: Elaboração de Contrato Social'}),
+            # AJUSTE: Adicionamos a classe 'select2' para que o JavaScript encontre estes campos.
+            'cliente': forms.Select(attrs={'class': 'form-select select2'}),
+            'tipo_servico': forms.Select(attrs={'class': 'form-select select2'}),
+            'responsavel': forms.Select(attrs={'class': 'form-select select2'}),
+
+            'descricao': forms.TextInput(attrs={'class': 'form-control'}),
             'recorrente': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'prazo': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
         }
 
 
-class ContratoHonorariosForm(forms.ModelForm):
-    """Formulário para os detalhes financeiros de um Serviço ou Processo."""
-    class Meta:
-        model = ContratoHonorarios
-        fields = [
-            'descricao', 'valor_pagamento_fixo', 'qtde_pagamentos_fixos',
-            'data_primeiro_vencimento', 'percentual_exito'
-        ]
-        widgets = {
-            'descricao': forms.TextInput(attrs={'class': 'form-control'}),
-            'valor_pagamento_fixo': forms.NumberInput(attrs={'class': 'form-control'}),
-            'qtde_pagamentos_fixos': forms.NumberInput(attrs={'class': 'form-control', 'value': 1}),
-            'data_primeiro_vencimento': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
-            'percentual_exito': forms.NumberInput(attrs={'class': 'form-control'}),
-        }
-
-
 class ServicoEditForm(forms.ModelForm):
-    """Formulário para EDITAR os detalhes de um Serviço existente."""
+    """Formulário completo para a edição de um serviço existente."""
     class Meta:
         model = Servico
-        fields = [
-            'responsavel', 'descricao', 'data_inicio', 'recorrente', 'prazo',
-            'data_encerramento', 'concluido', 'ativo'
-        ]
+        fields = ['responsavel', 'descricao', 'data_inicio', 'recorrente', 'prazo', 'data_encerramento', 'concluido', 'ativo']
         widgets = {
             'responsavel': forms.Select(attrs={'class': 'form-select'}),
             'descricao': forms.TextInput(attrs={'class': 'form-control'}),
             'data_inicio': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
-            'recorrente': forms.CheckboxInput(attrs={'class': 'form-check-input form-switch'}),
+            'recorrente': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'prazo': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
-            'data_encerramento': forms.DateInput(format='%Y-%m-%d', attrs={'class': 'form-control'}),
-            'concluido': forms.CheckboxInput(attrs={'class': 'form-check-input form-switch'}),
-            'ativo': forms.CheckboxInput(attrs={'class': 'form-check-input form-switch'}),
+            'data_encerramento': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+            'concluido': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'ativo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
-
 class MovimentacaoServicoForm(forms.ModelForm):
-    """Formulário para movimentações em Serviços."""
+    """Formulário para registrar andamentos e tarefas de um serviço."""
     class Meta:
         model = MovimentacaoServico
         fields = ['titulo', 'detalhes', 'data_atividade', 'responsavel', 'status', 'prazo_final']
@@ -169,206 +292,223 @@ class MovimentacaoServicoForm(forms.ModelForm):
             'prazo_final': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
         }
 
+# --- ESTA É A CLASSE QUE ESTAVA FALTANDO NO SEU ARQUIVO ---
+class MovimentacaoForm(forms.ModelForm):
+    """Formulário para andamentos, tarefas e prazos de um processo."""
+    class Meta:
+        model = Movimentacao
+        # O campo 'hora_prazo' foi adicionado à lista de campos.
+        fields = ['tipo_movimentacao', 'titulo', 'detalhes', 'data_publicacao', 'dias_prazo', 'data_prazo_final', 'hora_prazo', 'responsavel', 'status']
+        widgets = {
+            'tipo_movimentacao': forms.Select(attrs={'class': 'form-select select2'}),
+            'titulo': forms.TextInput(attrs={'class': 'form-control'}),
+            'detalhes': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+            'data_publicacao': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+            'dias_prazo': forms.NumberInput(attrs={'class': 'form-control'}),
+            'data_prazo_final': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+            # Widget para o novo campo 'hora_prazo' adicionado.
+            'hora_prazo': forms.TimeInput(format='%H:%M', attrs={'type': 'time', 'class': 'form-control'}),
+            'responsavel': forms.Select(attrs={'class': 'form-select'}),
+            'status': forms.Select(attrs={'class': 'form-select'}),
+        }
+
+
 
 class ServicoConcluirForm(forms.ModelForm):
-    """Formulário específico para concluir um serviço (usado no modal)."""
+    """Formulário específico para o ato de concluir um serviço."""
     class Meta:
         model = Servico
         fields = ['data_encerramento']
-        widgets = {
-            # CORREÇÃO APLICADA AQUI: Adicionado o 'format'
-            'data_encerramento': forms.DateInput(
-                format='%Y-%m-%d',
-                attrs={'type': 'date', 'class': 'form-control'}
-            ),
-        }
+        widgets = {'data_encerramento': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['data_encerramento'].label = "Data de Conclusão"
 
-# ===================================================================
-# === NOVO FORMULÁRIO PARA CRIAR UM PROCESSO ========================
-# ===================================================================
-class ProcessoCreateForm(forms.ModelForm):
-    """Formulário para a criação de um novo Processo."""
+# -----------------------------------------------------------------------------
+# FORMULÁRIOS FINANCEIROS
+# -----------------------------------------------------------------------------
+
+class ContratoHonorariosForm(forms.ModelForm):
+    """Formulário para registrar um novo contrato de honorários, gerando os lançamentos."""
     class Meta:
-        model = Processo
-        # ATENÇÃO: O campo 'cliente' será adicionado aqui futuramente, após a refatoração.
-        # Por enquanto, vamos assumir que o cliente será selecionado na tela.
-        # Mas como o campo foi removido na proposta anterior, e não implementado,
-        # vou me basear na sua ÚLTIMA estrutura de código enviada, onde o campo ainda existe.
-        fields = [
-            'tipo_acao', 'numero_processo',
-            'advogado_responsavel', 'vara_comarca_orgao', 'valor_causa',
-            'descricao_caso', 'observacoes_internas'
-        ]
+        model = ContratoHonorarios
+        fields = ['descricao', 'valor_pagamento_fixo', 'qtde_pagamentos_fixos', 'data_primeiro_vencimento', 'percentual_exito']
         widgets = {
-            #'cliente': forms.Select(attrs={'class': 'form-select'}),
-            'tipo_acao': forms.Select(attrs={'class': 'form-select'}),
-            'numero_processo': forms.TextInput(attrs={'class': 'form-control'}),
-            'advogado_responsavel': forms.Select(attrs={'class': 'form-select'}),
-            'vara_comarca_orgao': forms.TextInput(attrs={'class': 'form-control'}),
-            'valor_causa': forms.NumberInput(attrs={'class': 'form-control'}),
-            'descricao_caso': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
-            'observacoes_internas': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'descricao': forms.TextInput(attrs={'class': 'form-control'}),
+            'valor_pagamento_fixo': forms.NumberInput(attrs={'class': 'form-control'}),
+            'qtde_pagamentos_fixos': forms.NumberInput(attrs={'class': 'form-control', 'value': 1}),
+            'data_primeiro_vencimento': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+            'percentual_exito': forms.NumberInput(attrs={'class': 'form-control'}),
         }
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['numero_processo'].required = False
-        self.fields['valor_causa'].required = False
-        self.fields['observacoes_internas'].label = "Observações Internas (visível apenas para a equipe)"
+class PagamentoForm(forms.ModelForm):
+    """Formulário para registrar o recebimento de um pagamento de um lançamento."""
+    class Meta:
+        model = Pagamento
+        fields = ['data_pagamento', 'valor_pago', 'forma_pagamento', 'observacoes']
+        widgets = {
+            'data_pagamento': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+            'valor_pago': forms.NumberInput(attrs={'class': 'form-control'}),
+            'forma_pagamento': forms.TextInput(attrs={'class': 'form-control'}),
+            'observacoes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        }
 
-
-# ==========================================================
-# === FORMSET PARA ADICIONAR PARTES NO PROCESSO ==========
-# ==========================================================
-ParteProcessoFormSet = inlineformset_factory(
-    Processo,
-    ParteProcesso,
-    fields=('cliente', 'tipo_participacao', 'representado_por'),
-    extra=1,  # <<< ALTERE DE 2 PARA 1
-    can_delete=True,
-    widgets={
-        'cliente': forms.Select(attrs={'class': 'form-select'}),
-        'tipo_participacao': forms.Select(attrs={'class': 'form-select'}),
-        'representado_por': forms.Select(attrs={'class': 'form-select'}),
-    }
-)
-
+# -----------------------------------------------------------------------------
+# FORMULÁRIOS DE FERRAMENTAS (CÁLCULOS, MODELOS)
+# -----------------------------------------------------------------------------
 
 class CalculoForm(forms.Form):
     """
-    Formulário completo e aprimorado para a interface de cálculo monetário,
-    com a correção definitiva para o formato de data.
+    Formulário para a interface de cálculo judicial.
+    Usa forms.Form (e não ModelForm) porque a lógica de cálculo é executada
+    antes de salvar no banco, e os dados de entrada podem não corresponder
+    diretamente a todos os campos do modelo 'CalculoJudicial'.
     """
-    INDICE_CHOICES = [
-        ('IPCA', 'IPCA (IBGE)'),
-        ('INPC', 'INPC (IBGE)'),
-        ('IGP-M', 'IGP-M (FGV/BCB)'),
-        ('IGP-DI', 'IGP-DI (FGV/BCB)'),
-        ('SELIC', 'Taxa Selic (BCB)'),
-        ('TR', 'Taxa Referencial (BCB)'),
-    ]
+    # Choices são definidos aqui para centralizar as opções disponíveis na ferramenta
+    INDICE_CHOICES = [('IPCA', 'IPCA (IBGE)'), ('INPC', 'INPC (IBGE)'), ('IGP-M', 'IGP-M (FGV/BCB)'), ('IGP-DI', 'IGP-DI (FGV/BCB)'), ('SELIC', 'Taxa Selic (BCB)'), ('TR', 'Taxa Referencial (BCB)')]
     JUROS_TIPO_CHOICES = [('SIMPLES', 'Simples'), ('COMPOSTO', 'Compostos')]
     JUROS_PERIODO_CHOICES = [('MENSAL', 'Mensal'), ('ANUAL', 'Anual')]
 
-    # --- Seção 1: Valor e Período ---
-    valor_original = forms.DecimalField(
-        label="Valor a ser atualizado (R$)",
-        decimal_places=2,
-        widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '1000,00'})
-    )
-    # CORREÇÃO: Adicionado o parâmetro 'format' ao widget de data
-    data_inicio = forms.DateField(
-        label="Data inicial (termo inicial)",
-        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'})
-    )
-    # CORREÇÃO: Adicionado o parâmetro 'format' ao widget de data
-    data_fim = forms.DateField(
-        label="Data final (termo final)",
-        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
-        initial=date.today
-    )
-    correcao_pro_rata = forms.BooleanField(
-        label="Correção Pro-Rata",
-        required=False,
-        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
-    )
-    descricao = forms.CharField(
-        label="Descrição do Cálculo",
-        max_length=255,
-        initial="Cálculo Padrão",
-        widget=forms.TextInput(attrs={'class': 'form-control'}),
-        help_text="Ex: Cálculo para proposta de acordo, Atualização para petição, etc."
-    )
-
-    # --- Seção 2: Correção Monetária ---
-    indice = forms.ChoiceField(
-        label="Índice de atualização",
-        choices=INDICE_CHOICES,
-        widget=forms.Select(attrs={'class': 'form-select'})
-    )
-
-    # --- Seção 3: Juros ---
-    juros_taxa = forms.DecimalField(
-        label="Taxa de juros (%)",
-        required=False,
-        decimal_places=4,
-        widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Ex: 1.0 para 1%'})
-    )
-    juros_periodo = forms.ChoiceField(
-        label="Período da taxa",
-        choices=JUROS_PERIODO_CHOICES,
-        initial='MENSAL',
-        widget=forms.Select(attrs={'class': 'form-select'})
-    )
-    juros_tipo = forms.ChoiceField(
-        label="Tipo de juros",
-        choices=JUROS_TIPO_CHOICES,
-        initial='SIMPLES',
-        widget=forms.Select(attrs={'class': 'form-select'})
-    )
-    # CORREÇÃO: Adicionado o parâmetro 'format' ao widget de data
-    juros_data_inicio = forms.DateField(
-        label="Data inicial dos juros",
-        required=False,
-        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
-        help_text="Opcional. Se em branco, usa a data inicial da correção."
-    )
-    # CORREÇÃO: Adicionado o parâmetro 'format' ao widget de data
-    juros_data_fim = forms.DateField(
-        label="Data final dos juros",
-        required=False,
-        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
-        help_text="Opcional. Se em branco, usa a data final da correção."
-    )
-
-    # --- Seção 4: Multa e Honorários ---
-    multa_percentual = forms.DecimalField(
-        label="Percentual da multa (%)",
-        required=False,
-        decimal_places=2,
-        widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Ex: 10.00'})
-    )
-    multa_sobre_juros = forms.BooleanField(
-        label="Calcular a multa também sobre os juros",
-        required=False,
-        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
-    )
-    honorarios_percentual = forms.DecimalField(
-        label="Percentual dos honorários (%)",
-        required=False,
-        decimal_places=2,
-        widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Ex: 12.00'})
-    )
-
-    # --- Seção 5: Opções de Exibição ---
-    gerar_memorial = forms.BooleanField(
-        label="Gerar Memorial de Cálculo Detalhado",
-        required=False,
-        initial=True,
-        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
-    )
+    # Definição de cada campo do formulário
+    descricao = forms.CharField(label="Descrição do Cálculo", max_length=255, initial="Cálculo Padrão", widget=forms.TextInput(attrs={'class': 'form-control'}))
+    valor_original = forms.DecimalField(label="Valor a ser atualizado (R$)", decimal_places=2, widget=forms.NumberInput(attrs={'class': 'form-control'}))
+    data_inicio = forms.DateField(label="Data inicial da correção", widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}))
+    data_fim = forms.DateField(label="Data final da correção", initial=date.today, widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}))
+    indice = forms.ChoiceField(label="Índice de atualização", choices=INDICE_CHOICES, widget=forms.Select(attrs={'class': 'form-select'}))
+    correcao_pro_rata = forms.BooleanField(label="Correção Pro-Rata", required=False, widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
+    juros_taxa = forms.DecimalField(label="Taxa de juros (%)", required=False, decimal_places=4, widget=forms.NumberInput(attrs={'class': 'form-control'}))
+    juros_periodo = forms.ChoiceField(label="Período da taxa", choices=JUROS_PERIODO_CHOICES, initial='MENSAL', widget=forms.Select(attrs={'class': 'form-select'}))
+    juros_tipo = forms.ChoiceField(label="Tipo de juros", choices=JUROS_TIPO_CHOICES, initial='SIMPLES', widget=forms.Select(attrs={'class': 'form-select'}))
+    juros_data_inicio = forms.DateField(label="Data inicial dos juros", required=False, widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}))
+    juros_data_fim = forms.DateField(label="Data final dos juros", required=False, widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}))
+    multa_percentual = forms.DecimalField(label="Percentual da multa (%)", required=False, decimal_places=2, widget=forms.NumberInput(attrs={'class': 'form-control'}))
+    multa_sobre_juros = forms.BooleanField(label="Calcular a multa sobre os juros", required=False, widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
+    honorarios_percentual = forms.DecimalField(label="Percentual dos honorários (%)", required=False, decimal_places=2, widget=forms.NumberInput(attrs={'class': 'form-control'}))
+    gerar_memorial = forms.BooleanField(label="Gerar Memorial de Cálculo", required=False, initial=True, widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
 
 
 class ModeloDocumentoForm(forms.ModelForm):
-    """Formulário para criar e editar Modelos de Documentos."""
+    """Formulário para criar e editar Modelos de Documentos (templates)."""
     class Meta:
         model = ModeloDocumento
+        # Os campos 'cabecalho', 'conteudo' e 'rodape' são RichTextUploadingFields
+        # e usarão o widget do CKEditor automaticamente.
         fields = ['titulo', 'descricao', 'cabecalho', 'conteudo', 'rodape']
         widgets = {
             'titulo': forms.TextInput(attrs={'class': 'form-control'}),
             'descricao': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
 
-class DocumentoForm(forms.ModelForm):
-    """Formulário para editar um documento gerado."""
+class ClienteModalForm(forms.ModelForm):
+    """
+    Formulário simplificado para cadastro rápido de cliente via modal.
+    Contém apenas os campos essenciais para identificação e contato imediato.
+    """
     class Meta:
-        model = Documento
-        fields = ['titulo', 'conteudo']
+        model = Cliente
+        # Define apenas os campos essenciais para o cadastro rápido
+        fields = [
+            'nome_completo',
+            'tipo_pessoa',
+            'cpf_cnpj',
+            'email',
+            'telefone_principal'
+        ]
+        # Widgets para manter a estilização do Bootstrap
         widgets = {
-            'titulo': forms.TextInput(attrs={'class': 'form-control'}),
-            # O campo 'conteudo' usará o CKEditor automaticamente
+            'nome_completo': forms.TextInput(attrs={'class': 'form-control'}),
+            'tipo_pessoa': forms.Select(attrs={'class': 'form-select'}),
+            'cpf_cnpj': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'telefone_principal': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+
+class EscritorioConfiguracaoForm(forms.ModelForm):
+    class Meta:
+        model = EscritorioConfiguracao
+        fields = '__all__'
+        widgets = {
+            'nome_escritorio': forms.TextInput(attrs={'class': 'form-control'}),
+            'cnpj': forms.TextInput(attrs={'class': 'form-control'}),
+            'oab_principal': forms.TextInput(attrs={'class': 'form-control'}),
+            'cep': forms.TextInput(attrs={'class': 'form-control'}),
+            'logradouro': forms.TextInput(attrs={'class': 'form-control'}),
+            'numero': forms.TextInput(attrs={'class': 'form-control'}),
+            'complemento': forms.TextInput(attrs={'class': 'form-control'}),
+            'bairro': forms.TextInput(attrs={'class': 'form-control'}),
+            'cidade': forms.TextInput(attrs={'class': 'form-control'}),
+            'estado': forms.Select(attrs={'class': 'form-select'}),
+            'telefone_contato': forms.TextInput(attrs={'class': 'form-control'}),
+            'email_contato': forms.EmailInput(attrs={'class': 'form-control'}),
+        }
+
+
+class CustomUserCreationForm(UserCreationForm):
+    """ Formulário aprimorado para criação de usuários. """
+
+    # Usamos ModelMultipleChoiceField com CheckboxSelectMultiple para uma melhor UX
+    groups = forms.ModelMultipleChoiceField(
+        queryset=Group.objects.all().order_by('name'),
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        label="Grupos de Permissão",
+        help_text="Define o cargo e o nível de acesso do usuário no sistema."
+    )
+
+    class Meta(UserCreationForm.Meta):
+        model = User
+        fields = ('username', 'first_name', 'last_name', 'email')
+        # Adiciona placeholders e classes para estilização com Bootstrap
+        widgets = {
+            'username': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ex: jose.silva'}),
+            'first_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nome do usuário'}),
+            'last_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Sobrenome do usuário'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'ex: email@dominio.com'}),
+        }
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        if commit:
+            user.save()
+            # Salva os grupos (relação Many-to-Many)
+            user.groups.set(self.cleaned_data['groups'])
+            self.save_m2m()
+        return user
+
+
+class CustomUserChangeForm(UserChangeForm):
+    """ Formulário aprimorado para a EDIÇÃO de usuários existentes. """
+    password = None  # Remove completamente o manuseio de senhas deste formulário
+
+    class Meta(UserChangeForm.Meta):
+        model = User
+        fields = ('username', 'first_name', 'last_name', 'email', 'is_active', 'is_staff', 'groups')
+        widgets = {
+            # APRIMORAMENTO: Desabilita a edição do nome de usuário
+            'username': forms.TextInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+            'first_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'last_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'groups': forms.CheckboxSelectMultiple, # Garante o uso de checkboxes
+        }
+
+from django.contrib.auth.models import User
+from simple_history import register
+
+# Esta linha instrui o simple-history a começar a monitorar
+# e a criar um histórico para o modelo de Usuário do Django.
+register(User)
+
+class UsuarioPerfilForm(forms.ModelForm):
+    class Meta:
+        model = UsuarioPerfil
+        # Incluímos apenas os campos que o usuário deve poder editar diretamente
+        fields = ['cpf', 'oab', 'telefone', 'data_admissao', 'foto']
+        widgets = {
+            'cpf': forms.TextInput(attrs={'class': 'form-control'}),
+            'oab': forms.TextInput(attrs={'class': 'form-control'}),
+            'telefone': forms.TextInput(attrs={'class': 'form-control'}),
+            'data_admissao': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+            'foto': forms.FileInput(attrs={'class': 'form-control'}),
         }

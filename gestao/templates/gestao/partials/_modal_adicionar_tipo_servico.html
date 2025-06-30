@@ -1,0 +1,24 @@
+<div class="modal fade" id="addTipoServicoModal" tabindex="-1" aria-labelledby="addTipoServicoModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="addTipoServicoForm" method="post" action="{% url 'adicionar_tipo_servico_modal' %}" novalidate>
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="addTipoServicoModalLabel"><i class="bi bi-tag-fill me-2"></i>Novo Tipo de Serviço</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="tipoServicoFormErrors" class="alert alert-danger d-none small p-2"></div>
+                    <div class="mb-3">
+                        <label for="id_nome" class="form-label">Nome do Tipo de Serviço</label>
+                        {{ form_tipo_servico_modal.nome }}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnSalvarTipoServico">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

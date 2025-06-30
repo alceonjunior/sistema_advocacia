@@ -1,20 +1,208 @@
 {% extends 'gestao/base.html' %}
 
-{% block title %}Editar Processo{% endblock %}
+{% block title %}Editar Processo - {{ processo.numero_processo|default:"Sem Número" }}{% endblock %}
 
 {% block content %}
-<div class="card">
-    <div class="card-header">
-        <h3>Editar Processo: {{ processo.numero_processo|default:"Sem Número" }}</h3>
-        <p class="mb-0">Cliente: {{ processo.cliente.nome_completo }}</p>
+<form method="post" novalidate>
+    {% csrf_token %}
+
+    <div class="sticky-top bg-light py-3 mb-4 border-bottom" style="top: -1px; z-index: 1020;">
+        <div class="d-flex justify-content-between align-items-center">
+            <h1 class="h2 mb-0 d-flex align-items-center gap-2">
+                <i class="bi bi-pencil-square text-primary"></i> Editar Processo
+            </h1>
+            <div>
+                <a href="{{ processo.get_absolute_url }}" class="btn btn-secondary">Cancelar</a>
+                <button type="submit" class="btn btn-primary px-4"><i class="bi bi-check-lg me-1"></i> Salvar Alterações</button>
+            </div>
+        </div>
+        {% if form.errors %}
+            <div class="alert alert-danger alert-dismissible fade show small p-2 mt-2 mb-0" role="alert">
+                <strong>Por favor, corrija os erros indicados nos campos abaixo.</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close" style="padding: 0.75rem 1rem;"></button>
+            </div>
+        {% endif %}
     </div>
-    <div class="card-body">
-        <form method="post">
-            {% csrf_token %}
-            {{ form.as_p }}
-            <button type="submit" class="btn btn-success mt-3">Salvar Alterações</button>
-            <a href="{% url 'detalhe_processo' pk=processo.pk %}" class="btn btn-secondary mt-3">Cancelar</a>
-        </form>
+
+    <ul class="nav nav-tabs nav-fill" id="editProcessoTab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="geral-tab" data-bs-toggle="tab" data-bs-target="#geral-pane" type="button" role="tab" aria-controls="geral-pane" aria-selected="true">
+                <i class="bi bi-file-earmark-text me-1"></i> Geral
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tramite-tab" data-bs-toggle="tab" data-bs-target="#tramite-pane" type="button" role="tab" aria-controls="tramite-pane" aria-selected="false">
+                <i class="bi bi-building-fill-gear me-1"></i> Trâmite e Juízo
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="acesso-tab" data-bs-toggle="tab" data-bs-target="#acesso-pane" type="button" role="tab" aria-controls="acesso-pane" aria-selected="false">
+                <i class="bi bi-shield-lock me-1"></i> Equipe e Acesso
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="resultado-tab" data-bs-toggle="tab" data-bs-target="#resultado-pane" type="button" role="tab" aria-controls="resultado-pane" aria-selected="false">
+                <i class="bi bi-gavel me-1"></i> Resultado e Execução
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="complementar-tab" data-bs-toggle="tab" data-bs-target="#complementar-pane" type="button" role="tab" aria-controls="complementar-pane" aria-selected="false">
+                <i class="bi bi-three-dots me-1"></i> Complementar
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="editProcessoTabContent">
+
+        <div class="tab-pane fade show active" id="geral-pane" role="tabpanel" aria-labelledby="geral-tab" tabindex="0">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <div class="form-floating">
+                                {{ form.tipo_acao }}
+                                <label for="{{ form.tipo_acao.id_for_label }}">{{ form.tipo_acao.label }}</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-floating">
+                                {{ form.numero_processo }}
+                                <label for="{{ form.numero_processo.id_for_label }}">{{ form.numero_processo.label }}</label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-floating">
+                                {{ form.descricao_caso }}
+                                <label for="{{ form.descricao_caso.id_for_label }}">{{ form.descricao_caso.label }}</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                {{ form.data_distribuicao }}
+                                <label for="{{ form.data_distribuicao.id_for_label }}">{{ form.data_distribuicao.label }}</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                {{ form.valor_causa }}
+                                <label for="{{ form.valor_causa.id_for_label }}">{{ form.valor_causa.label }}</label>
+                            </div>
+                        </div>
+                        <div class="col-12 mt-4 pt-3 border-top">
+                            <h6 class="text-muted mb-3">Opções</h6>
+                            <div class="d-flex flex-wrap gap-4">
+                                <div class="form-check form-switch">{{ form.segredo_justica }} {{ form.segredo_justica.label_tag }}</div>
+                                <div class="form-check form-switch">{{ form.justica_gratuita }} {{ form.justica_gratuita.label_tag }}</div>
+                                <div class="form-check form-switch">{{ form.prioridade_tramitacao }} {{ form.prioridade_tramitacao.label_tag }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="tramite-pane" role="tabpanel" aria-labelledby="tramite-tab" tabindex="0">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                             <div class="form-floating">{{ form.status_processo }} <label for="{{ form.status_processo.id_for_label }}">{{ form.status_processo.label }}</label></div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-floating">{{ form.fase }} <label for="{{ form.fase.id_for_label }}">{{ form.fase.label }}</label></div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-floating">{{ form.grau_jurisdicao }} <label for="{{ form.grau_jurisdicao.id_for_label }}">{{ form.grau_jurisdicao.label }}</label></div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">{{ form.tribunal }} <label for="{{ form.tribunal.id_for_label }}">{{ form.tribunal.label }}</label></div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">{{ form.vara_comarca_orgao }} <label for="{{ form.vara_comarca_orgao.id_for_label }}">{{ form.vara_comarca_orgao.label }}</label></div>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-floating">{{ form.juiz_responsavel }} <label for="{{ form.juiz_responsavel.id_for_label }}">{{ form.juiz_responsavel.label }}</label></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="acesso-pane" role="tabpanel" aria-labelledby="acesso-tab" tabindex="0">
+            <div class="card shadow-sm">
+                 <div class="card-body p-4">
+                    <div class="mb-3">
+                        <label for="{{ form.advogado_responsavel.id_for_label }}" class="form-label">{{ form.advogado_responsavel.label }}</label>
+                        {{ form.advogado_responsavel }}
+                    </div>
+                    <div class="mb-3">
+                        <label for="{{ form.advogados_envolvidos.id_for_label }}" class="form-label">{{ form.advogados_envolvidos.label }}</label>
+                        {{ form.advogados_envolvidos }}
+                        <div class="form-text">Selecione outros membros da equipe para dar acesso ao processo.</div>
+                    </div>
+                    <div class="mt-4 pt-3 border-top">
+                        <h6 class="mb-2">Nível de Permissão de Visualização</h6>
+                        {{ form.nivel_permissao }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="resultado-pane" role="tabpanel" aria-labelledby="resultado-tab" tabindex="0">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <div class="form-floating">{{ form.resultado }} <label for="{{ form.resultado.id_for_label }}">{{ form.resultado.label }}</label></div>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-floating">{{ form.data_transito_em_julgado }} <label for="{{ form.data_transito_em_julgado.id_for_label }}">{{ form.data_transito_em_julgado.label }}</label></div>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-floating">{{ form.valor_executado }} <label for="{{ form.valor_executado.id_for_label }}">{{ form.valor_executado.label }}</label></div>
+                        </div>
+                         <div class="col-12">
+                            <div class="form-floating">{{ form.bloqueios_penhoras }} <label for="{{ form.bloqueios_penhoras.id_for_label }}">{{ form.bloqueios_penhoras.label }}</label></div>
+                        </div>
+                        <div class="col-12 mt-4 pt-3 border-top">
+                           <div class="form-check form-switch">{{ form.execucao_iniciada }} {{ form.execucao_iniciada.label_tag }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="complementar-pane" role="tabpanel" aria-labelledby="complementar-tab" tabindex="0">
+            <div class="card shadow-sm">
+                 <div class="card-body p-4">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <div class="form-floating">{{ form.observacoes_internas }} <label for="{{ form.observacoes_internas.id_for_label }}">{{ form.observacoes_internas.label }}</label></div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">{{ form.numero_sei }} <label for="{{ form.numero_sei.id_for_label }}">{{ form.numero_sei.label }}</label></div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">{{ form.numero_outro_sistema }} <label for="{{ form.numero_outro_sistema.id_for_label }}">{{ form.numero_outro_sistema.label }}</label></div>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-floating">{{ form.link_acesso }} <label for="{{ form.link_acesso.id_for_label }}">{{ form.link_acesso.label }}</label></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
-</div>
+</form>
+
+{% endblock %}
+
+{% block javascript %}
+{{ block.super }}
+<script>
+    // Inicializa qualquer campo com a classe .select2 na página.
+    // O script global em base.html já faz isso, mas podemos adicionar
+    // configurações específicas aqui se necessário no futuro.
+</script>
 {% endblock %}

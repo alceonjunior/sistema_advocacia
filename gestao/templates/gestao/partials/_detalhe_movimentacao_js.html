@@ -1,0 +1,29 @@
+<script>
+// SCRIPT PARA O MODAL DE ADICIONAR MOVIMENTAÇÃO
+// Controla a visibilidade do campo "Horário" quando o tipo de movimentação é uma audiência.
+const movForm = document.querySelector('#adicionarMovimentacaoModal form');
+if(movForm) {
+    const tipoMovSelect = movForm.querySelector('#id_tipo_movimentacao');
+    const horaPrazoContainer = movForm.querySelector("#div_id_hora_prazo");
+    const dataPrazoLabel = movForm.querySelector("label[for='id_data_prazo_final']");
+
+    if(tipoMovSelect && horaPrazoContainer && dataPrazoLabel) {
+         if (!dataPrazoLabel.dataset.originalText) {
+             dataPrazoLabel.dataset.originalText = dataPrazoLabel.textContent;
+        }
+        const originalLabelText = dataPrazoLabel.dataset.originalText;
+
+        $(tipoMovSelect).on('change', function() {
+            const selectedOptionText = $(this).find('option:selected').text();
+            if (selectedOptionText.toLowerCase().includes('audiência')) {
+                horaPrazoContainer.classList.remove('d-none');
+                dataPrazoLabel.textContent = 'Data da Audiência';
+            } else {
+                horaPrazoContainer.classList.add('d-none');
+                horaPrazoContainer.querySelector('#id_hora_prazo').value = '';
+                dataPrazoLabel.textContent = originalLabelText;
+            }
+        }).trigger('change');
+    }
+}
+</script>

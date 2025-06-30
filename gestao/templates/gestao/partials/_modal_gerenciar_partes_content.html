@@ -1,0 +1,65 @@
+<form method="post" id="formGerenciarPartes">
+    {% csrf_token %}
+    {{ formset.management_form }}
+
+    <div id="partesFormsetContainer">
+        {% for form_parte in formset.forms %}
+            {% include 'gestao/partials/_form_parte_processo.html' with form_parte=form_parte %}
+        {% endfor %}
+    </div>
+
+    <div class="mt-3">
+        <button type="submit" class="btn btn-primary">Salvar</button>
+    </div>
+</form>
+
+<script>
+// Essa função será chamada sempre que o conteúdo for carregado via AJAX
+function inicializarEventosFormPartes() {
+    document.querySelectorAll('.remove-form-btn').forEach(function(btn) {
+        btn.addEventListener('click', function () {
+            const formWrapper = btn.closest('.parte-form');
+            if (formWrapper) {
+                // Marca o campo DELETE como 'on'
+                const deleteInput = formWrapper.querySelector('input[name$="-DELETE"]');
+                if (deleteInput) {
+                    deleteInput.value = 'on';
+                }
+
+                // Oculta o formulário visualmente
+                formWrapper.style.display = 'none';
+            }
+        });
+    });
+
+    // Lógica de envio via AJAX
+    const form = document.getElementById('formGerenciarPartes');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(form);
+            fetch(form.action || window.location.href, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    document.getElementById('gerenciarPartesModalBody').innerHTML = data.form_html;
+                    inicializarEventosFormPartes(); // Reaplica os eventos ao conteúdo reprocessado
+                }
+            })
+            .catch(() => {
+                alert("Erro ao salvar as partes. Tente novamente.");
+            });
+        });
+    }
+}
+
+// Executa a função imediatamente após o script ser carregado
+inicializarEventosFormPartes();
+</script>

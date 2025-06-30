@@ -1,0 +1,43 @@
+<div class="modal fade" id="arquivarProcessoModal" tabindex="-1" aria-labelledby="arquivarProcessoModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="modal-title fs-5" id="arquivarProcessoModalLabel"><i class="bi bi-archive-fill text-danger me-2"></i> Confirmar Arquivamento</h1>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Você tem certeza que deseja arquivar o processo <strong>{{ processo.numero_processo|default:"este processo" }}</strong>?</p>
+        <p class="text-muted small">Esta ação alterará o status do processo para "Arquivado".</p>
+      </div>
+      <div class="modal-footer">
+        <form action="{% url 'arquivar_processo' pk=processo.pk %}" method="post" class="w-100 d-flex justify-content-end gap-2">
+          {% csrf_token %}
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-danger">Sim, Arquivar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="desarquivarProcessoModal" tabindex="-1" aria-labelledby="desarquivarProcessoModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="modal-title fs-5" id="desarquivarProcessoModalLabel"><i class="bi bi-box-arrow-up text-success me-2"></i> Confirmar Desarquivamento</h1>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Você tem certeza que deseja desarquivar o processo <strong>{{ processo.numero_processo|default:"este processo" }}</strong>?</p>
+        <p class="text-muted small">Esta ação alterará o status do processo de volta para "Ativo".</p>
+      </div>
+      <div class="modal-footer">
+        <form action="{% url 'desarquivar_processo' pk=processo.pk %}" method="post" class="w-100 d-flex justify-content-end gap-2">
+          {% csrf_token %}
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success">Sim, Desarquivar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,34 @@
+{% comment %}
+Este é o template final e corrigido para uma única linha do formulário de partes.
+Ele usa a classe 'parte-form' e inclui todos os 3 campos necessários.
+{% endcomment %}
+<div class="parte-form mb-3 p-3 border rounded bg-light-subtle position-relative">
+    {# Campo oculto com o ID da instância, crucial para a edição. #}
+    {% if form_parte.instance.pk %}
+        {{ form_parte.id }}
+    {% endif %}
+
+    {# Botão 'x' para remover o formulário da tela (tratado via JS) #}
+    <button type="button" class="btn-close btn-sm position-absolute top-0 end-0 m-2 remove-form-btn" aria-label="Remover"></button>
+
+    {# Renderiza os campos do formulário com 3 colunas #}
+    <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+            {{ form_parte.cliente.label_tag }}
+            {{ form_parte.cliente }}
+        </div>
+        <div class="col-md-4">
+            {{ form_parte.tipo_participacao.label_tag }}
+            {{ form_parte.tipo_participacao }}
+        </div>
+        <div class="col-md-4">
+            {{ form_parte.representado_por.label_tag }}
+            {{ form_parte.representado_por }}
+        </div>
+    </div>
+
+    {# O campo DELETE do formset, que fica oculto. #}
+    <div hidden>
+        {{ form_parte.DELETE }}
+    </div>
+</div>

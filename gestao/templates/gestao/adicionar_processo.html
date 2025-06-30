@@ -1,134 +1,363 @@
 {% extends 'gestao/base.html' %}
+{% load static %}
 
 {% block title %}Adicionar Novo Processo{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<style>
+    /* --- Estilos do Wizard --- */
+    .wizard-steps { display: flex; justify-content: space-between; margin-bottom: 2rem; position: relative; }
+    .wizard-step { text-align: center; flex: 1; position: relative; color: #adb5bd; }
+    .wizard-step .step-circle { width: 40px; height: 40px; border-radius: 50%; background-color: #e9ecef; color: #adb5bd; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid #e9ecef; transition: all 0.3s ease; }
+    .wizard-step.active .step-circle { background-color: var(--bs-primary); color: white; border-color: var(--bs-primary); }
+    .wizard-step.completed .step-circle { background-color: var(--bs-success); color: white; border-color: var(--bs-success); }
+    .wizard-step p { margin-top: 0.5rem; font-size: 0.9rem; font-weight: 500; }
+    .wizard-steps::before { content: ''; position: absolute; top: 20px; left: 0; right: 0; height: 2px; background-color: #e9ecef; z-index: -1; }
+    .step-content { display: none; }
+    .step-content.active { display: block; }
+    .modal-body-scrollable { max-height: 70vh; overflow-y: auto; }
 
-<form method="post" novalidate>
-    {% csrf_token %}
+    /* --- Estilos da Seção de Partes (Aprimorados) --- */
+    .partes-column { background-color: #f8f9fa; border-radius: 0.5rem; padding: 1rem; min-height: 150px; height: 100%; }
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="h2 d-flex align-items-center gap-2">
-            <i class="bi bi-folder-plus text-primary"></i>
-            Adicionar Novo Processo
-        </h1>
-    </div>
+    .parte-card {
+        display: flex; align-items: center; gap: 0.75rem;
+        background-color: white; border: 1px solid #e9ecef;
+        border-left-width: 4px; border-radius: 0.375rem;
+        padding: 0.75rem 1rem; margin-bottom: 0.5rem;
+    }
+    .parte-card.polo-ativo { border-left-color: var(--bs-success); }
+    .parte-card.polo-passivo { border-left-color: var(--bs-danger); }
 
-    <div class="card shadow-sm mb-4">
-        <div class="card-header">
-            <h5 class="mb-0">1. Informações Gerais do Processo</h5>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-8">{{ form.tipo_acao.label_tag }}{{ form.tipo_acao }}</div>
-                <div class="col-md-4">{{ form.numero_processo.label_tag }}{{ form.numero_processo }}</div>
+    .parte-card-info { flex-grow: 1; }
+    .parte-card-info strong { display: block; color: #212529; }
+    .parte-card-info small { color: #6c757d; }
+
+    .empty-state-message { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; color: #6c757d; text-align: center; }
+    .empty-state-message i { font-size: 1.5rem; margin-bottom: 0.5rem; }
+
+    /* O formset do Django gera os formulários como divs, então o display: none é aplicado diretamente a eles */
+    #partes-form-container .parte-form { display: none; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h2 d-flex align-items-center gap-2"><i class="bi bi-folder-plus text-primary"></i> Novo Processo</h1>
+    <a href="{% url 'gestao:lista_processos' %}" class="btn btn-outline-secondary">Cancelar</a>
+</div>
+
+<div class="card shadow-sm">
+    <form id="wizard-form-main" method="post" novalidate>
+        {% csrf_token %}
+        <div class="card-body p-4 p-md-5">
+            <div class="wizard-steps">
+                <div class="wizard-step active" data-step="1"><div class="step-circle">1</div><p>Partes Envolvidas</p></div>
+                <div class="wizard-step" data-step="2"><div class="step-circle">2</div><p>Dados do Processo</p></div>
+                <div class="wizard-step" data-step="3"><div class="step-circle">3</div><p>Gestão Interna</p></div>
+                <div class="wizard-step" data-step="4"><div class="step-circle"><i class="bi bi-check-lg"></i></div><p>Concluir</p></div>
             </div>
-            <div class="mt-3">{{ form.descricao_caso.label_tag }}{{ form.descricao_caso }}</div>
+
+            {% if form.errors or formset.errors %}
+            <div class="alert alert-danger" role="alert">
+                <strong>Por favor, corrija os erros abaixo:</strong>
+                {{ form.errors }}
+                {{ formset.non_form_errors }}
+                {% for form_parte in formset %}
+                    {{ form_parte.errors }}
+                {% endfor %}
             </div>
-    </div>
+            {% endif %}
 
-    {{ formset.management_form }}
+            <div id="step-1" class="step-content active">
+                <h4 class="mb-4 border-bottom pb-2">1. Partes Envolvidas</h4>
 
-    <div class="row">
-        <div class="col-md-6">
-            <div class="card shadow-sm">
-                <div class="card-header bg-success-subtle d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0 text-success-emphasis">2. Polo Ativo (Autores)</h5>
-                    <button type="button" id="add-autor-form" class="btn btn-sm btn-success">
-                        <i class="bi bi-plus-circle"></i> Adicionar Autor
-                    </button>
-                </div>
-                <div class="card-body" id="autores-form-list">
+                <div class="card bg-light-subtle border-0 p-3 mb-4">
+                     <div class="mb-3">
+                        <label for="parte-cliente-selector" class="form-label fw-bold">1. Selecione um cliente ou cadastre um novo</label>
+                        <div class="d-flex align-items-center">
+                            <select id="parte-cliente-selector" class="form-select" style="width: 100%;"></select>
+                            <button id="btn-abrir-modal-cliente" class="btn btn-outline-primary ms-2" type="button" title="Adicionar Novo Cliente">
+                                <i class="bi bi-person-plus-fill"></i>
+                            </button>
+                        </div>
                     </div>
-            </div>
-        </div>
-
-        <div class="col-md-6">
-            <div class="card shadow-sm">
-                <div class="card-header bg-danger-subtle d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0 text-danger-emphasis">3. Polo Passivo (Réus)</h5>
-                    <button type="button" id="add-reu-form" class="btn btn-sm btn-danger">
-                        <i class="bi bi-plus-circle"></i> Adicionar Réu
-                    </button>
-                </div>
-                <div class="card-body" id="reus-form-list">
+                    <div>
+                        <label class="form-label fw-bold">2. Adicione o cliente selecionado ao polo correto</label>
+                        <div class="d-flex gap-2">
+                            <button type="button" id="btn-add-to-ativo" class="btn btn-success"><i class="bi bi-plus-circle me-1"></i> Adicionar ao Polo Ativo</button>
+                            <button type="button" id="btn-add-to-passivo" class="btn btn-danger"><i class="bi bi-plus-circle me-1"></i> Adicionar ao Polo Passivo</button>
+                        </div>
                     </div>
+                </div>
+
+                <div class="row g-4 mt-2">
+                    <div class="col-md-6">
+                        <h6 class="text-success fw-bold">POLO ATIVO (AUTORES)</h6>
+                        <div class="partes-column" id="polo-ativo-container">
+                            <div class="empty-state-message" id="empty-polo-ativo">
+                                <i class="bi bi-people"></i>
+                                <span>Nenhuma parte adicionada</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-danger fw-bold">POLO PASSIVO (RÉUS)</h6>
+                        <div class="partes-column" id="polo-passivo-container">
+                             <div class="empty-state-message" id="empty-polo-passivo">
+                                <i class="bi bi-people"></i>
+                                <span>Nenhuma parte adicionada</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="step-2" class="step-content">
+                <h4 class="mb-4 border-bottom pb-2">2. Dados Fundamentais e Trâmite</h4>
+                 <div class="row g-3">
+                    <div class="col-md-8">{{ form.tipo_acao.label_tag }}{{ form.tipo_acao }}</div>
+                    <div class="col-md-4">{{ form.numero_processo.label_tag }}{{ form.numero_processo }}</div>
+                    <div class="col-12">{{ form.descricao_caso.label_tag }}{{ form.descricao_caso }}</div>
+                    <div class="col-md-6">{{ form.data_distribuicao.label_tag }}{{ form.data_distribuicao }}</div>
+                    <div class="col-md-6">{{ form.valor_causa.label_tag }}{{ form.valor_causa }}</div>
+                </div>
+                <div class="row g-3 mt-2">
+                    <div class="col-md-4">{{ form.status_processo.label_tag }}{{ form.status_processo }}</div>
+                    <div class="col-md-4">{{ form.fase.label_tag }}{{ form.fase }}</div>
+                    <div class="col-md-4">{{ form.grau_jurisdicao.label_tag }}{{ form.grau_jurisdicao }}</div>
+                    <div class="col-md-6">{{ form.tribunal.label_tag }}{{ form.tribunal }}</div>
+                    <div class="col-md-6">{{ form.vara_comarca_orgao.label_tag }}{{ form.vara_comarca_orgao }}</div>
+                </div>
+                 <div class="col-12 pt-4 d-flex flex-wrap align-items-center gap-4">
+                    <div class="form-check form-switch">{{ form.segredo_justica }} {{ form.segredo_justica.label_tag }}</div>
+                    <div class="form-check form-switch">{{ form.justica_gratuita }} {{ form.justica_gratuita.label_tag }}</div>
+                    <div class="form-check form-switch">{{ form.prioridade_tramitacao }} {{ form.prioridade_tramitacao.label_tag }}</div>
+                </div>
+            </div>
+
+            <div id="step-3" class="step-content">
+                <h4 class="mb-4 border-bottom pb-2">3. Equipe e Detalhes Internos</h4>
+                <div class="row g-3">
+                     <div class="col-md-6">{{ form.advogado_responsavel.label_tag }}{{ form.advogado_responsavel }}</div>
+                     <div class="col-md-6">{{ form.advogados_envolvidos.label_tag }}{{ form.advogados_envolvidos }}</div>
+                     <div class="col-12">{{ form.observacoes_internas.label_tag }}{{ form.observacoes_internas }}</div>
+                     <div class="col-md-6">{{ form.numero_sei.label_tag }}{{ form.numero_sei }}</div>
+                     <div class="col-md-6">{{ form.numero_outro_sistema.label_tag }}{{ form.numero_outro_sistema }}</div>
+                     <div class="col-12 mt-4">
+                        <label class="form-label d-block mb-2">{{ form.nivel_permissao.label }}</label>
+                        {% for radio in form.nivel_permissao %}<div class="form-check">{{ radio.tag }} <label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label></div>{% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div id="step-4" class="step-content text-center py-5">
+                <h4 class="mb-3">Revisão Final</h4>
+                <p class="text-muted">Todos os passos foram preenchidos. Clique em "Salvar Processo" para concluir o cadastro.</p>
+                <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
             </div>
         </div>
-    </div>
 
+        <div id="partes-form-container" style="display: none;">
+            {{ formset.management_form }}
+            {% for form_parte in formset.forms %}
+                <div class="parte-form" data-form-index="{{ forloop.counter0 }}">
+                    {{ form_parte.as_p }}
+                </div>
+            {% endfor %}
+        </div>
+        <div class="card-footer p-3 bg-light d-flex justify-content-between">
+            <button type="button" class="btn btn-secondary" id="prev-btn" style="display: none;"><i class="bi bi-arrow-left"></i> Voltar</button>
+            <button type="button" class="btn btn-primary" id="next-btn">Próximo <i class="bi bi-arrow-right"></i></button>
+            <button type="submit" class="btn btn-success" id="save-btn" style="display: none;"><i class="bi bi-check-lg"></i> Salvar Processo</button>
+        </div>
+    </form>
+</div>
 
-    <div class="d-flex justify-content-end gap-2 mt-4">
-        <a href="{% url 'lista_processos' %}" class="btn btn-secondary">Cancelar</a>
-        <button type="submit" class="btn btn-primary px-4">Salvar Processo</button>
-    </div>
-</form>
-
-<div id="empty-form" style="display: none;">
-    <div class="parte-form mb-3 p-3 border rounded bg-light position-relative">
-        <button type="button" class="btn-close position-absolute top-0 end-0 p-2" aria-label="Close" onclick="this.closest('.parte-form').remove()"></button>
-        {{ formset.empty_form.as_p }}
+<div id="empty-form-template" style="display: none;">{{ formset.empty_form.as_p }}</div>
+<div id="parte-card-template" style="display: none;">
+    <div class="parte-card">
+        <i class="bi bi-person-fill text-muted"></i>
+        <div class="parte-card-info">
+            <strong data-name></strong>
+        </div>
+        <button type="button" class="btn-close remove-parte-btn" aria-label="Remover"></button>
     </div>
 </div>
 
+{% include 'gestao/partials/_modal_adicionar_cliente.html' with form=form_cliente_modal %}
+
+<script id="client-data" type="application/json">{{ all_clients_json|safe }}</script>
 {% endblock %}
 
 
 {% block javascript %}
 {{ block.super }}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Seleciona os botões e os containers
-    const addAutorButton = document.getElementById('add-autor-form');
-    const addReuButton = document.getElementById('add-reu-form');
-    const autoresList = document.getElementById('autores-form-list');
-    const reusList = document.getElementById('reus-form-list');
+// Usando a forma padrão e mais segura do jQuery para garantir que o DOM está pronto.
+$(function() {
 
-    // Pega o template do formulário vazio e o input de gerenciamento
-    const emptyFormTemplate = document.getElementById('empty-form').innerHTML;
-    const totalFormsInput = document.querySelector('#id_partes-TOTAL_FORMS');
-    let formNum = parseInt(totalFormsInput.value);
+    // --- LÓGICA DO WIZARD ---
+    const steps = $('.wizard-step');
+    const stepContents = $('.step-content');
+    const nextBtn = $('#next-btn');
+    const prevBtn = $('#prev-btn');
+    const saveBtn = $('#save-btn');
+    let currentStep = 1;
+    const totalSteps = steps.length;
 
-    // Função reutilizável para adicionar um novo formulário de parte
-    function addForm(container, tipoParticipacao) {
-        // Substitui o prefixo no template do formulário
-        let newFormHtml = emptyFormTemplate.replace(/__prefix__/g, formNum);
+    function updateWizard() {
+        steps.each(function() {
+            const step = $(this);
+            const stepNum = step.data('step');
+            step.toggleClass('active', stepNum === currentStep).toggleClass('completed', stepNum < currentStep);
+        });
 
-        // Cria um elemento temporário para manipular o novo formulário
-        let tempDiv = document.createElement('div');
-        tempDiv.innerHTML = newFormHtml;
+        stepContents.each(function() {
+            const content = $(this);
+            const stepNum = parseInt(content.attr('id').replace('step-', ''));
+            content.toggleClass('active', stepNum === currentStep);
+        });
 
-        // Encontra o campo 'tipo_participacao' e define o valor (AUTOR ou REU)
-        let tipoSelect = tempDiv.querySelector('select[name$="tipo_participacao"]');
-        if (tipoSelect) {
-            tipoSelect.value = tipoParticipacao;
-            // Opcional: Desabilitar o campo para o usuário não mudar
-            // tipoSelect.disabled = true;
+        prevBtn.toggle(currentStep > 1);
+        nextBtn.toggle(currentStep < totalSteps);
+        saveBtn.toggle(currentStep === totalSteps);
+
+        // AJUSTE 2: Inicialização segura e condicional do Select2 para o campo oculto
+        if (currentStep === 3) {
+            const advogadosSelect = $('#id_advogados_envolvidos');
+            if (advogadosSelect.length && !advogadosSelect.hasClass("select2-hidden-accessible")) {
+                advogadosSelect.select2({
+                    theme: "bootstrap-5",
+                    placeholder: 'Selecione os colaboradores',
+                    width: '100%'
+                });
+            }
+        }
+    }
+
+    // --- LÓGICA PARA ABRIR O MODAL MANUALMENTE (RESOLVE O CONFLITO BS5/JQUERY) ---
+    // AJUSTE 3: Listener de clique manual para o botão com o novo ID
+    $('#btn-abrir-modal-cliente').on('click', function() {
+        var clienteModalEl = document.getElementById('addClienteModal');
+        if (clienteModalEl) {
+            var clienteModal = new bootstrap.Modal(clienteModalEl);
+            clienteModal.show();
+        } else {
+            console.error("Elemento do Modal #addClienteModal não encontrado.");
+        }
+    });
+
+
+    // --- LÓGICA DAS PARTES (CLIENTES) ---
+    const partesFormContainer = $('#partes-form-container');
+    const totalFormsInput = $('#id_partes-TOTAL_FORMS');
+    const emptyFormTemplate = $('#empty-form-template').html();
+    const parteCardTemplate = $('#parte-card-template').html();
+    const clienteSelector = $('#parte-cliente-selector');
+    const poloAtivoContainer = $('#polo-ativo-container');
+    const poloPassivoContainer = $('#polo-passivo-container');
+
+    function updateEmptyState(container) {
+        const emptyMessage = container.find('.empty-state-message');
+        const hasCards = container.find('.parte-card').length > 0;
+        emptyMessage.toggle(!hasCards);
+    }
+
+    function populateClientSelector() {
+        const clientDataTag = document.getElementById('client-data');
+        if (!clientDataTag) return;
+        try {
+            const clients = JSON.parse(clientDataTag.textContent || '[]');
+            clienteSelector.select2({
+                theme: "bootstrap-5",
+                placeholder: 'Buscar por nome ou CPF/CNPJ...',
+                data: clients
+            });
+        } catch (e) { console.error("Erro ao processar JSON dos clientes:", e); }
+    }
+
+    // Ouve o evento global que o base.html dispara quando um cliente é salvo no modal.
+    $(document).on('itemAdicionado', function(event) {
+        if (event.detail && event.detail.tipo === 'cliente') {
+            const novoCliente = event.detail.dados;
+            const newOption = new Option(novoCliente.nome, novoCliente.pk, true, true);
+            clienteSelector.append(newOption).trigger('change');
+            clienteSelector.val(novoCliente.pk).trigger('change');
+        }
+    });
+
+    function addParte(tipoPolo) {
+        const selectedData = clienteSelector.select2('data')[0];
+        if (!selectedData || !selectedData.id) {
+            alert('Por favor, selecione um cliente da lista.');
+            return;
+        }
+        const clienteId = selectedData.id;
+        const clienteNome = selectedData.text;
+
+        let formJaExiste = false;
+        partesFormContainer.find('select[name$="-cliente"]').each(function() {
+            const formDiv = $(this).closest('.parte-form');
+            const isMarkedForDeletion = formDiv.find('input[name$="-DELETE"]:checked').length > 0;
+            if (this.value == clienteId && !isMarkedForDeletion) {
+                formJaExiste = true; return false;
+            }
+        });
+
+        if (formJaExiste) {
+            alert('Este cliente já foi adicionado como parte no processo.');
+            return;
         }
 
-        // Adiciona o novo formulário ao container correto
-        container.append(tempDiv.firstElementChild);
+        const formIndex = parseInt(totalFormsInput.val());
+        const newFormHtml = emptyFormTemplate.replace(/__prefix__/g, formIndex);
+        const newForm = $('<div class="parte-form"></div>').attr('data-form-index', formIndex).html(newFormHtml);
+        partesFormContainer.append(newForm);
+        newForm.find(`select[name$="-cliente"]`).append(new Option(clienteNome, clienteId, true, true)).val(clienteId);
+        newForm.find(`select[name$="-tipo_participacao"]`).val(tipoPolo);
 
-        // Atualiza a contagem de formulários no formset de gerenciamento
-        formNum++;
-        totalFormsInput.value = formNum;
+        const newCard = $(parteCardTemplate);
+        newCard.attr('data-form-index', formIndex);
+        newCard.find('[data-name]').text(clienteNome);
+        newCard.addClass(tipoPolo === 'AUTOR' ? 'polo-ativo' : 'polo-passivo');
+        const container = (tipoPolo === 'AUTOR' ? poloAtivoContainer : poloPassivoContainer);
+        container.append(newCard);
+        updateEmptyState(container);
+        totalFormsInput.val(formIndex + 1);
+        clienteSelector.val(null).trigger('change');
     }
 
-    // Adiciona os eventos de clique aos botões
-    addAutorButton.addEventListener('click', () => addForm(autoresList, 'AUTOR'));
-    addReuButton.addEventListener('click', () => addForm(reusList, 'REU'));
-
-    // Inicia a tela com um formulário para autor e um para réu
-    addForm(autoresList, 'AUTOR');
-    addForm(reusList, 'REU');
-
-    // Remove o formulário "extra" original que o Django cria, pois já o usamos como template
-    const initialExtraForm = document.querySelector('#partes-form-list .parte-form');
-    if(initialExtraForm) {
-        // Este passo é um pouco mais complexo, a lógica acima já o substitui.
-        // O JS agora cria os formulários iniciais, ignorando o 'extra=1' do Django.
+    function removeParte(cardElement) {
+        const card = $(cardElement);
+        const container = card.parent();
+        const formIndex = card.data('form-index');
+        const formToRemove = partesFormContainer.find(`.parte-form[data-form-index="${formIndex}"]`);
+        if (formToRemove.length) {
+            const deleteCheckbox = formToRemove.find('input[type=checkbox][name$="-DELETE"]');
+            if (deleteCheckbox.length) {
+                deleteCheckbox.prop('checked', true);
+                formToRemove.hide();
+            } else {
+                formToRemove.remove();
+            }
+        }
+        card.remove();
+        updateEmptyState(container);
     }
+
+    // --- Vinculando Eventos ---
+    nextBtn.on('click', () => { if (currentStep < totalSteps) { currentStep++; updateWizard(); } });
+    prevBtn.on('click', () => { if (currentStep > 1) { currentStep--; updateWizard(); } });
+    $('#btn-add-to-ativo').on('click', () => addParte('AUTOR'));
+    $('#btn-add-to-passivo').on('click', () => addParte('REU'));
+    $(document).on('click', '.remove-parte-btn', function() {
+        removeParte($(this).closest('.parte-card'));
+    });
+
+    // --- INICIALIZAÇÃO DA PÁGINA ---
+    updateWizard();
+    populateClientSelector();
+    updateEmptyState(poloAtivoContainer);
+    updateEmptyState(poloPassivoContainer);
 });
 </script>
 {% endblock %}

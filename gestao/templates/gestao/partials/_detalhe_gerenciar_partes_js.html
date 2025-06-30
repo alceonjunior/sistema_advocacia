@@ -1,0 +1,128 @@
+<script>
+// SCRIPT PARA GERENCIAR PARTES DO PROCESSO (VERSÃO CORRIGIDA E COMPLETA)
+document.addEventListener('DOMContentLoaded', function() {
+    const gerenciarPartesModalEl = document.getElementById('gerenciarPartesModal');
+    if (!gerenciarPartesModalEl) return;
+
+    const modalBody = document.getElementById('gerenciarPartesModalBody');
+
+    // Função que será chamada para inicializar toda a lógica do formulário
+    const setupGerenciarPartesForm = () => {
+        const formEl = modalBody.querySelector('#gerenciarPartesForm');
+        if (!formEl) return;
+
+        const autoresList = modalBody.querySelector('#autores-list');
+        const reusList = modalBody.querySelector('#reus-list');
+        const formContainer = modalBody.querySelector('#form-container');
+
+        // Função para inicializar o Select2 (se necessário no futuro)
+        const initSelect2 = (context) => {
+            $(context).find('.select2').select2({
+                theme: "bootstrap-5",
+                width: '100%',
+                dropdownParent: $(gerenciarPartesModalEl)
+            });
+        };
+
+        // 1. Move os formulários que já existem para as listas corretas
+        formContainer.querySelectorAll('.parte-form').forEach(formRow => {
+            const tipoSelect = formRow.querySelector('select[name$="-tipo_participacao"]');
+            if (tipoSelect && tipoSelect.value) {
+                const targetList = tipoSelect.value === 'AUTOR' ? autoresList : reusList;
+                targetList.appendChild(formRow);
+            }
+        });
+
+        // Inicializa o Select2 para os formulários existentes
+        initSelect2(formEl);
+
+        // 2. Adiciona os 'event listeners' para os botões e o formulário
+        formEl.addEventListener('click', function(e) {
+            const addBtn = e.target.closest('.btn-add-parte');
+            const removeBtn = e.target.closest('.remove-form-btn');
+
+            // Lógica para ADICIONAR uma nova parte
+            if (addBtn) {
+                const tipo = addBtn.dataset.tipo;
+                const totalFormsInput = formEl.querySelector('#id_partes-TOTAL_FORMS');
+                const nextIndex = parseInt(totalFormsInput.value, 10);
+                const template = formEl.querySelector('#empty-form-template').innerHTML.replace(/__prefix__/g, nextIndex);
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = template;
+                const newFormRow = tempDiv.firstElementChild;
+                newFormRow.querySelector('select[name*="tipo_participacao"]').value = tipo;
+                const targetList = (tipo === 'AUTOR') ? autoresList : reusList;
+                targetList.appendChild(newFormRow);
+                initSelect2(newFormRow); // Inicializa o select2 apenas no novo form
+                totalFormsInput.value = nextIndex + 1;
+            }
+
+            // Lógica para REMOVER uma parte
+            if (removeBtn) {
+                const formRow = removeBtn.closest('.parte-form');
+                if (formRow) {
+                    const deleteInput = formRow.querySelector('input[name$="-DELETE"]');
+                    if (deleteInput) {
+                        deleteInput.checked = true;
+                        formRow.style.display = 'none';
+                    } else {
+                        formRow.remove();
+                    }
+                }
+            }
+        });
+
+        // 3. Lógica para SUBMETER o formulário via AJAX
+        formEl.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const saveBtn = formEl.querySelector('#save-partes-btn');
+            const formData = new FormData(formEl);
+            const spinner = saveBtn.querySelector('.spinner-border');
+            spinner.classList.remove('d-none');
+            saveBtn.disabled = true;
+
+            fetch(formEl.action, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-CSRFToken': formData.get('csrfmiddlewaretoken'), 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Recarrega a página inteira para garantir a atualização de todos os dados
+                    window.location.reload();
+                } else if (data.form_html) {
+                    // Se houver erro, recarrega o corpo do modal com o formulário e os erros
+                    modalBody.innerHTML = data.form_html;
+                    // Re-inicializa a lógica no novo HTML injetado
+                    setupGerenciarPartesForm();
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert("Ocorreu um erro inesperado. Tente novamente.");
+            })
+            .finally(() => {
+                spinner.classList.add('d-none');
+                saveBtn.disabled = false;
+            });
+        });
+    };
+
+    // Ouve o evento de abertura do modal para iniciar o processo
+    gerenciarPartesModalEl.addEventListener('show.bs.modal', () => {
+        modalBody.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div></div>';
+
+        fetch(`{% url 'gerenciar_partes' processo_pk=processo.pk %}`)
+        .then(res => res.text())
+        .then(html => {
+            modalBody.innerHTML = html;
+            // CHAMA A FUNÇÃO PARA DAR VIDA AO FORMULÁRIO CARREGADO
+            setupGerenciarPartesForm();
+        }).catch(err => {
+            modalBody.innerHTML = '<div class="alert alert-danger">Erro ao carregar o conteúdo. Por favor, tente novamente.</div>';
+            console.error('Erro no fetch de gerenciar partes:', err);
+        });
+    });
+});
+</script>g

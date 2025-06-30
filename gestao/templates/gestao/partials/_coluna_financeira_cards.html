@@ -1,0 +1,69 @@
+{% load humanize %}
+
+{% for ano, meses in lancamentos_agrupados.items %}
+    {# Agrupador de Ano #}
+    <h5 class="text-muted fw-light mt-3 mb-3">
+        <i class="bi bi-calendar3-range me-2"></i>Ano de {{ ano }}
+    </h5>
+
+    {% for mes, lancamentos in meses.items %}
+        {# Agrupador de Mês #}
+        <h6 class="text-primary border-bottom pb-2 mb-3">
+            <i class="bi bi-calendar-month me-2"></i>{{ mes }}
+        </h6>
+
+        {% for lancamento in lancamentos %}
+            {# Card de Lançamento Individual #}
+            <div class="card mb-3 shadow-sm {{ card_border_class }}">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <p class="mb-0 fw-normal small">
+                        <i class="bi bi-receipt me-2 text-muted"></i>{{ lancamento.descricao }}
+                    </p>
+                    {# Status do Lançamento #}
+                    {% if lancamento.status == 'PAGO' %}
+                        <span class="badge bg-success-subtle text-success-emphasis rounded-pill"><i class="bi bi-check-circle me-1"></i>Pago</span>
+                    {% elif lancamento.status == 'ATRASADO' %}
+                        <span class="badge bg-danger-subtle text-danger-emphasis rounded-pill"><i class="bi bi-exclamation-triangle me-1"></i>Atrasado</span>
+                    {% elif lancamento.status == 'PARCIALMENTE_PAGO' %}
+                        <span class="badge bg-warning-subtle text-warning-emphasis rounded-pill"><i class="bi bi-pie-chart me-1"></i>Parcial</span>
+                    {% else %}
+                         <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill"><i class="bi bi-clock me-1"></i>A Pagar</span>
+                    {% endif %}
+                </div>
+                <div class="card-body py-2">
+                    <div class="row g-2 text-center small">
+                        <div class="col-md-3 col-6"><p class="small text-muted mb-0">Vencimento</p><p class="mb-0 fw-bold">{{ lancamento.data_vencimento|date:"d/m/Y" }}</p></div>
+                        <div class="col-md-3 col-6"><p class="small text-muted mb-0">Valor Devido</p><p class="mb-0">R$ {{ lancamento.valor|intcomma }}</p></div>
+                        <div class="col-md-3 col-6"><p class="small text-muted mb-0">Valor Pago</p><p class="mb-0 text-success">R$ {{ lancamento.valor_pago|intcomma }}</p></div>
+                        <div class="col-md-3 col-6"><p class="small text-muted mb-0">Saldo Devedor</p><p class="mb-0 fw-bold {% if lancamento.saldo_devedor > 0 %}text-danger{% endif %}">R$ {{ lancamento.saldo_devedor|intcomma }}</p></div>
+                    </div>
+                </div>
+                <div class="card-footer bg-light d-flex justify-content-between align-items-center py-1">
+                    <button class="btn btn-sm btn-link text-decoration-none small" type="button" data-bs-toggle="collapse" data-bs-target="#pagamentos-{{ lancamento.pk }}"><i class="bi bi-list-ol me-1"></i>Histórico ({{ lancamento.pagamentos.count }})</button>
+                    <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#pagamentoModal" data-modal-mode="add" data-lancamento-id="{{ lancamento.pk }}" data-lancamento-descricao="{{ lancamento.descricao }}" data-saldo-devedor="{{ lancamento.saldo_devedor }}" title="Adicionar Pagamento"><i class="bi bi-plus-circle me-1"></i> Pagar</button>
+                </div>
+                <div class="collapse" id="pagamentos-{{ lancamento.pk }}">
+                    <ul class="list-group list-group-flush">
+                        {% for pagamento in lancamento.pagamentos.all %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center px-3 py-2">
+                                <div class="small"><i class="bi bi-cash-stack text-success me-2"></i>Pago em <strong>{{ pagamento.data_pagamento|date:"d/m/Y" }}</strong>: <span class="fw-bold text-success">R$ {{ pagamento.valor_pago|intcomma }}</span>{% if pagamento.forma_pagamento %}<span class="text-muted"> ({{ pagamento.forma_pagamento }})</span>{% endif %}</div>
+                                <div class="btn-group">
+                                    <a href="{% url 'imprimir_recibo' pagamento.pk %}" target="_blank" class="btn btn-sm btn-outline-secondary" title="Imprimir Recibo"><i class="bi bi-printer"></i></a>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#pagamentoModal" data-modal-mode="edit" data-pagamento-id="{{ pagamento.pk }}" data-lancamento-descricao="{{ lancamento.descricao }}" data-pagamento-data="{{ pagamento.data_pagamento|date:'Y-m-d' }}" data-pagamento-valor="{{ pagamento.valor_pago }}" data-pagamento-forma="{{ pagamento.forma_pagamento|default:'' }}" data-pagamento-obs="{{ pagamento.observacoes|default:'' }}" title="Editar Pagamento"><i class="bi bi-pencil"></i></button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger delete-payment-btn" data-bs-toggle="modal" data-bs-target="#confirmDeleteModal" data-delete-url="{% url 'excluir_pagamento' pk=pagamento.pk %}" data-modal-title="Confirmar Exclusão de Pagamento" data-modal-body="Tem certeza que deseja excluir o pagamento de R$ {{ pagamento.valor_pago|intcomma }} do dia {{ pagamento.data_pagamento|date:'d/m/Y' }}? Esta ação não pode ser desfeita." data-parent-pk="{% if processo %}{{ processo.pk }}{% else %}{{ servico.pk }}{% endif %}" data-parent-type="{% if processo %}processo{% else %}servico{% endif %}" title="Excluir Pagamento"><i class="bi bi-trash"></i></button>
+                                </div>
+                            </li>
+                        {% empty %}
+                            <li class="list-group-item text-center text-muted small p-3">Nenhum pagamento registrado para este lançamento.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        {% endfor %}
+    {% endfor %}
+{% empty %}
+    <div class="text-center p-4 text-muted small">
+        <i class="bi bi-check2-circle fs-4 d-block mb-2"></i>
+        {{ empty_message }}
+    </div>
+{% endfor %}

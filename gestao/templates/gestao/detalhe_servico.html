@@ -1,259 +1,173 @@
 {% extends 'gestao/base.html' %}
-{% load humanize %}
+{% load static humanize %}
 
 {% block title %}Painel do Serviço - {{ servico.descricao|truncatechars:30 }}{% endblock %}
 
-{% block content %}
+{% block styles %}
+{{ block.super }}
 <style>
-    /* Estilos para o painel de controle e linha do tempo */
-    .stat-card { background-color: var(--bs-tertiary-bg); }
-    .timeline { list-style-type: none; padding-left: 20px; position: relative; }
-    .timeline:before {
-        content: ' ';
-        background: #d4d9df;
-        display: inline-block;
-        position: absolute;
-        left: 4px;
-        width: 2px;
-        height: 100%;
-        z-index: 400;
-    }
-    .timeline-item {
-        margin-bottom: 20px;
-    }
-    .timeline-marker {
-        position: absolute;
-        left: -5px;
-        top: 5px;
-        width: 18px;
-        height: 18px;
-        background-color: #0d6efd;
-        border: 3px solid #fff;
-        border-radius: 50%;
-        z-index: 500;
-    }
-    .timeline-content {
-        padding-left: 25px;
-    }
-</style>
+    /* Efeito de carregamento para os containers AJAX */
+    .loading-container { opacity: 0.5; transition: opacity 0.3s; position: relative; min-height: 100px; }
+    .loading-container::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 2rem; height: 2rem; border: 4px solid #f3f3f3; border-top: 4px solid var(--bs-primary); border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-<!-- CABEÇALHO E AÇÕES PRINCIPAIS -->
+    /* Estilos para a Linha do Tempo (Timeline) */
+    .timeline { list-style-type: none; padding-left: 25px; position: relative; border-left: 2px solid #e9ecef; }
+    .timeline-item { position: relative; padding-bottom: 25px; padding-left: 25px; }
+    .timeline-item:last-child { padding-bottom: 0; }
+    .timeline-marker { position: absolute; left: -14px; top: 0px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 50%; z-index: 1; border: 3px solid white; }
+    .timeline-content { background-color: #f8f9fa; border-radius: .375rem; padding: 1rem; }
+    .border-end-lg { border-right: 1px solid #dee2e6 !important; }
+    @media (max-width: 991.98px) { .border-end-lg { border-right: none !important; } }
+</style>
+{% endblock %}
+
+
+{% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h1 class="h2 mb-0">Painel do Serviço</h1>
+        <h1 class="h2 mb-0 d-flex align-items-center gap-2"><i class="bi bi-briefcase-fill text-primary"></i> Painel do Serviço</h1>
         <p class="text-muted mb-0" title="{{ servico.descricao }}">{{ servico.descricao|truncatechars:70 }}</p>
     </div>
-    <div>
-        <!-- Botão para Concluir o Serviço (condicional) -->
-        {% if not servico.concluido %}
-        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#concluirServicoModal">
-            <i class="bi bi-check-circle-fill"></i> Concluir Serviço
-        </button>
-        {% endif %}
+    <div class="d-flex gap-2">
+        {% if not servico.concluido %}<button id="btn-concluir-servico" type="button" class="btn btn-success"><i class="bi bi-check-circle-fill me-1"></i> Concluir Serviço</button>{% endif %}
         <a href="{% url 'editar_servico' pk=servico.pk %}" class="btn btn-outline-secondary"><i class="bi bi-pencil"></i> Editar</a>
         <a href="{% url 'lista_servicos' %}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle"></i> Voltar</a>
     </div>
 </div>
 
-<!-- PAINEL DE CONTROLE (DASHBOARD) DO SERVIÇO -->
 <div class="card shadow-sm mb-4">
     <div class="card-body p-4">
         <div class="row g-4 align-items-center">
-            <!-- Coluna de Informações Principais -->
-            <div class="col-lg-7 border-end">
+            <div class="col-lg-7 border-end-lg">
                 <div class="row">
-                    <div class="col-md-7 mb-4">
-                        <p class="text-muted small mb-1">CLIENTE</p>
-                        <h5 class="mb-0 d-flex align-items-center gap-2"><i class="bi bi-person-circle text-primary"></i>{{ servico.cliente.nome_completo }}</h5>
-                    </div>
-                    <div class="col-md-5 mb-4">
-                        <p class="text-muted small mb-1">TIPO DE SERVIÇO</p>
-                        <h6 class="mb-0">{{ servico.tipo_servico.nome }}</h6>
-                    </div>
-                    <div class="col-md-4">
-                        <p class="text-muted small mb-1">STATUS</p>
-                        {% if servico.concluido %}<span class="badge fs-6 bg-success-subtle text-success-emphasis">Concluído</span>
-                        {% elif not servico.ativo %}<span class="badge fs-6 bg-secondary-subtle text-secondary-emphasis">Inativo</span>
-                        {% else %}<span class="badge fs-6 bg-primary-subtle text-primary-emphasis">Em Andamento</span>{% endif %}
-                    </div>
-                    <div class="col-md-4">
-                        <p class="text-muted small mb-1">PRAZO FINAL</p>
-                        <h6 class="mb-0 {% if servico.prazo and servico.prazo < today and not servico.concluido %}text-danger{% endif %}">
-                            <i class="bi bi-calendar-check"></i> {{ servico.prazo|date:"d/m/Y"|default:"N/D" }}
-                        </h6>
-                    </div>
-                    <div class="col-md-4">
-                        <p class="text-muted small mb-1">RESPONSÁVEL</p>
-                        <h6 class="mb-0">
-                            <i class="bi bi-person-badge"></i>
-                            {% if servico.responsavel %}
-                                {{ servico.responsavel.get_full_name|default:servico.responsavel.username }}
-                            {% else %}
-                                Não Definido
-                            {% endif %}
-                        </h6>
-                    </div>
+                    <div class="col-md-7 mb-3 mb-md-4"><p class="text-muted small mb-1">CLIENTE</p><h5 class="mb-0 d-flex align-items-center gap-2"><i class="bi bi-person-circle text-primary"></i>{{ servico.cliente.nome_completo }}</h5></div>
+                    <div class="col-md-5 mb-3 mb-md-4"><p class="text-muted small mb-1">TIPO DE SERVIÇO</p><h6 class="mb-0">{{ servico.tipo_servico.nome }}</h6></div>
+                    <div class="col-md-4"><p class="text-muted small mb-1">STATUS</p>{% if servico.concluido %}<span class="badge fs-6 bg-success-subtle text-success-emphasis rounded-pill">Concluído</span>{% else %}<span class="badge fs-6 bg-primary-subtle text-primary-emphasis rounded-pill">Em Andamento</span>{% endif %}</div>
+                    <div class="col-md-4"><p class="text-muted small mb-1">PRAZO FINAL</p><h6 class="mb-0 {% if info_prazo.status == 'VENCIDO' %}text-danger{% endif %}"><i class="bi bi-calendar-check"></i> {{ servico.prazo|date:"d/m/Y"|default:"N/D" }}{% if info_prazo.status %}<span class="badge rounded-pill ms-2 {% if info_prazo.status == 'VENCIDO' %} bg-danger-subtle text-danger-emphasis {% elif info_prazo.status == 'VENCE_HOJE' %} bg-warning-subtle text-warning-emphasis {% else %} bg-info-subtle text-info-emphasis {% endif %}">{{ info_prazo.texto }}</span>{% endif %}</h6></div>
+                    <div class="col-md-4"><p class="text-muted small mb-1">RESPONSÁVEL</p><h6 class="mb-0"><i class="bi bi-person-badge"></i> {% if servico.responsavel %}{{ servico.responsavel.get_full_name|default:servico.responsavel.username }}{% else %}Não Definido{% endif %}</h6></div>
                 </div>
             </div>
-            <!-- Coluna de Resumo Financeiro -->
-            <div class="col-lg-5">
-                <p class="text-muted small mb-2">RESUMO FINANCEIRO</p>
-                <div class="d-flex justify-content-between align-items-baseline">
-                    <span class="fw-bold">R$ {{ financeiro.total_pago|floatformat:2|intcomma }}</span>
-                    <span class="text-muted">de R$ {{ financeiro.valor_total|floatformat:2|intcomma }}</span>
-                </div>
-                <!-- Barra de Progresso Empilhada Corrigida -->
-                <div class="progress mt-1" style="height: 10px;">
-                    <div class="progress-bar bg-success" role="progressbar" style="width: {{ financeiro.percentual_pago_css }}%;"
-                         aria-valuenow="{{ financeiro.percentual_pago }}" aria-valuemin="0" aria-valuemax="100"
-                         title="Pago: R$ {{ financeiro.total_pago|floatformat:2|intcomma }} ({{ financeiro.percentual_pago|floatformat:2 }}%)">
-                    </div>
-                    <div class="progress-bar bg-danger" role="progressbar" style="width: {{ financeiro.percentual_devedor_css }}%;"
-                         aria-valuenow="{{ financeiro.percentual_devedor }}" aria-valuemin="0" aria-valuemax="100"
-                         title="Saldo Devedor: R$ {{ financeiro.saldo_devedor|floatformat:2|intcomma }} ({{ financeiro.percentual_devedor|floatformat:2 }}%)">
-                    </div>
-                </div>
-                <div class="d-flex justify-content-between small mt-1">
-                    <span>Pago</span>
-                    <span>Saldo devedor: <strong>R$ {{ financeiro.saldo_devedor|floatformat:2|intcomma }}</strong></span>
-                </div>
+            <div class="col-lg-5" id="servico-resumo-financeiro-container">
+                {% include 'gestao/partials/_servico_resumo_financeiro.html' %}
             </div>
         </div>
     </div>
 </div>
 
-<!-- ABAS COM DETALHES -->
 <ul class="nav nav-tabs nav-tabs-bordered mb-3" id="serviceTab" role="tablist">
-    <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="andamento-tab" data-bs-toggle="tab" data-bs-target="#andamento-tab-pane" type="button" role="tab"><i class="bi bi-list-check me-2"></i>Andamento</button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="financeiro-tab" data-bs-toggle="tab" data-bs-target="#financeiro-tab-pane" type="button" role="tab"><i class="bi bi-wallet2 me-2"></i>Financeiro Detalhado</button>
-    </li>
+    <li class="nav-item" role="presentation"><button class="nav-link active" id="andamento-tab" data-bs-toggle="tab" data-bs-target="#andamento-tab-pane" type="button" role="tab"><i class="bi bi-list-check me-2"></i>Andamento</button></li>
+    <li class="nav-item" role="presentation"><button class="nav-link" id="financeiro-tab" data-bs-toggle="tab" data-bs-target="#financeiro-tab-pane" type="button" role="tab"><i class="bi bi-wallet2 me-2"></i>Financeiro Detalhado</button></li>
 </ul>
 <div class="tab-content" id="serviceTabContent">
     <div class="tab-pane fade show active" id="andamento-tab-pane" role="tabpanel">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Histórico de Atividades</h5>
-                <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addAndamentoModal"><i class="bi bi-plus-circle"></i> Adicionar Andamento</button>
+                <h5 class="mb-0">Histórico de Atividades (Linha do Tempo)</h5>
+                <button id="btn-add-andamento" class="btn btn-sm btn-primary" type="button"><i class="bi bi-plus-circle"></i> Adicionar Andamento</button>
             </div>
-            <div class="card-body pt-3">
+            <div class="card-body p-4" id="andamento-timeline-container">
                 {% include 'gestao/partials/_historico_movimentacoes_servico.html' %}
             </div>
         </div>
     </div>
     <div class="tab-pane fade" id="financeiro-tab-pane" role="tabpanel">
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Lançamentos Financeiros</h5>
-                <a href="{% url 'adicionar_contrato_servico' servico_pk=servico.pk %}" class="btn btn-sm btn-outline-success">+ Contrato</a>
-            </div>
-            <div class="card-body p-2">
-                {% with servico.lancamentos.all as lancamentos %}
-                    {% include 'gestao/partials/_tabela_financeira.html' %}
-                {% endwith %}
+            <div class="card-header d-flex justify-content-between align-items-center"><h5 class="mb-0">Lançamentos Financeiros</h5><a href="{% url 'adicionar_contrato_servico' servico_pk=servico.pk %}" class="btn btn-sm btn-outline-success">+ Contrato</a></div>
+            <div class="card-body p-0" id="servico-tabela-financeira-container">
+                {% include 'gestao/partials/_tabela_financeira.html' %}
             </div>
         </div>
     </div>
 </div>
 
-<!-- ========================================================== -->
-<!-- === SEÇÃO DE MODAIS ===================================== -->
-<!-- ========================================================== -->
-
-<!-- MODAL PARA ADICIONAR ANDAMENTO -->
-<div class="modal fade" id="addAndamentoModal" tabindex="-1" aria-labelledby="addAndamentoModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h1 class="modal-title fs-5" id="addAndamentoModalLabel">Adicionar Novo Andamento</h1>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <form method="post">
-          {% csrf_token %}
-          <div class="modal-body">
+<div class="modal fade" id="addAndamentoModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <form method="post" action="{% url 'adicionar_movimentacao_servico_ajax' servico_pk=servico.pk %}" data-ajax-form="true" data-reload-container="#andamento-timeline-container" data-reload-url="{% url 'atualizar_historico_servico_partial' servico_pk=servico.pk %}">
+            {% csrf_token %}
+            <div class="modal-header"><h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Adicionar Novo Andamento</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="alert alert-danger d-none p-2 small"></div>
                 <div class="mb-3">{{ form_movimentacao.titulo.label_tag }} {{ form_movimentacao.titulo }}</div>
                 <div class="mb-3">{{ form_movimentacao.detalhes.label_tag }} {{ form_movimentacao.detalhes }}</div>
-                <div class="row">
-                    <div class="col-md-6 mb-3">{{ form_movimentacao.data_atividade.label_tag }} {{ form_movimentacao.data_atividade }}</div>
-                    <div class="col-md-6 mb-3">{{ form_movimentacao.status.label_tag }} {{ form_movimentacao.status }}</div>
-                </div>
-                 <div class="mb-3">{{ form_movimentacao.responsavel.label_tag }} {{ form_movimentacao.responsavel }}</div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-            <button type="submit" name="submit_movimentacao_servico" class="btn btn-primary">Salvar Atividade</button>
-          </div>
-      </form>
-    </div>
-  </div>
+                <div class="row g-3"><div class="col-md-6">{{ form_movimentacao.data_atividade.label_tag }} {{ form_movimentacao.data_atividade }}</div><div class="col-md-6">{{ form_movimentacao.status.label_tag }} {{ form_movimentacao.status }}</div></div>
+                <div class="mt-3">{{ form_movimentacao.responsavel.label_tag }} {{ form_movimentacao.responsavel }}</div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-primary">Salvar Atividade</button></div>
+        </form>
+    </div></div>
 </div>
 
-<!-- MODAL PARA CONCLUIR SERVIÇO -->
-<div class="modal fade" id="concluirServicoModal" tabindex="-1" aria-labelledby="concluirServicoModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h1 class="modal-title fs-5" id="concluirServicoModalLabel">Concluir Serviço</h1>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
+<div class="modal fade" id="concluirServicoModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
       <form action="{% url 'concluir_servico' pk=servico.pk %}" method="post">
           {% csrf_token %}
-          <div class="modal-body">
-              <p>Você tem certeza que deseja marcar este serviço como concluído? Esta ação pode ser revertida na tela de edição.</p>
-              <div class="mb-3">
-                  <label for="{{ form_concluir.data_encerramento.id_for_label }}" class="form-label"><strong>{{ form_concluir.data_encerramento.label }}</strong></label>
-                  {{ form_concluir.data_encerramento }}
-              </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-            <button type="submit" class="btn btn-success">Sim, Concluir Serviço</button>
-          </div>
+          <div class="modal-header"><h5 class="modal-title"><i class="bi bi-check-circle-fill me-2"></i>Concluir Serviço</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body"><p>Você tem certeza?</p>{{ financeiro.form_concluir.as_p }}</div>
+          <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-success">Sim, Concluir</button></div>
       </form>
-    </div>
-  </div>
+  </div></div>
 </div>
-{% block javascript %}
-{{ block.super }} {# Mantém scripts do template pai, se houver #}
-
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    // === NOVO SCRIPT PARA PREENCHER A DATA DO MODAL 'CONCLUIR' ===
-
-    const concluirModalEl = document.getElementById('concluirServicoModal');
-
-    // Verifica se o elemento do modal existe na página
-    if (concluirModalEl) {
-        // Adiciona um "ouvinte" para o evento 'show.bs.modal', que ocorre
-        // toda vez que o modal de conclusão é aberto.
-        concluirModalEl.addEventListener('show.bs.modal', function (event) {
-
-            // 1. Encontra o campo de data dentro do modal
-            const dataInput = concluirModalEl.querySelector('#id_data_encerramento');
-
-            // 2. Cria uma string para a data de hoje no formato YYYY-MM-DD
-            const hoje = new Date();
-            const ano = hoje.getFullYear();
-            // Adiciona um zero à esquerda se o mês/dia for menor que 10
-            const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-            const dia = String(hoje.getDate()).padStart(2, '0');
-            const dataDeHojeString = `${ano}-${mes}-${dia}`;
-
-            // 3. Define o valor do campo de data
-            if (dataInput) {
-                dataInput.value = dataDeHojeString;
-            }
-        });
-    }
-
-    // O resto do seu JavaScript (se houver) pode vir aqui...
-
-});
-</script>
-
-{% endblock %}
 
 {% include 'gestao/partials/_modal_pagamento.html' %}
+{% endblock %}
+
+
+{% block javascript %}
+{{ block.super }}
+<script>
+$(function() {
+    // Função para (re)ativar os tooltips do Bootstrap
+    function activateTooltips() {
+        $('[data-bs-toggle="tooltip"]').tooltip('dispose');
+        const tooltipTriggerList = $('[data-bs-toggle="tooltip"]');
+        tooltipTriggerList.each(function () { new bootstrap.Tooltip(this); });
+    }
+    activateTooltips();
+
+    // --- CONTROLE MANUAL DOS MODAIS PARA EVITAR CONFLITOS ---
+    const addAndamentoModal = new bootstrap.Modal(document.getElementById('addAndamentoModal'));
+    const concluirServicoModal = new bootstrap.Modal(document.getElementById('concluirServicoModal'));
+
+    $('#btn-add-andamento').on('click', () => addAndamentoModal.show());
+    $('#btn-concluir-servico').on('click', () => concluirServicoModal.show());
+
+    // --- LÓGICA DE ATUALIZAÇÃO AUTOMÁTICA DOS COMPONENTES ---
+    const updateUrl = "{% url 'atualizar_componentes_financeiros_servico' pk=servico.pk %}";
+    const resumoContainer = $('#servico-resumo-financeiro-container');
+    const tabelaContainer = $('#servico-tabela-financeira-container');
+
+    function atualizarComponentesFinanceiros() {
+        resumoContainer.addClass('loading-container');
+        tabelaContainer.addClass('loading-container');
+
+        fetch(updateUrl)
+            .then(response => response.json())
+            .then(data => {
+                resumoContainer.html(data.resumo_financeiro_html);
+                tabelaContainer.html(data.tabela_financeira_html);
+                activateTooltips(); // Reativa os tooltips nos novos elementos
+            })
+            .finally(() => {
+                resumoContainer.removeClass('loading-container');
+                tabelaContainer.removeClass('loading-container');
+            });
+    }
+
+    // Ouve o evento que nosso script AJAX universal dispara após um sucesso
+    $(document).on('itemAdicionado', function(event) {
+        if (event.detail && (event.detail.tipo === 'pagamento' || event.detail.tipo === 'contrato')) {
+            atualizarComponentesFinanceiros();
+        }
+    });
+
+    // Ativa aba via hash na URL
+    const urlHash = window.location.hash;
+    if (urlHash) {
+        const tabTrigger = $(`.nav-tabs button[data-bs-target="${urlHash}"]`);
+        if (tabTrigger.length) { new bootstrap.Tab(tabTrigger[0]).show(); }
+    }
+});
+</script>
+{% include 'gestao/partials/_detalhe_financeiro_js.html' %}
 {% endblock %}

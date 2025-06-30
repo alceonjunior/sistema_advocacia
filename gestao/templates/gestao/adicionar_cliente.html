@@ -1,0 +1,166 @@
+{% extends 'gestao/base.html' %}
+{% load static %}
+
+{% block title %}{{ titulo_pagina }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h2 d-flex align-items-center gap-2">
+        <i class="bi bi-person-plus-fill text-primary"></i> {{ titulo_pagina }}
+    </h1>
+    <a href="{% url 'gestao:lista_clientes' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-x-lg me-1"></i> Cancelar
+    </a>
+</div>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endfor %}
+{% endif %}
+
+<form method="post" novalidate>
+    {% csrf_token %}
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light d-flex align-items-center gap-2">
+                    <i class="bi bi-person-vcard-fill"></i>
+                    <h5 class="mb-0">Dados Fundamentais</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row g-3">
+                        <div class="col-12">{{ form.nome_completo.label_tag }}{{ form.nome_completo }}{{ form.nome_completo.errors }}</div>
+                        <div class="col-md-6">{{ form.tipo_pessoa.label_tag }}{{ form.tipo_pessoa }}{{ form.tipo_pessoa.errors }}</div>
+                        <div class="col-md-6">{{ form.cpf_cnpj.label_tag }}{{ form.cpf_cnpj }}{{ form.cpf_cnpj.errors }}</div>
+                        <div class="col-md-6">{{ form.email.label_tag }}{{ form.email }}{{ form.email.errors }}</div>
+                        <div class="col-md-6">{{ form.telefone_principal.label_tag }}{{ form.telefone_principal }}{{ form.telefone_principal.errors }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="campos-pf" class="card shadow-sm mb-4">
+                <div class="card-header bg-light d-flex align-items-center gap-2"><i class="bi bi-person-badge-fill"></i><h5 class="mb-0">Qualificação (Pessoa Física)</h5></div>
+                <div class="card-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">{{ form.data_nascimento.label_tag }}{{ form.data_nascimento }}{{ form.data_nascimento.errors }}</div>
+                        <div class="col-md-6">{{ form.nacionalidade.label_tag }}{{ form.nacionalidade }}{{ form.nacionalidade.errors }}</div>
+                        <div class="col-md-6">{{ form.estado_civil.label_tag }}{{ form.estado_civil }}{{ form.estado_civil.errors }}</div>
+                        <div class="col-md-6">{{ form.profissao.label_tag }}{{ form.profissao }}{{ form.profissao.errors }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="campos-pj" class="card shadow-sm mb-4" style="display: none;">
+                <div class="card-header bg-light d-flex align-items-center gap-2"><i class="bi bi-building-fill"></i><h5 class="mb-0">Representação (Pessoa Jurídica)</h5></div>
+                <div class="card-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">{{ form.representante_legal.label_tag }}{{ form.representante_legal }}{{ form.representante_legal.errors }}</div>
+                        <div class="col-md-6">{{ form.cpf_representante_legal.label_tag }}{{ form.cpf_representante_legal }}{{ form.cpf_representante_legal.errors }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light d-flex align-items-center gap-2"><i class="bi bi-geo-alt-fill"></i><h5 class="mb-0">Endereço</h5></div>
+                <div class="card-body p-4">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            {{ form.cep.label_tag }}
+                            <div class="input-group">
+                                {{ form.cep }}
+                                <button class="btn btn-outline-secondary" type="button" id="btn-buscar-cep"><i class="bi bi-search"></i></button>
+                            </div>
+                            {{ form.cep.errors }}
+                        </div>
+                        <div class="col-12">{{ form.logradouro.label_tag }}{{ form.logradouro }}{{ form.logradouro.errors }}</div>
+                        <div class="col-md-6">{{ form.numero.label_tag }}{{ form.numero }}{{ form.numero.errors }}</div>
+                        <div class="col-md-6">{{ form.complemento.label_tag }}{{ form.complemento }}{{ form.complemento.errors }}</div>
+                        <div class="col-12">{{ form.bairro.label_tag }}{{ form.bairro }}{{ form.bairro.errors }}</div>
+                        <div class="col-md-8">{{ form.cidade.label_tag }}{{ form.cidade }}{{ form.cidade.errors }}</div>
+                        <div class="col-md-4">{{ form.estado.label_tag }}{{ form.estado }}{{ form.estado.errors }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4 text-end">
+        <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check-circle-fill me-2"></i> Salvar Cliente</button>
+    </div>
+</form>
+{% endblock %}
+
+{% block javascript %}
+{{ block.super }}
+<script>
+$(function() {
+    // --- MÁSCARAS DE CAMPO (UX Aprimorada) ---
+    $('#id_cpf_cnpj').mask('000.000.000-00', {
+        onKeyPress: function(cpf, e, field, options) {
+            const masks = ['000.000.000-000', '00.000.000/0000-00'];
+            const mask = (cpf.length > 14) ? masks[1] : masks[0];
+            $('#id_cpf_cnpj').mask(mask, options);
+        }
+    });
+    $('#id_cpf_representante_legal').mask('000.000.000-00');
+    $('#id_telefone_principal').mask('(00) 00000-0000');
+    $('#id_cep').mask('00000-000');
+
+
+    // --- LÓGICA PARA CAMPOS CONDICIONAIS (PF/PJ) ---
+    const tipoPessoaSelect = $('#id_tipo_pessoa');
+    const camposPf = $('#campos-pf');
+    const camposPj = $('#campos-pj');
+
+    function toggleCamposPessoa() {
+        if (tipoPessoaSelect.val() === 'PJ') {
+            camposPf.hide();
+            camposPj.show();
+        } else {
+            camposPf.show();
+            camposPj.hide();
+        }
+    }
+    // Executa na primeira vez e a cada mudança
+    toggleCamposPessoa(); 
+    tipoPessoaSelect.on('change', toggleCamposPessoa);
+
+
+    // --- LÓGICA DE BUSCA DE CEP (UX Aprimorada) ---
+    function buscarCep() {
+        const cep = $('#id_cep').val().replace(/\D/g, ''); // Remove caracteres não numéricos
+        if (cep.length !== 8) {
+            return;
+        }
+
+        const url = `https://viacep.com.br/ws/${cep}/json/`;
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.erro) {
+                    $('#id_logradouro').val(data.logradouro);
+                    $('#id_bairro').val(data.bairro);
+                    $('#id_cidade').val(data.localidade);
+                    $('#id_estado').val(data.uf).trigger('change'); // .trigger('change') é útil para Select2
+                    $('#id_numero').focus(); // Move o foco para o campo de número
+                } else {
+                    alert('CEP não encontrado.');
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao buscar CEP:', error);
+                alert('Ocorreu um erro ao buscar o CEP.');
+            });
+    }
+    $('#btn-buscar-cep').on('click', buscarCep);
+    $('#id_cep').on('blur', buscarCep); // Busca também quando o usuário sai do campo
+});
+</script>
+{% endblock %}

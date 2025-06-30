@@ -1,45 +1,91 @@
+{% load humanize %}
+
 {% for processo in filter.qs %}
-<div class="col-md-6 mb-4">
-    <div class="card h-100 shadow-sm process-card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0 text-primary fw-bold">
-                <i class="bi bi-folder2-open"></i>
-                {{ processo.numero_processo|default:"Processo Sem Número" }}
+<div class="col">
+    <div class="card h-100 shadow-sm processo-card border-start-0">
+        <div class="card-header bg-transparent border-bottom-0 pt-3 pb-0">
+            <h5 class="card-title mb-1">
+                <a href="{{ processo.get_absolute_url }}" class="text-decoration-none stretched-link">
+                    {{ processo.descricao_caso|truncatechars:60|default:"Processo sem descrição" }}
+                </a>
             </h5>
-            {% if processo.status_processo == 'ATIVO' %}
-                <span class="badge bg-success-subtle border border-success-subtle text-success-emphasis rounded-pill fs-6">Ativo</span>
-            {% elif processo.status_processo == 'SUSPENSO' %}
-                <span class="badge bg-warning-subtle border border-warning-subtle text-warning-emphasis rounded-pill fs-6">Suspenso</span>
-            {% elif processo.status_processo == 'ARQUIVADO' %}
-                <span class="badge bg-secondary-subtle border border-secondary-subtle text-secondary-emphasis rounded-pill fs-6">Arquivado</span>
-            {% endif %}
+            <small class="text-muted">Proc. nº {{ processo.numero_processo|default:"N/A" }}</small>
         </div>
-        <div class="card-body">
-            <p class="card-text mb-2">
-                <strong class="text-success">Polo Ativo:</strong> {{ processo.get_polo_ativo_display|default:"Não definido" }}
-            </p>
-            <p class="card-text">
-                <strong class="text-danger">Polo Passivo:</strong> {{ processo.get_polo_passivo_display|default:"Não definido" }}
-            </p>
-            <hr>
-            <div class="small text-muted">
-                <p class="mb-1"><i class="bi bi-bookmark-star me-2"></i><strong>Ação:</strong> {{ processo.tipo_acao|default:"Não especificado" }}</p>
-                <p class="mb-0"><i class="bi bi-person-check me-2"></i><strong>Responsável:</strong> {{ processo.advogado_responsavel|default:"N/A" }}</p>
+
+        <div class="card-body d-flex flex-column pt-2">
+            <div class="mb-3">
+                <div class="d-flex align-items-center gap-2 text-success" title="Polo Ativo">
+                    <i class="bi bi-people-fill"></i>
+                    <span class="small">{{ processo.get_polo_ativo_display|truncatechars:35 }}</span>
+                </div>
+                <div class="d-flex align-items-center gap-2 text-danger mt-1" title="Polo Passivo">
+                    <i class="bi bi-people-fill"></i>
+                    <span class="small">{{ processo.get_polo_passivo_display|truncatechars:35 }}</span>
+                </div>
             </div>
-        </div>
-        <div class="card-footer bg-light text-center">
-            <a href="{% url 'detalhe_processo' pk=processo.pk %}" class="btn btn-sm btn-outline-primary stretched-link">
-                Ver Detalhes do Processo
-            </a>
+
+            <div class="mb-3 small text-muted">
+                <div class="d-flex align-items-center gap-2" title="Órgão Julgador">
+                    <i class="bi bi-building-fill-gear"></i>
+                    <span>{{ processo.vara_comarca_orgao|default:"Vara/Comarca não informada" }}</span>
+                </div>
+            </div>
+
+            <div class="mt-auto">
+                <div class="d-flex flex-wrap gap-2 justify-content-start align-items-center mb-3">
+                    <span class="badge d-flex align-items-center
+                        {% if processo.status_processo == 'ATIVO' %} bg-success-subtle text-success-emphasis
+                        {% elif processo.status_processo == 'SUSPENSO' %} bg-warning-subtle text-warning-emphasis
+                        {% elif processo.status_processo == 'ARQUIVADO' %} bg-secondary-subtle text-secondary-emphasis
+                        {% else %} bg-light-subtle text-light-emphasis {% endif %}
+                        rounded-pill px-2 py-1 small">
+                        <i class="bi bi-gavel me-1"></i> {{ processo.get_status_processo_display }}
+                    </span>
+                    <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill px-2 py-1 small d-flex align-items-center">
+                        <i class="bi bi-tag-fill me-1"></i> {{ processo.get_fase_display }}
+                    </span>
+
+                    <span class="badge bg-info-subtle text-info-emphasis rounded-pill px-2 py-1 small d-flex align-items-center" title="Valor da Causa">
+                        <i class="bi bi-currency-dollar me-1"></i>
+                        {# O filtro 'intcomma' adiciona os pontos de milhar. Ex: 10000.50 -> 10.000,50 #}
+                        R$ {{ processo.valor_causa|default:"0,00"|intcomma }}
+                    </span>
+                </div>
+
+                {% if processo.proximo_prazo %}
+                    {% now "Y-m-d" as today_iso %}
+                    {% with dias_restantes=processo.proximo_prazo|timeuntil:today %}
+                    <div class="p-2 rounded mt-2 small
+                        {% if processo.proximo_prazo|date:"Y-m-d" < today_iso %} border border-danger bg-danger-subtle text-danger-emphasis
+                        {% elif processo.proximo_prazo|date:"Y-m-d" == today_iso %} border border-warning bg-warning-subtle text-warning-emphasis
+                        {% else %} border border-primary-subtle bg-primary-emphasis {% endif %}
+                    ">
+                        <i class="bi bi-calendar2-event-fill me-1"></i>
+                        <strong>Próximo Prazo:</strong> {{ processo.proximo_prazo|date:"d/m/Y" }}
+
+                        <span class="fw-bold">
+                            {% if processo.proximo_prazo|date:"Y-m-d" < today_iso %}
+                               (Vencido)
+                            {% elif processo.proximo_prazo|date:"Y-m-d" == today_iso %}
+                               (Vence Hoje!)
+                            {% else %}
+                               (em {{ dias_restantes }})
+                            {% endif %}
+                        </span>
+                    </div>
+                    {% endwith %}
+                {% endif %}
+
+                <div class="border-top pt-2 mt-3 text-end small text-muted">
+                    <i class="bi bi-person-fill"></i> Resp: {{ processo.advogado_responsavel.get_full_name|default:processo.advogado_responsavel.username }}
+                </div>
+            </div>
         </div>
     </div>
 </div>
 {% empty %}
-<div class="col-12">
-    <div class="text-center p-5 border rounded-3 bg-light">
-        <i class="bi bi-inbox fs-1 text-muted"></i>
-        <h5 class="mt-2">Nenhum processo encontrado</h5>
-        <p class="text-muted">Tente ajustar os filtros ou adicione um novo processo.</p>
-    </div>
+<div class="col-12 text-center py-5">
+    <h5 class="text-muted">Nenhum processo encontrado.</h5>
+    <p class="text-muted">Tente ajustar os filtros ou adicione um novo processo.</p>
 </div>
 {% endfor %}

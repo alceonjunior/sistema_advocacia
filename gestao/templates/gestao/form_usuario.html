@@ -1,0 +1,98 @@
+{% extends 'gestao/base.html' %}
+{% load static %}
+
+{% block title %}{{ titulo_pagina }}{% endblock %}
+
+{% block content %}
+<h1 class="h2 mb-4">{{ titulo_pagina }}</h1>
+
+<form method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+
+    {% if user_form.non_field_errors or profile_form.non_field_errors %}
+        <div class="alert alert-danger">
+            {{ user_form.non_field_errors }} {{ profile_form.non_field_errors }}
+        </div>
+    {% endif %}
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light"><h5 class="mb-0">Dados Pessoais e de Login</h5></div>
+                <div class="card-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">{{ user_form.first_name.label_tag }}{{ user_form.first_name }}<div class="invalid-feedback d-block">{{ user_form.first_name.errors.0 }}</div></div>
+                        <div class="col-md-6">{{ user_form.last_name.label_tag }}{{ user_form.last_name }}<div class="invalid-feedback d-block">{{ user_form.last_name.errors.0 }}</div></div>
+                        <div class="col-md-6">{{ user_form.username.label_tag }}{{ user_form.username }}<div class="form-text">{{ user_form.username.help_text }}</div><div class="invalid-feedback d-block">{{ user_form.username.errors.0 }}</div></div>
+                        <div class="col-md-6">{{ user_form.email.label_tag }}{{ user_form.email }}<div class="invalid-feedback d-block">{{ user_form.email.errors.0 }}</div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light"><h5 class="mb-0">Informações Profissionais</h5></div>
+                <div class="card-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">{{ profile_form.cpf.label_tag }}{{ profile_form.cpf }}<div class="invalid-feedback d-block">{{ profile_form.cpf.errors.0 }}</div></div>
+                        <div class="col-md-6">{{ profile_form.oab.label_tag }}{{ profile_form.oab }}<div class="invalid-feedback d-block">{{ profile_form.oab.errors.0 }}</div></div>
+                        <div class="col-md-6">{{ profile_form.telefone.label_tag }}{{ profile_form.telefone }}<div class="invalid-feedback d-block">{{ profile_form.telefone.errors.0 }}</div></div>
+                        <div class="col-md-6">{{ profile_form.data_admissao.label_tag }}{{ profile_form.data_admissao }}<div class="invalid-feedback d-block">{{ profile_form.data_admissao.errors.0 }}</div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light"><h5 class="mb-0">Gerenciamento de Senha</h5></div>
+                <div class="card-body p-4">
+                     {% if user_form.password1 %}
+                        <div class="row g-3">
+                           <div class="col-md-6">{{ user_form.password1.label_tag }}{{ user_form.password1 }}<div class="form-text">{{ user_form.password1.help_text|safe }}</div><div class="invalid-feedback d-block">{{ user_form.password1.errors.0 }}</div></div>
+                           <div class="col-md-6">{{ user_form.password2.label_tag }}{{ user_form.password2 }}<div class="invalid-feedback d-block">{{ user_form.password2.errors.0 }}</div></div>
+                        </div>
+                     {% else %}
+                        <div class="alert alert-secondary small">A senha de um usuário existente só pode ser alterada através do <a href="{% url 'admin:auth_user_password_change' usuario_editado.pk %}" target="_blank">painel de administração</a> por segurança.</div>
+                     {% endif %}
+                </div>
+            </div>
+
+            {% if historico %} ... {% endif %}
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light"><h5 class="mb-0">Foto de Perfil</h5></div>
+                <div class="card-body text-center">
+                    {% if user_form.instance.perfil.foto %}
+                        <img src="{{ user_form.instance.perfil.foto.url }}" alt="Foto de Perfil" class="img-thumbnail rounded-circle mb-3" width="150" height="150">
+                    {% else %}
+                        <div class="bg-light rounded-circle mb-3 d-flex align-items-center justify-content-center" style="width: 150px; height: 150px;">
+                           <i class="bi bi-person-fill text-secondary" style="font-size: 5rem;"></i>
+                        </div>
+                    {% endif %}
+                    {{ profile_form.foto.label_tag }}
+                    {{ profile_form.foto }}
+                    <div class="invalid-feedback d-block">{{ profile_form.foto.errors.0 }}</div>
+                </div>
+            </div>
+            <div class="card shadow-sm">
+                <div class="card-header bg-light"><h5 class="mb-0">Status e Permissões</h5></div>
+                <div class="card-body p-4">
+                    {% if user_form.is_active %}<div class="form-check form-switch mb-3">{{ user_form.is_active }} {{ user_form.is_active.label_tag }}</div>{% endif %}
+                    {% if user_form.is_staff %}<div class="form-check form-switch mb-3">{{ user_form.is_staff }} {{ user_form.is_staff.label_tag }}<div class="form-text small">Permite acesso ao Admin do Django.</div></div>{% endif %}
+                    {% if user_form.groups %}
+                        <hr><label class="form-label d-block fw-bold">{{ user_form.groups.label }}</label>
+                        <div class="form-text small mb-2">{{ user_form.groups.help_text }}</div>
+                        {% for group_choice in user_form.groups %}<div class="form-check">{{ group_choice.tag }}<label for="{{ group_choice.id_for_label }}" class="form-check-label">{{ group_choice.choice_label }}</label></div>{% endfor %}
+                        {% if user_form.groups.errors %}<div class="invalid-feedback d-block">{{ user_form.groups.errors.0 }}</div>{% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4 border-top pt-4">
+        <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check-circle-fill me-2"></i> Salvar</button>
+        <a href="{% url 'gestao:configuracoes' %}#usuarios" class="btn btn-secondary">Cancelar</a>
+    </div>
+</form>
+{% endblock %}

@@ -1,64 +1,177 @@
-<div class="card-header d-flex justify-content-between align-items-center">
-    <h4 class="h5 mb-0">Histórico de Movimentações</h4>
-    <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#formNovaMovimentacao" aria-expanded="false" aria-controls="formNovaMovimentacao">
-        + Adicionar Movimentação
-    </button>
-</div>
-<div class="card-body">
-    <div class="collapse mb-4" id="formNovaMovimentacao">
-        <div class="card card-body bg-light">
-            <h4>Nova Movimentação, Prazo ou Tarefa</h4>
-            <form method="post">
-                {% csrf_token %}
-                {{ form_movimentacao.as_p }}
-                <button type="submit" name="submit_movimentacao" class="btn btn-success mt-2">Salvar Nova Movimentação</button>
-            </form>
+{% load humanize %}
+
+<style>
+    .movimentacao-card {
+        border: 1px solid #e9ecef;
+        border-radius: 0.5rem;
+        background-color: #fff;
+        transition: box-shadow 0.2s ease-in-out;
+        margin-bottom: 1rem;
+    }
+    .movimentacao-card:hover {
+        box_shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.075);
+    }
+    .movimentacao-card .card-header {
+        padding: 0.75rem 1.25rem;
+    }
+    .movimentacao-card .card-title {
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    .movimentacao-card .card-title .icon-display {
+        color: var(--bs-primary);
+    }
+    .metadata-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1.5rem;
+        font-size: 0.8rem;
+        color: #6c757d;
+        padding: 0.5rem 1.25rem;
+        background-color: #f8f9fa;
+        border-top: 1px solid #e9ecef;
+        border-bottom: 1px solid #e9ecef;
+    }
+    .metadata-item {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+    .detalhes-content {
+        padding: 1rem;
+        font-size: 0.9rem;
+        background-color: #f8f9fa;
+        border-radius: 0.25rem;
+        border: 1px solid #e9ecef;
+        color: #495057;
+    }
+    .prazo-final-alert {
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.25rem;
+        border-radius: 0.375rem;
+        font-size: 0.9rem;
+    }
+    .prazo-vencido { background-color: var(--bs-danger-bg-subtle); color: var(--bs-danger-text-emphasis); }
+    .prazo-urgente { background-color: var(--bs-warning-bg-subtle); color: var(--bs-warning-text-emphasis); }
+    .prazo-ok { background-color: var(--bs-gray-200); color: var(--bs-gray-700); }
+    .prazo-concluido { background-color: var(--bs-success-bg-subtle); color: var(--bs-success-text-emphasis); }
+    .status-atrasado { background-color: var(--bs-danger-bg-subtle); color: var(--bs-danger-text-emphasis); } /* Novo estilo para badge de atraso */
+</style>
+
+
+<div class="list-group list-group-flush">
+{% for mov in movimentacoes %}
+    {% with tipo_lower=mov.tipo_movimentacao.nome|lower %}
+    <div class="list-group-item px-0 py-2 border-0">
+        <div class="movimentacao-card">
+            <div class="card-header d-flex justify-content-between align-items-center bg-white border-bottom-0">
+                <h5 class="card-title mb-0">
+                    <span class="icon-display fs-4">
+                        {% if 'audiência' in tipo_lower %}
+                            <i class="bi bi-gavel"></i>
+                        {% elif 'defesa' in tipo_lower or 'petição' in tipo_lower or 'recurso' in tipo_lower %}
+                            <i class="bi bi-file-earmark-text-fill"></i>
+                        {% elif 'prazo' in tipo_lower %}
+                            <i class="bi bi-calendar-check-fill"></i>
+                        {% else %}
+                            <i class="bi bi-chat-right-dots-fill"></i>
+                        {% endif %}
+                    </span>
+                    {{ mov.titulo }}
+                </h5>
+                <div class="btn-group" role="group" aria-label="Ações da Movimentação">
+                    {% if mov.status != 'CONCLUIDA' %}
+                        <form action="{% url 'concluir_movimentacao' pk=mov.pk %}" method="post" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-success" title="Marcar como Concluída">
+                                <i class="bi bi-check2-circle me-1"></i> Concluir
+                            </button>
+                        </form>
+                    {% endif %}
+                    <a href="{% url 'editar_movimentacao' pk=mov.pk %}" class="btn btn-sm btn-outline-secondary" title="Editar Movimentação">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <form method="post" action="{% url 'excluir_movimentacao' pk=mov.pk %}" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir esta movimentação?');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir Movimentação">
+                            <i class="bi bi-trash3-fill"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="metadata-bar">
+                <div class="metadata-item" title="Tipo de Movimentação">
+                    <i class="bi bi-tags-fill"></i>
+                    <span>{{ mov.tipo_movimentacao.nome }}</span>
+                </div>
+                <div class="metadata-item" title="Status Atual">
+                    {# Lógica para exibir o status, adicionando 'Atrasado' de forma sutil #}
+                    {% if mov.status == 'CONCLUIDA' %}
+                        <i class="bi bi-check-circle-fill text-success"></i><span class="badge bg-success-subtle text-success-emphasis rounded-pill">{{ mov.get_status_display }}</span>
+                    {% elif mov.data_prazo_final and mov.dias_restantes < 0 %}
+                        <i class="bi bi-exclamation-circle-fill text-danger"></i><span class="badge status-atrasado rounded-pill">Em Atraso</span>
+                    {% elif mov.status == 'PENDENTE' %}
+                        <i class="bi bi-hourglass-split text-warning"></i><span class="badge bg-warning-subtle text-warning-emphasis rounded-pill">{{ mov.get_status_display }}</span>
+                    {% elif mov.status == 'EM_ANDAMENTO' %}
+                        <i class="bi bi-person-walking text-info"></i><span class="badge bg-info-subtle text-info-emphasis rounded-pill">{{ mov.get_status_display }}</span>
+                    {% endif %}
+                </div>
+                <div class="metadata-item" title="Responsável">
+                    <i class="bi bi-person-fill"></i>
+                    <span>{{ mov.responsavel.get_full_name|default:mov.responsavel.username|default:"-" }}</span>
+                </div>
+                <div class="metadata-item" title="Data de Cadastro">
+                    <i class="bi bi-clock-history"></i>
+                    <span>{{ mov.data_criacao|date:"d/m/Y H:i" }}</span>
+                </div>
+            </div>
+
+            {% if mov.detalhes %}
+            <div class="card-body py-3 px-3">
+                <div class="detalhes-content">
+                    {{ mov.detalhes|linebreaksbr }}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if mov.data_prazo_final %}
+                <div class="card-footer bg-white border-top-0 pt-0 pb-3 px-3">
+                {% if mov.status == 'CONCLUIDA' %}
+                    <div class="prazo-final-alert prazo-concluido"><i class="bi bi-check2-all"></i> Prazo Cumprido em {{ mov.data_prazo_final|date:"d/m/Y" }}</div>
+                {% elif mov.dias_restantes < 0 %}
+                    {# Manter o alerta de vencido, que já é a indicação principal de atraso #}
+                    <div class="prazo-final-alert prazo-vencido"><i class="bi bi-exclamation-triangle-fill"></i> PRAZO VENCIDO HÁ {{ mov.dias_vencidos }} {% if mov.dias_vencidos == 1 %} dia{% else %} dias{% endif %}!</div>
+                {% elif mov.dias_restantes == 0 %}
+                    <div class="prazo-final-alert prazo-urgente"><i class="bi bi-alarm-fill"></i> PRAZO FINAL É HOJE! ({{ mov.data_prazo_final|date:"d/m/Y" }})</div>
+                {% elif mov.dias_restantes <= 7 %}
+                    <div class="prazo-final-alert prazo-urgente"><i class="bi bi-alarm-fill"></i> PRAZO FINAL em {{ mov.dias_restantes }} {% if mov.dias_restantes == 1 %} dia{% else %} dias{% endif %} ({{ mov.data_prazo_final|date:"d/m/Y" }})</div>
+                {% else %}
+                    <div class="prazo-final-alert prazo-ok"><i class="bi bi-calendar-range"></i> Prazo Final: {{ mov.data_prazo_final|date:"d/m/Y" }}</div>
+                {% endif %}
+                </div>
+            {% endif %}
         </div>
     </div>
-    <div class="list-group">
-        {% for mov in movimentacoes %}
-            <div class="list-group-item mb-3 shadow-sm">
-                <div class="d-flex w-100 justify-content-between">
-                    <h5 class="mb-1">{{ mov.titulo }}</h5>
-
-                    <div class="d-flex align-items-center gap-2">
-
-                        {% if mov.status != 'CONCLUIDA' and mov.status != 'CANCELADA' %}
-                            <form method="post" action="{% url 'concluir_movimentacao' pk=mov.pk %}" style="display: inline;">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-sm btn-success">Concluir</button>
-                            </form>
-                        {% endif %}
-
-                        <a href="{% url 'editar_movimentacao' pk=mov.pk %}" class="btn btn-sm btn-outline-primary">Editar</a>
-                        <form method="post" action="{% url 'excluir_movimentacao' pk=mov.pk %}" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta movimentação?');">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-sm btn-outline-danger">Excluir</button>
-                        </form>
-                    </div>
-                </div>
-                <p class="mb-1"><span class="badge bg-secondary">{{ mov.tipo_movimentacao|default:"Geral" }}</span>
-                    <span class="badge
-    {% if mov.status == 'CONCLUIDA' %}
-        bg-success
-    {% elif mov.status == 'EM_ANDAMENTO' %}
-        bg-warning text-dark
-    {% elif mov.status == 'PENDENTE' %}
-        bg-danger
-    {% else %}
-        bg-secondary
-    {% endif %}">
-    {{ mov.get_status_display }}
-</span> <strong>Responsável:</strong> {{ mov.responsavel|default:"-" }}</p>
-                <div class="d-flex justify-content-start gap-4 mt-2">
-                    <small class="text-muted"><strong>Cadastrado em:</strong> {{ mov.data_criacao|date:"d/m/Y H:i" }}</small>
-                    {% if mov.data_publicacao %}<small class="text-muted"><strong>Publicação/Ciência:</strong> {{ mov.data_publicacao|date:"d/m/Y" }}</small>{% endif %}
-                    {% if mov.data_prazo_final %}<small class="fw-bold text-danger"><strong>PRAZO FINAL: {{ mov.data_prazo_final|date:"d/m/Y" }}</strong></small>{% endif %}
-                </div>
-                {% if mov.detalhes %}<hr class="my-2"><small>{{ mov.detalhes|linebreaks }}</small>{% endif %}
-            </div>
-        {% empty %}
-            <p class="text-muted">Nenhuma movimentação registrada para este processo ainda.</p>
-        {% endfor %}
+    {% endwith %}
+{% empty %}
+    <div class="list-group-item text-center p-5">
+        <div class="text-center">
+            <i class="bi bi-inbox-fill fs-1 text-muted"></i>
+            <h5 class="mt-3">Nenhuma movimentação registrada.</h5>
+            <p class="text-muted">Clique em "Adicionar Movimentação" para começar.</p>
+        </div>
     </div>
+{% endfor %}
 </div>
+
+
+
+
+
+

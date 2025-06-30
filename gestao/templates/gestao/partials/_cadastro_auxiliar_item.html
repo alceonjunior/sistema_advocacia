@@ -1,0 +1,53 @@
+{% load static %}
+
+{# Este template é um componente reutilizável para cada tipo de cadastro auxiliar #}
+
+<h5 class="mb-3">{{ titulo }}</h5>
+
+<form class="form-add-item mb-4" method="post"
+      action="{% url 'gestao:salvar_cadastro_auxiliar_ajax' modelo=modelo %}"
+      data-ajax-form="true"
+      data-list-container="#list-{{ modelo|lower }}"
+      data-item-type="{{ modelo|lower }}">
+    {% csrf_token %}
+    <div class="input-group">
+        {# O formulário se adapta para o Tipo de Ação, que tem dois campos #}
+        {% if form.area %}{{ form.area }}{% endif %}
+        {{ form.nome }}
+        <button class="btn btn-primary" type="submit"><i class="bi bi-plus-circle me-1"></i> Adicionar</button>
+    </div>
+    <div class="ajax-error alert alert-danger d-none mt-2 p-2 small"></div>
+</form>
+
+<div class="list-group" id="list-{{ modelo|lower }}">
+    {% for item in itens %}
+    <div class="list-group-item d-flex justify-content-between align-items-center" data-pk="{{ item.pk }}">
+
+        <div class="item-display">
+            <span class="item-display-name">
+                {{ item.nome }}
+                {# Exibe a área para o Tipo de Ação #}
+                {% if item.area %}
+                    <small class="text-muted">({{ item.area.nome }})</small>
+                {% endif %}
+            </span>
+        </div>
+
+        <div class="item-edit" style="display: none;">
+            <form class="form-edit-item d-flex gap-2" method="post" action="{% url 'gestao:editar_cadastro_auxiliar_ajax' modelo=modelo pk=item.pk %}">
+                {% csrf_token %}
+                <input type="text" name="nome" value="{{ item.nome }}" class="form-control form-control-sm">
+                <button type="button" class="btn btn-sm btn-success btn-save-edit" title="Salvar"><i class="bi bi-check-lg"></i></button>
+                <button type="button" class="btn btn-sm btn-secondary btn-cancel-edit" title="Cancelar"><i class="bi bi-x-lg"></i></button>
+            </form>
+        </div>
+
+        <div>
+            <button class="btn btn-sm btn-outline-primary btn-edit-item" title="Editar"><i class="bi bi-pencil-fill"></i></button>
+            <button class="btn btn-sm btn-outline-danger btn-delete-item" title="Excluir" data-url="{% url 'gestao:excluir_cadastro_auxiliar_ajax' modelo=modelo pk=item.pk %}"><i class="bi bi-trash-fill"></i></button>
+        </div>
+    </div>
+    {% empty %}
+    <div class="list-group-item text-muted text-center">Nenhum item cadastrado.</div>
+    {% endfor %}
+</div>

@@ -1,0 +1,284 @@
+{% extends 'gestao/base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Perfil de {{ cliente.nome_completo }}{% endblock %}
+
+{% block content %}
+<style>
+    /* Estilos para alternar entre modo de visualização e edição */
+    #form-container.view-mode .form-control,
+    #form-container.view-mode .form-select {
+        background-color: transparent !important;
+        border-color: transparent;
+        box-shadow: none;
+        padding-left: 0;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        pointer-events: none; /* Desativa cliques nos campos */
+    }
+    #form-container.view-mode .form-check-input {
+        pointer-events: none;
+        background-color: #e9ecef;
+        border-color: #ced4da;
+    }
+    #form-container.view-mode .form-check-input:checked {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+
+    /* Controle da visibilidade dos botões de ação */
+    .edit-buttons { display: none; }
+    #action-buttons.edit-mode .edit-buttons { display: inline-flex; }
+    #action-buttons.edit-mode #btn-editar { display: none; }
+
+    /* Estilo para a caixa de qualificação */
+    .qualificacao-box {
+        background-color: #f8f9fa;
+        border: 1px dashed #dee2e6;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        font-family: monospace;
+        font-size: 0.9rem;
+        line-height: 1.6;
+        position: relative;
+    }
+    .btn-copy {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        z-index: 10;
+    }
+</style>
+
+<form id="cliente-form" method="post">
+    {% csrf_token %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 d-flex align-items-center gap-2 mb-0">
+                <i class="bi bi-person-badge-fill text-primary"></i> Perfil do Cliente
+            </h1>
+            <p class="text-muted mb-0">Visualize e edite as informações de {{ cliente.nome_completo }}</p>
+        </div>
+        <div id="action-buttons">
+            <a href="{% url 'gestao:lista_clientes' %}" class="btn btn-outline-secondary">Voltar à Lista</a>
+            <button type="button" class="btn btn-secondary" id="btn-editar"><i class="bi bi-pencil-fill me-1"></i> Editar Dados</button>
+            <div class="btn-group edit-buttons">
+                <button type="button" class="btn btn-secondary" id="btn-cancelar">Cancelar</button>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i> Salvar Alterações</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-4 d-flex flex-column gap-4">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    <img src="https://ui-avatars.com/api/?name={{ cliente.nome_completo|urlencode }}&background=0D6EFD&color=fff&size=120&bold=true" alt="Avatar do Cliente" class="rounded-circle mb-3">
+                    <h4 class="card-title mb-1">{{ cliente.nome_completo }}</h4>
+                    <p class="text-muted">{{ cliente.cpf_cnpj|default:"" }}</p>
+                    {% if is_ativo %}
+                        <span class="badge bg-success bg-opacity-75"><i class="bi bi-check-circle-fill me-1"></i> Cliente Ativo</span>
+                    {% else %}
+                        <span class="badge bg-secondary bg-opacity-75"><i class="bi bi-archive-fill me-1"></i> Cliente Inativo</span>
+                    {% endif %}
+                    <hr>
+                    <div class="text-start">
+                        <p class="small text-muted mb-2"><i class="bi bi-envelope-fill me-2 text-primary"></i>{{ cliente.email|default:"E-mail não informado" }}</p>
+                        <p class="small text-muted mb-0"><i class="bi bi-telephone-fill me-2 text-primary"></i>{{ cliente.telefone_principal|default:"Telefone não informado" }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header"><i class="bi bi-file-text-fill me-2"></i>Qualificação Processual</div>
+                <div class="qualificacao-box">
+                    <button class="btn btn-sm btn-light btn-copy" id="btn-copy-qualificacao" type="button" title="Copiar para Área de Transferência"><i class="bi bi-clipboard-fill"></i></button>
+                    <span id="qualificacao-text">{{ cliente.qualificacao }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body p-0">
+                    <ul class="nav nav-tabs nav-fill px-2" id="clienteTab" role="tablist">
+                        <li class="nav-item" role="presentation"><button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview-pane" type="button">Visão Geral</button></li>
+                        <li class="nav-item" role="presentation"><button class="nav-link" id="dados-tab" data-bs-toggle="tab" data-bs-target="#dados-pane" type="button">Dados Cadastrais</button></li>
+                        <li class="nav-item" role="presentation"><button class="nav-link" id="processos-tab" data-bs-toggle="tab" data-bs-target="#processos-pane" type="button">Processos</button></li>
+                        <li class="nav-item" role="presentation"><button class="nav-link" id="servicos-tab" data-bs-toggle="tab" data-bs-target="#servicos-pane" type="button">Serviços</button></li>
+                    </ul>
+                    <div class="tab-content p-4">
+                        <div class="tab-pane fade show active" id="overview-pane" role="tabpanel">
+                            <div class="row mb-4">
+                                <div class="col-6"><div class="card text-center"><div class="card-body"><h6 class="text-muted small">PROCESSOS</h6><div class="fs-3 fw-bold">{{ cliente.participacoes.count|intcomma }}</div></div></div></div>
+                                <div class="col-6"><div class="card text-center"><div class="card-body"><h6 class="text-muted small">SERVIÇOS</h6><div class="fs-3 fw-bold">{{ cliente.servicos.count|intcomma }}</div></div></div></div>
+                            </div>
+                            <h5 class="mb-3">Atividades Recentes</h5>
+                            <div class="list-group">
+                                {% for atividade in atividades_recentes %}
+                                <div class="list-group-item">
+                                    {% if atividade.processo %}
+                                        <p class="mb-1"><strong>{{ atividade.titulo }}</strong> no processo <a href="{% url 'gestao:detalhe_processo' pk=atividade.processo.pk %}">{{ atividade.processo.numero_processo|default:"N/A" }}</a></p>
+                                        <small class="text-muted">Publicado em: {{ atividade.data_publicacao|date:"d/m/Y" }}</small>
+                                    {% else %}
+                                        <p class="mb-1"><strong>{{ atividade.titulo }}</strong> no serviço <a href="{% url 'gestao:detalhe_servico' pk=atividade.servico.pk %}">{{ atividade.servico.descricao }}</a></p>
+                                        <small class="text-muted">Atividade de: {{ atividade.data_atividade|date:"d/m/Y" }}</small>
+                                    {% endif %}
+                                </div>
+                                {% empty %}
+                                <p class="text-muted text-center p-3">Nenhuma atividade recente encontrada.</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="dados-pane" role="tabpanel">
+                            <div id="form-container" class="view-mode">
+                                {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+
+                                <h5 class="mb-3">Dados Pessoais e Contato</h5>
+                                <div class="row g-3">
+                                    <div class="col-md-4">{{ form.tipo_pessoa.label_tag }}{{ form.tipo_pessoa }}</div>
+                                    <div class="col-md-8">{{ form.nome_completo.label_tag }}{{ form.nome_completo }}</div>
+                                    <div class="col-md-6">{{ form.cpf_cnpj.label_tag }}{{ form.cpf_cnpj }}</div>
+                                    <div class="col-md-6">{{ form.telefone_principal.label_tag }}{{ form.telefone_principal }}</div>
+                                    <div class="col-12">{{ form.email.label_tag }}{{ form.email }}</div>
+                                </div>
+                                <div id="pf-fields">
+                                    <hr class="my-4"><h5 class="mb-3">Qualificação Pessoal</h5>
+                                    <div class="row g-3">
+                                        <div class="col-md-4">{{ form.data_nascimento.label_tag }}{{ form.data_nascimento }}</div>
+                                        <div class="col-md-8">{{ form.nacionalidade.label_tag }}{{ form.nacionalidade }}</div>
+                                        <div class="col-md-4">{{ form.estado_civil.label_tag }}{{ form.estado_civil }}</div>
+                                        <div class="col-md-8">{{ form.profissao.label_tag }}{{ form.profissao }}</div>
+                                    </div>
+                                </div>
+                                <hr class="my-4"><h5 class="mb-3">Endereço</h5>
+                                <div class="row g-3">
+                                    <div class="col-md-4">{{ form.cep.label_tag }}{{ form.cep }}</div>
+                                    <div class="col-md-8">{{ form.logradouro.label_tag }}{{ form.logradouro }}</div>
+                                    <div class="col-md-4">{{ form.numero.label_tag }}{{ form.numero }}</div>
+                                    <div class="col-md-8">{{ form.complemento.label_tag }}{{ form.complemento }}</div>
+                                    <div class="col-md-6">{{ form.bairro.label_tag }}{{ form.bairro }}</div>
+                                    <div class="col-md-4">{{ form.cidade.label_tag }}{{ form.cidade }}</div>
+                                    <div class="col-md-2">{{ form.estado.label_tag }}{{ form.estado }}</div>
+                                </div>
+                                <div id="pj-fields" class="d-none">
+                                    <hr class="my-4"><h5 class="mb-3">Representação (Pessoa Jurídica)</h5>
+                                    <div class="row g-3">
+                                        <div class="col-md-7">{{ form.representante_legal.label_tag }}{{ form.representante_legal }}</div>
+                                        <div class="col-md-5">{{ form.cpf_representante_legal.label_tag }}{{ form.cpf_representante_legal }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="processos-pane" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-hover table-sm">
+                                    <thead><tr><th>Nº Processo</th><th>Tipo da Ação</th><th>Status</th></tr></thead>
+                                    <tbody>
+                                    {% for p in cliente.participacoes.all %}
+                                    <tr><td><a href="{% url 'gestao:detalhe_processo' pk=p.processo.pk %}">{{ p.processo.numero_processo|default:"Sem número" }}</a></td><td>{{ p.processo.tipo_acao.nome|default:"-" }}</td><td><span class="badge bg-primary">{{ p.processo.get_status_processo_display }}</span></td></tr>
+                                    {% empty %}
+                                    <tr><td colspan="3" class="text-center text-muted p-4">Nenhum processo encontrado.</td></tr>
+                                    {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="servicos-pane" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-hover table-sm">
+                                    <thead><tr><th>Tipo de Serviço</th><th>Descrição</th><th>Status</th></tr></thead>
+                                    <tbody>
+                                    {% for s in cliente.servicos.all %}
+                                    <tr><td><a href="{% url 'gestao:detalhe_servico' pk=s.pk %}">{{ s.tipo_servico.nome }}</a></td><td>{{ s.descricao|truncatechars:60 }}</td><td><span class="badge {% if s.concluido %}bg-secondary{% else %}bg-info{% endif %}">{{ s.concluido|yesno:"Concluído,Ativo" }}</span></td></tr>
+                                    {% empty %}
+                                    <tr><td colspan="3" class="text-center text-muted p-4">Nenhum serviço encontrado.</td></tr>
+                                    {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+{% endblock %}
+
+{% block javascript %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // --- Seletores e Variáveis ---
+    const formContainer = document.getElementById('form-container');
+    const actionButtons = document.getElementById('action-buttons');
+    const btnEditar = actionButtons.querySelector('#btn-editar');
+    const btnCancelar = actionButtons.querySelector('#btn-cancelar');
+    const btnCopy = document.getElementById('btn-copy-qualificacao');
+    const tipoPessoaSelect = formContainer.querySelector('#id_tipo_pessoa');
+    const pjFields = formContainer.querySelector('#pj-fields');
+    const cepInput = formContainer.querySelector('#id_cep');
+
+    // --- Lógica do Modo de Edição ---
+    btnEditar.addEventListener('click', () => {
+        formContainer.classList.remove('view-mode');
+        actionButtons.classList.add('edit-mode');
+    });
+
+    btnCancelar.addEventListener('click', () => {
+        formContainer.classList.add('view-mode');
+        actionButtons.classList.remove('edit-mode');
+        window.location.reload(); // Recarrega para descartar alterações não salvas
+    });
+
+    // --- Lógica do Botão de Copiar Qualificação ---
+    btnCopy.addEventListener('click', () => {
+        const textToCopy = document.getElementById('qualificacao-text').innerText;
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            const originalIconHTML = btnCopy.innerHTML;
+            btnCopy.innerHTML = '<i class="bi bi-check-lg text-success"></i>';
+            setTimeout(() => { btnCopy.innerHTML = originalIconHTML; }, 2000);
+        });
+    });
+
+    // --- Lógica dos Campos Condicionais e CEP ---
+    function toggleFieldsVisibility() {
+        if (!tipoPessoaSelect || !pjFields) return;
+        pjFields.classList.toggle('d-none', tipoPessoaSelect.value !== 'PJ');
+    }
+
+    function formatCEP(cep) { return cep.replace(/\D/g, '').replace(/^(\d{5})(\d)/, '$1-$2'); }
+    function handleCepInput(event) { event.target.value = formatCEP(event.target.value); }
+
+    function fetchAddressFromCEP() {
+        const cep = cepInput.value.replace(/\D/g, '');
+        if (cep.length !== 8) return;
+
+        fetch(`https://viacep.com.br/ws/${cep}/json/`)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.erro) {
+                    formContainer.querySelector('#id_logradouro').value = data.logradouro;
+                    formContainer.querySelector('#id_bairro').value = data.bairro;
+                    formContainer.querySelector('#id_cidade').value = data.localidade;
+                    formContainer.querySelector('#id_estado').value = data.uf;
+                    formContainer.querySelector('#id_numero').focus();
+                }
+            });
+    }
+
+    if (tipoPessoaSelect) tipoPessoaSelect.addEventListener('change', toggleFieldsVisibility);
+    if (cepInput) {
+        cepInput.addEventListener('input', handleCepInput);
+        cepInput.addEventListener('blur', fetchAddressFromCEP);
+    }
+    toggleFieldsVisibility(); // Garante o estado correto no carregamento da página
+});
+</script>
+{% endblock %}

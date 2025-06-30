@@ -9,9 +9,6 @@ from .models import UsuarioPerfil # Importe seu modelo de Perfil
 # para nos conectarmos ao sinal. Esta é a melhor prática.
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
 def create_user_profile(sender, instance, created, **kwargs):
-    """
-    Cria um Perfil de Usuário automaticamente sempre que um novo
-    usuário do tipo definido em AUTH_USER_MODEL é criado.
-    """
+    """Cria um UsuarioPerfil toda vez que um novo User é criado."""
     if created:
-        UsuarioPerfil.objects.create(user=instance)
+        UsuarioPerfil.objects.get_or_create(user=instance)

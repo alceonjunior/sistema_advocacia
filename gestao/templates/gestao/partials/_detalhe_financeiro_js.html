@@ -1,30 +1,236 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const pagamentoModal = document.getElementById('pagamentoModal');
-    if (pagamentoModal) {
-        pagamentoModal.addEventListener('show.bs.modal', function(event) {
-            const button = event.relatedTarget;
-            const modalTitle = pagamentoModal.querySelector('.modal-title');
-            const modalForm = pagamentoModal.querySelector('#pagamentoForm');
-            const modalSaldoDevedorContainer = pagamentoModal.querySelector('#modalSaldoDevedorContainer');
-            const modalSaldoDevedor = pagamentoModal.querySelector('#modalSaldoDevedor');
-            modalForm.reset();
+    const pagamentoModalEl = document.getElementById('pagamentoModal');
+    if (!pagamentoModalEl) return;
 
-            if (button.classList.contains('btn-editar-pagamento')) {
-                modalTitle.textContent = 'Editar Pagamento';
-                modalSaldoDevedorContainer.style.display = 'none';
-                modalForm.setAttribute('action', button.getAttribute('data-form-url'));
-                modalForm.querySelector('#id_valor_pago').value = parseFloat(button.getAttribute('data-valor-pago')).toFixed(2);
-                modalForm.querySelector('#id_data_pagamento').value = button.getAttribute('data-data-pagamento');
-                modalForm.querySelector('#id_forma_pagamento').value = button.getAttribute('data-forma-pagamento');
-                modalForm.querySelector('#id_observacoes').value = button.getAttribute('data-observacoes');
-            } else {
-                modalTitle.textContent = 'Registrar Pagamento para: ' + button.getAttribute('data-lancamento-descricao');
-                modalSaldoDevedorContainer.style.display = 'block';
-                modalForm.setAttribute('action', button.getAttribute('data-form-url'));
-                modalSaldoDevedor.textContent = 'R$ ' + button.getAttribute('data-saldo-devedor');
+    const pagamentoForm = document.getElementById('pagamentoForm');
+    const modalLabel = document.getElementById('pagamentoModalLabel');
+    const modalLancamentoDescricao = document.getElementById('modalLancamentoDescricao');
+
+    // Variáveis para armazenar o PK e Tipo do objeto pai (Processo ou Serviço)
+    // Inicialize com valores do contêiner da tabela, que deverão estar sempre presentes
+    const financialTableContainer = document.getElementById('financial-table-container');
+    let currentParentPk = financialTableContainer ? financialTableContainer.dataset.parentPk : null;
+    let currentParentType = financialTableContainer ? financialTableContainer.dataset.parentType : null;
+
+    // Referência ao modal de confirmação de exclusão e seu formulário de confirmação
+    const confirmDeleteModal = document.getElementById('confirmDeleteModal');
+    const deleteConfirmForm = confirmDeleteModal ? confirmDeleteModal.querySelector('#deleteForm') : null;
+
+
+    pagamentoModalEl.addEventListener('show.bs.modal', function(event) {
+        const button = event.relatedTarget;
+        const mode = button.dataset.modalMode;
+
+        pagamentoForm.reset();
+
+        // currentParentPk e currentParentType já são obtidos do contêiner da tabela no DOMContentLoaded.
+        // Eles representam o processo/serviço pai da página atual.
+
+        if (mode === 'add') {
+            const lancamentoId = button.dataset.lancamentoId;
+            const lancamentoDescricao = button.dataset.lancamentoDescricao;
+            const saldoDevedor = button.dataset.saldoDevedor;
+
+            modalLabel.textContent = 'Adicionar Novo Pagamento';
+            modalLancamentoDescricao.textContent = `Para o lançamento: ${lancamentoDescricao}`;
+            pagamentoForm.action = `/adicionar_pagamento/${lancamentoId}/`;
+            pagamentoForm.querySelector('#id_valor_pago').value = saldoDevedor.replace(',', '.');
+
+        } else if (mode === 'edit') {
+            const pagamentoId = button.dataset.pagamentoId;
+            const lancamentoDescricao = button.dataset.lancamentoDescricao;
+
+            modalLabel.textContent = 'Editar Pagamento';
+            modalLancamentoDescricao.textContent = `Para o lançamento: ${lancamentoDescricao}`;
+            pagamentoForm.action = `/editar_pagamento/${pagamentoId}/`;
+
+            pagamentoForm.querySelector('#id_data_pagamento').value = button.dataset.pagamentoData;
+            pagamentoForm.querySelector('#id_valor_pago').value = button.dataset.pagamentoValor.replace(',', '.');
+            pagamentoForm.querySelector('#id_forma_pagamento').value = button.dataset.pagamentoForma;
+            pagamentoForm.querySelector('#id_observacoes').value = button.dataset.pagamentoObs;
+        }
+
+        const dataPagamentoInput = pagamentoForm.querySelector('#id_data_pagamento');
+        if (dataPagamentoInput && !dataPagamentoInput.value) {
+            const hoje = new Date();
+            const ano = hoje.getFullYear();
+            const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+            const dia = String(hoje.getDate()).padStart(2, '0');
+            dataPagamentoInput.value = `${ano}-${mes}-${dia}`;
+        }
+    });
+
+    pagamentoForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const form = e.target;
+        const formData = new FormData(form);
+
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {'X-CSRFToken': formData.get('csrfmiddlewaretoken')}
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => { throw err; });
             }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                const modalInstance = bootstrap.Modal.getInstance(pagamentoModalEl);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+
+                // Usa currentParentPk e currentParentType que foram obtidos no DOMContentLoaded
+                updateFinancialTable(currentParentPk, currentParentType);
+
+            } else {
+                let errorMessage = 'Ocorreu um erro ao salvar o pagamento. Verifique os dados.';
+                if (data.errors) {
+                    try {
+                        const errors = JSON.parse(data.errors);
+                        errorMessage += '\nDetalhes:';
+                        for (const field in errors) {
+                            errors[field].forEach(error => {
+                                errorMessage += `\n- ${field}: ${error.message}`;
+                            });
+                        }
+                    } catch (e) {
+                        console.error('Erro ao parsear erros:', e);
+                    }
+                }
+                alert(errorMessage);
+                console.error('Erros no formulário:', data.errors);
+            }
+        }).catch(error => {
+            console.error('Erro na requisição AJAX:', error);
+            alert('Ocorreu um erro de comunicação. Tente novamente.');
         });
+    });
+
+    function updateFinancialTable(parentPk, parentType) {
+        const financialTableContainer = document.getElementById('financial-table-container');
+        if (!financialTableContainer) {
+            console.error("Contêiner da tabela financeira não encontrado. Verifique o ID 'financial-table-container'.");
+            window.location.reload(true);
+            return;
+        }
+
+        const fetchUrl = `/ajax/tabela_financeira/${parentPk}/${parentType}/`;
+        console.log("Fetching financial table from:", fetchUrl); // Log para depuração
+
+        fetch(fetchUrl)
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(`HTTP error! status: ${response.status}, response: ${text}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.html) {
+                    financialTableContainer.innerHTML = data.html;
+
+                    const tooltipTriggerList = financialTableContainer.querySelectorAll('[data-bs-toggle="tooltip"]');
+                    [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+
+                    attachPaymentButtonListeners(); // Re-anexa listeners
+                } else {
+                    console.error("Resposta AJAX para tabela financeira não contém HTML válido:", data);
+                    financialTableContainer.innerHTML = '<p class="text-center text-muted p-4">Nenhum lançamento financeiro encontrado.</p>';
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao atualizar a tabela financeira:', error);
+                alert('Não foi possível atualizar a tabela financeira. Por favor, recarregue a página. Detalhes: ' + error.message);
+                window.location.reload(true);
+            });
     }
+
+    // Função para anexar listeners aos botões de pagamento e exclusão
+    function attachPaymentButtonListeners() {
+        // --- Lógica para o botão de CONFIRMAÇÃO dentro do modal de exclusão ---
+        // Anexa o listener ao formulário dentro do modal de confirmação.
+        if (confirmDeleteModal && deleteConfirmForm && !deleteConfirmForm.dataset.listenerAttached) {
+            deleteConfirmForm.dataset.listenerAttached = 'true';
+
+            deleteConfirmForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const form = e.target;
+                const deleteUrl = form.action;
+
+                const formParentPk = form.dataset.parentPk;
+                const formParentType = form.dataset.parentType;
+
+                fetch(deleteUrl, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: {'X-CSRFToken': form.querySelector('input[name="csrfmiddlewaretoken"]').value}
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw err; });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        const modalInstance = bootstrap.Modal.getInstance(confirmDeleteModal);
+                        if (modalInstance) {
+                            modalInstance.hide();
+                        }
+                        updateFinancialTable(formParentPk, formParentType);
+
+                    } else {
+                        alert('Erro ao excluir pagamento: ' + (data.errors ? JSON.stringify(data.errors) : 'Erro desconhecido.'));
+                        console.error('Erros na exclusão:', data.errors);
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro na requisição de exclusão:', error);
+                    alert('Ocorreu um erro de comunicação ao excluir. Tente novamente.');
+                });
+            });
+        }
+
+
+        // Anexar listeners aos botões de exclusão que ABREM o modal de confirmação
+        const deletePaymentBtns = document.querySelectorAll('.delete-payment-btn');
+        deletePaymentBtns.forEach(button => {
+            button.removeEventListener('click', openDeleteModalHandler); // Remove para evitar duplicação
+            button.addEventListener('click', openDeleteModalHandler);
+        });
+
+        function openDeleteModalHandler() {
+            const deleteUrl = this.dataset.deleteUrl;
+            const modalTitle = this.dataset.modalTitle;
+            const modalBody = this.dataset.modalBody;
+            const parentPk = this.dataset.parentPk;
+            const parentType = this.dataset.parentType;
+
+            confirmDeleteModal.querySelector('#confirmDeleteModalLabel').textContent = modalTitle;
+            confirmDeleteModal.querySelector('#confirmDeleteModalBody').textContent = modalBody;
+
+            if (deleteConfirmForm) {
+                deleteConfirmForm.action = deleteUrl;
+                deleteConfirmForm.dataset.parentPk = parentPk;
+                deleteConfirmForm.dataset.parentType = parentType;
+            }
+        }
+    }
+
+    // A chamada inicial de updateFinancialTable.
+    // Ela ocorrerá apenas se #financial-table-container existir, e usará seus data-attributes.
+    if (financialTableContainer && currentParentPk && currentParentType) {
+        updateFinancialTable(currentParentPk, currentParentType);
+    } else {
+        console.warn("financialTableContainer não encontrado ou parentPk/Type ausente na inicialização. Tabela não será carregada via AJAX automaticamente.");
+    }
+
+    attachPaymentButtonListeners(); // Chama a função para anexar listeners iniciais
 });
 </script>

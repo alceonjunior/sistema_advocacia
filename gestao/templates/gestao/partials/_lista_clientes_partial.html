@@ -1,70 +1,59 @@
-{% comment %}
-Arquivo: gestao/partials/_lista_clientes_partial.html
-Este template renderiza a grade de cards de clientes e é projetado para
-ser incluído na página principal ou carregado via AJAX.
-{% endcomment %}
+<div class="row">
+    {% for cliente in filter.qs %}
+    <div class="col-md-6 col-lg-4 mb-4 client-card">
+        <div class="card h-100 shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 text-primary fw-bold">
+                    <i class="bi bi-person-circle me-1"></i>
+                    <a href="{% url 'gestao:detalhe_cliente' pk=cliente.pk %}" class="text-decoration-none" title="Ver detalhes de {{ cliente.nome_completo }}">{{ cliente.nome_completo|truncatechars:30 }}</a>
+                </h6>
 
-{% for cliente in filter.qs %}
-<div class="col-md-6 col-lg-4 mb-4">
-    <div class="card h-100 shadow-sm client-card">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <div class="d-flex align-items-center gap-3" style="min-width: 0;">
-                <div class="avatar-circle flex-shrink-0 {% if cliente.tipo_pessoa == 'PF' %}bg-primary-subtle text-primary{% else %}bg-secondary-subtle text-secondary{% endif %}">
-                    <i class="bi {% if cliente.tipo_pessoa == 'PF' %}bi-person-fill{% else %}bi-building-fill{% endif %} fs-5"></i>
+                <div class="d-flex align-items-center gap-3">
+                    <a href="{% url 'gestao:detalhe_cliente' pk=cliente.pk %}" class="text-primary" data-bs-toggle="tooltip" title="Editar Cliente">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+
+                    {% if cliente.processos_ativos_count > 0 or cliente.servicos_ativos_count > 0 %}
+                        <span data-bs-toggle="tooltip" title="Cliente com casos ativos não pode ser excluído.">
+                            <i class="bi bi-trash3-fill text-muted" style="cursor: not-allowed;"></i>
+                        </span>
+                    {% else %}
+                        <a href="#" class="text-danger btn-excluir-cliente"
+                           data-bs-toggle="tooltip" title="Excluir Cliente"
+                           data-url="{% url 'gestao:excluir_cliente' pk=cliente.pk %}"
+                           data-nome="{{ cliente.nome_completo }}">
+                           <i class="bi bi-trash3-fill"></i>
+                        </a>
+                    {% endif %}
                 </div>
-                <h5 class="card-title mb-0 fs-6 fw-bold text-truncate" title="{{ cliente.nome_completo }}">{{ cliente.nome_completo }}</h5>
-            </div>
-            <div class="d-flex align-items-center flex-shrink-0">
-                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 btn-editar" data-pk="{{ cliente.pk }}" title="Editar Cliente">
-                    <i class="bi bi-pencil-fill"></i>
-                </button>
 
-                {# ===== INÍCIO DA LÓGICA CORRIGIDA ===== #}
-                {% if cliente.processos_ativos_count > 0 or cliente.servicos_ativos_count > 0 %}
-                    <span class="d-inline-block ms-1" tabindex="0" data-bs-toggle="tooltip"
-                          title="Não pode ser excluído. Vínculos ativos:
-{% if cliente.processos_ativos_count > 0 %}- {{ cliente.processos_ativos_count }} Processo(s)
-{% endif %}{% if cliente.servicos_ativos_count > 0 %}- {{ cliente.servicos_ativos_count }} Serviço(s){% endif %}">
-                        <button class="btn btn-sm btn-outline-danger py-0 px-2" type="button" disabled style="pointer-events: none;">
-                            <i class="bi bi-trash-fill"></i>
-                        </button>
-                    </span>
-                {% else %}
-                    <button class="btn btn-sm btn-outline-danger py-0 px-2 ms-1" type="button"
-                            data-bs-toggle="modal" data-bs-target="#deleteClienteModal"
-                            data-delete-url="{% url 'excluir_cliente' pk=cliente.pk %}"
-                            data-nome="{{ cliente.nome_completo }}">
-                        <i class="bi bi-trash-fill"></i>
-                    </button>
-
-                {% endif %}
-
-                {# ===== FIM DA LÓGICA CORRIGIDA ===== #}
             </div>
-        </div>
-        <div class="card-body small">
-            <p class="card-text text-muted mb-2"><i class="bi bi-person-badge me-2"></i>{{ cliente.cpf_cnpj|default:"Não informado" }}</p>
-            <p class="card-text text-muted mb-2"><i class="bi bi-envelope-at me-2"></i>{{ cliente.email|default:"Não informado" }}</p>
-            <p class="card-text text-muted mb-0"><i class="bi bi-telephone me-2"></i>{{ cliente.telefone_principal|default:"Não informado" }}</p>
-        </div>
-        <div class="card-footer bg-light-subtle d-flex justify-content-around small text-center">
-            <div>
-                <div class="fw-bold fs-5">{{ cliente.processos_ativos_count|default:0 }}</div>
-                <div class="text-muted">Processos Ativos</div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item px-0"><i class="bi bi-card-heading me-2 text-muted"></i>{{ cliente.cpf_cnpj|default:"-" }}</li>
+                    <li class="list-group-item px-0"><i class="bi bi-envelope-at-fill me-2 text-muted"></i>{{ cliente.email|default:"-" }}</li>
+                    <li class="list-group-item px-0"><i class="bi bi-telephone-fill me-2 text-muted"></i>{{ cliente.telefone_principal|default:"-" }}</li>
+                </ul>
             </div>
-            <div>
-                <div class="fw-bold fs-5">{{ cliente.servicos_ativos_count|default:0 }}</div>
-                <div class="text-muted">Serviços Ativos</div>
+            <div class="card-footer bg-light d-flex justify-content-around text-center small p-2">
+                <div>
+                    <strong class="text-primary">{{ cliente.processos_ativos_count }}</strong>
+                    <div class="text-muted">Processos Ativos</div>
+                </div>
+                <div>
+                    <strong class="text-info">{{ cliente.servicos_ativos_count }}</strong>
+                    <div class="text-muted">Serviços Ativos</div>
+                </div>
             </div>
         </div>
     </div>
-</div>
-{% empty %}
-<div class="col-12">
-    <div class="text-center p-5 border rounded-3 bg-light">
-        <i class="bi bi-people fs-1 text-muted"></i>
-        <h5 class="mt-2">Nenhum cliente encontrado</h5>
-        <p class="text-muted">Tente ajustar os filtros ou adicione um novo cliente.</p>
+    {% empty %}
+    <div class="col-12">
+        <div class="text-center p-5 border rounded bg-light mt-3">
+            <i class="bi bi-search-heart fs-1 text-muted"></i>
+            <h5 class="mt-3 text-muted">Nenhum cliente encontrado</h5>
+            <p class="text-muted mb-0">Tente ajustar os filtros ou adicione um novo cliente.</p>
+        </div>
     </div>
+    {% endfor %}
 </div>
-{% endfor %}

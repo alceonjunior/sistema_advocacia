@@ -1,249 +1,225 @@
 {% extends 'gestao/base.html' %}
+{% load static %}
 
-{% block title %}Gestão de Clientes{% endblock %}
+{% block title %}Painel de Clientes{% endblock %}
 
-{% block content %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-
+{% block styles %}
 <style>
-    /* Estilos visuais da página (sem alterações) */
-    .client-card { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
-    .client-card:hover { transform: translateY(-5px); box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.1); }
-    .avatar-circle { height: 40px; width: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
-    #client-list-container.loading { opacity: 0.5; position: relative; transition: opacity 0.3s; min-height: 200px; }
+    /* Estilo para o efeito de carregamento da lista */
+    #client-list-container.loading {
+        opacity: 0.5;
+        position: relative;
+        transition: opacity 0.3s;
+        min-height: 200px;
+        pointer-events: none;
+    }
+
     #client-list-container.loading::after {
-        content: ''; position: absolute; top: 40%; left: 50%; width: 3rem; height: 3rem; margin-left: -1.5rem;
-        border: 5px solid #f3f3f3; border-top: 5px solid #0d6efd; border-radius: 50%;
+        content: '';
+        position: absolute;
+        top: 40%;
+        left: 50%;
+        width: 3rem;
+        height: 3rem;
+        margin-left: -1.5rem;
+        border: 5px solid #f3f3f3;
+        border-top: 5px solid var(--bs-primary);
+        border-radius: 50%;
         animation: spin 1s linear infinite;
     }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-</style>
 
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    /* Garante o scroll no modal de cliente */
+    #addClienteModal .modal-body {
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="h2 d-flex align-items-center gap-2"><i class="bi bi-people-fill text-primary"></i> Gestão de Clientes</h1>
-    <button type="button" class="btn btn-primary btn-adicionar"><i class="bi bi-plus-circle"></i> Adicionar Cliente</button>
+    <h1 class="h2 d-flex align-items-center gap-2">
+        <i class="bi bi-people-fill text-primary"></i> Painel de Clientes
+    </h1>
+    <a href="{% url 'gestao:adicionar_cliente_page' %}" class="btn btn-primary">
+        <i class="bi bi-plus-circle-fill me-1"></i> Adicionar Novo Cliente
+    </a>
+
 </div>
 
-<div class="card mb-4">
+<div class="row mb-4">
+    <div class="col-6 col-lg-3 mb-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h6 class="text-muted small">TOTAL DE CLIENTES</h6>
+                <div class="fs-2 fw-bold">{{ stats.total }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3 mb-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h6 class="text-muted small">COM PROCESSOS ATIVOS</h6>
+                <div class="fs-2 fw-bold text-primary">{{ stats.com_processos_ativos }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3 mb-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h6 class="text-muted small">COM SERVIÇOS ATIVOS</h6>
+                <div class="fs-2 fw-bold text-info">{{ stats.com_servicos_ativos }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3 mb-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h6 class="text-muted small">CLIENTES ATIVOS (TOTAL)</h6>
+                <div class="fs-2 fw-bold text-success">{{ stats.total_ativos }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4 shadow-sm">
+    <div class="card-header">
+        <h5 class="mb-0 d-flex align-items-center gap-2">
+            <i class="bi bi-funnel-fill"></i> Filtros, Busca e Ordenação
+        </h5>
+    </div>
     <div class="card-body">
         <form id="filter-form" class="row g-3 align-items-end">
-            <div class="col-md-9">
-                <label for="{{ filter.form.busca_geral.id_for_label }}" class="form-label">Buscar por Nome ou CPF/CNPJ</label>
+            <div class="col-md-4">
+                <label for="{{ filter.form.busca_geral.id_for_label }}" class="form-label">{{ filter.form.busca_geral.label }}</label>
                 {{ filter.form.busca_geral }}
             </div>
-            <div class="col-md-3">
-                <label for="{{ filter.form.tipo_pessoa.id_for_label }}" class="form-label">Tipo de Pessoa</label>
+            <div class="col-md-2">
+                <label for="{{ filter.form.tipo_pessoa.id_for_label }}" class="form-label">{{ filter.form.tipo_pessoa.label }}</label>
                 {{ filter.form.tipo_pessoa }}
+            </div>
+            <div class="col-md-3">
+                <label for="{{ filter.form.status_casos.id_for_label }}" class="form-label">{{ filter.form.status_casos.label }}</label>
+                {{ filter.form.status_casos }}
+            </div>
+            <div class="col-md-3">
+                <label for="{{ filter.form.ordering.id_for_label }}" class="form-label">{{ filter.form.ordering.label }}</label>
+                {{ filter.form.ordering }}
             </div>
         </form>
     </div>
 </div>
 
-<div id="client-list-container" class="row">
+<div id="client-list-container">
     {% include 'gestao/partials/_lista_clientes_partial.html' %}
 </div>
 
-<!-- Modal para Adicionar/Editar Cliente -->
-<div class="modal fade" id="clienteModal" tabindex="-1" aria-labelledby="clienteModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h1 class="modal-title fs-5" id="clienteModalLabel">Adicionar Cliente</h1>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form id="clienteForm" method="post" novalidate>
-                {% csrf_token %}
-                <div class="modal-body">
-                    <div id="form-errors-non-field" class="alert alert-danger d-none"></div>
-                    {% for field in form %}
-                        <div class="mb-3">
-                            {{ field.label_tag }}
-                            {{ field }}
-                            <div class="invalid-feedback">{{ field.errors|striptags }}</div>
-                        </div>
-                    {% endfor %}
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Salvar</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+{% include 'gestao/partials/_modal_adicionar_cliente.html' with form=form %}
 
-<!-- Modal de Confirmação de Exclusão -->
-<div class="modal fade" id="deleteClienteModal" tabindex="-1" aria-labelledby="deleteClienteModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-danger text-white">
-                <h1 class="modal-title fs-5" id="deleteClienteModalLabel">Confirmar Exclusão</h1>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>Você tem certeza que deseja excluir o cliente <strong id="clienteNomeDelete"></strong>?</p>
-                <p class="text-danger">Esta ação não pode ser desfeita.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <form id="deleteForm" method="post" class="d-inline">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-danger">Sim, Excluir</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block javascript %}
+{{ block.super }}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    // --- SELEÇÃO DE ELEMENTOS E INSTÂNCIAS DE MODAIS ---
-    const clienteModalEl = document.getElementById('clienteModal');
-    const clienteModal = clienteModalEl ? new bootstrap.Modal(clienteModalEl) : null;
-    const deleteModalEl = document.getElementById('deleteClienteModal');
-    const deleteModal = deleteModalEl ? new bootstrap.Modal(deleteModalEl) : null;
-
-    const clienteForm = document.getElementById('clienteForm');
-    const clientListContainer = document.getElementById('client-list-container');
     const filterForm = document.getElementById('filter-form');
+    const clientListContainer = document.getElementById('client-list-container');
     let debounceTimer;
+    let tooltipList = []; // Para gerenciar os tooltips dinamicamente
 
-    // --- FUNÇÃO PARA ATUALIZAR A LISTA DE CLIENTES E REINICIAR TOOLTIPS ---
+    // Função para inicializar ou atualizar os tooltips
+    function initializeTooltips() {
+        tooltipList.forEach(t => t.dispose());
+        const tooltipTriggerList = [].slice.call(clientListContainer.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }
+
+    // Função para atualizar a lista de clientes via AJAX
     function updateClientList() {
-        if (!clientListContainer) return;
         clientListContainer.classList.add('loading');
         const params = new URLSearchParams(new FormData(filterForm));
-        fetch(`{% url 'lista_clientes' %}?${params.toString()}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        const url = `{% url 'gestao:lista_clientes' %}?${params.toString()}`;
+        history.pushState(null, '', url);
+
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(response => response.text())
             .then(html => {
                 clientListContainer.innerHTML = html;
-                const tooltipTriggerList = [].slice.call(clientListContainer.querySelectorAll('[data-bs-toggle="tooltip"]'));
-                tooltipTriggerList.map(function (tooltipTriggerEl) { return new bootstrap.Tooltip(tooltipTriggerEl); });
+                initializeTooltips(); // Re-inicializa os tooltips no novo conteúdo
             })
-            .finally(() => clientListContainer.classList.remove('loading'));
+            .finally(() => {
+                clientListContainer.classList.remove('loading');
+            });
     }
 
-    // --- EVENTOS DE FILTRAGEM ---
+    // Adiciona os "ouvintes" aos campos do formulário de filtro
     if (filterForm) {
-        filterForm.addEventListener('input', () => {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(updateClientList, 400);
+        filterForm.querySelectorAll('input, select').forEach(input => {
+            const eventType = input.tagName.toLowerCase() === 'select' ? 'change' : 'input';
+            input.addEventListener(eventType, function() {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(updateClientList, 400); // Debounce para evitar muitas requisições
+            });
         });
     }
 
-    // --- DELEGAÇÃO DE EVENTOS PARA OS BOTÕES DE AÇÃO ---
-    document.body.addEventListener('click', function (e) {
-        // Lógica para o botão de ADICIONAR CLIENTE
-        if (e.target.closest('.btn-adicionar')) {
-            document.getElementById('clienteModalLabel').textContent = 'Adicionar Cliente';
-            clienteForm.action = "{% url 'adicionar_cliente' %}";
-            clienteForm.reset();
-            clearFormErrors(clienteForm);
-            clienteModal?.show();
-        }
+    // Atualiza a lista quando um novo cliente é salvo pelo modal
+    document.addEventListener('clienteSalvo', function(e) {
+        updateClientList();
+    });
 
-        // Lógica para o botão de EDITAR CLIENTE
-        const editButton = e.target.closest('.btn-editar');
-        if (editButton) {
-            const pk = editButton.dataset.pk;
-            clearFormErrors(clienteForm);
-            fetch(`/clientes/${pk}/json/`)
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('clienteModalLabel').textContent = 'Editar Cliente';
-                    clienteForm.action = `/clientes/${pk}/salvar/`;
-                    for (const key in data) {
-                        if (clienteForm.elements[key]) clienteForm.elements[key].value = data[key];
-                    }
-                    clienteModal?.show();
-                });
-        }
+    // Lógica para EXCLUSÃO de cliente via AJAX com DELEGAÇÃO DE EVENTO
+    clientListContainer.addEventListener('click', function(e) {
+        const deleteButton = e.target.closest('.btn-excluir-cliente');
 
-        // --- LÓGICA CORRETA E FINAL PARA O BOTÃO DE EXCLUIR ---
-        const deleteButton = e.target.closest('button[data-bs-target="#deleteClienteModal"]');
         if (deleteButton) {
             e.preventDefault();
-            const deleteUrl = deleteButton.dataset.deleteUrl;
-            const clientName = deleteButton.dataset.nome;
-            document.getElementById('deleteForm').action = deleteUrl;
-            document.getElementById('clienteNomeDelete').textContent = clientName || 'este cliente';
-            deleteModal?.show();
+
+            const url = deleteButton.dataset.url;
+            const nomeCliente = deleteButton.dataset.nome;
+            const csrfToken = '{{ csrf_token }}';
+            const clientCard = deleteButton.closest('.client-card');
+
+            // === MENSAGEM DE CONFIRMAÇÃO APRIMORADA ===
+            const confirmacao = confirm(`Você está prestes a excluir o cliente: ${nomeCliente}\n\nEsta ação é permanente e não poderá ser desfeita.\nDeseja continuar?`);
+
+            if (confirmacao) {
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        if (clientCard) {
+                            clientCard.style.transition = 'opacity 0.5s';
+                            clientCard.style.opacity = '0';
+                            setTimeout(() => clientCard.remove(), 500); // Remove o card após a animação
+                        }
+                    } else {
+                        alert(`Erro ao excluir: ${data.message}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    alert('Ocorreu um erro de comunicação ao tentar excluir o cliente.');
+                });
+            }
         }
     });
 
-    // --- LÓGICA PARA SUBMETER FORMULÁRIOS VIA AJAX ---
-
-    // Formulário de Adicionar/Editar
-    if (clienteForm) {
-        clienteForm.addEventListener('submit', function (e) {
-            e.preventDefault();
-            clearFormErrors(this);
-            fetch(this.action, { method: 'POST', body: new FormData(this) })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    clienteModal.hide();
-                    updateClientList();
-                } else {
-                    displayFormErrors(this, data.errors);
-                }
-            }).catch(err => console.error("Erro ao salvar cliente:", err));
-        });
-    }
-
-    // Formulário de Exclusão
-    const deleteForm = document.getElementById('deleteForm');
-    if (deleteForm) {
-        deleteForm.addEventListener('submit', function (e) {
-            e.preventDefault();
-            fetch(this.action, { method: 'POST', body: new FormData(this) })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    deleteModal.hide();
-                    updateClientList();
-                } else {
-                    alert('Erro ao excluir: ' + (data.message || 'Erro desconhecido.'));
-                    deleteModal.hide();
-                }
-            }).catch(err => console.error("Erro ao excluir cliente:", err));
-        });
-    }
-
-    // --- FUNÇÕES AUXILIARES PARA MANIPULAR ERROS DE FORMULÁRIO ---
-    function clearFormErrors(form) {
-        form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
-        const nonFieldErrorsDiv = form.querySelector('#form-errors-non-field');
-        if (nonFieldErrorsDiv) {
-            nonFieldErrorsDiv.innerHTML = '';
-            nonFieldErrorsDiv.classList.add('d-none');
-        }
-    }
-
-    function displayFormErrors(form, errors) {
-        for (const fieldName in errors) {
-            if (fieldName === '__all__') {
-                const nonFieldErrorsDiv = form.querySelector('#form-errors-non-field');
-                if (nonFieldErrorsDiv) {
-                    nonFieldErrorsDiv.innerHTML = errors[fieldName].map(e => `<p class="mb-0">${e.message || e}</p>`).join('');
-                    nonFieldErrorsDiv.classList.remove('d-none');
-                }
-            } else {
-                const field = form.querySelector(`[name="${fieldName}"]`);
-                if (field) {
-                    field.classList.add('is-invalid');
-                    const errorDiv = field.closest('.mb-3')?.querySelector('.invalid-feedback');
-                    if (errorDiv) errorDiv.textContent = errors[fieldName].map(e => e.message || e).join(' ');
-                }
-            }
-        }
-    }
-
-    // --- INICIALIZAÇÃO DE TOOLTIPS NA CARGA INICIAL DA PÁGINA ---
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function (tooltipTriggerEl) { return new bootstrap.Tooltip(tooltipTriggerEl); });
+    // Inicializa os tooltips no carregamento inicial da página
+    initializeTooltips();
 });
 </script>
 {% endblock %}

@@ -1,0 +1,68 @@
+<div class="modal fade" id="addClienteModal" tabindex="-1" aria-labelledby="addClienteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+
+            <form id="addClienteForm" method="post" action="{% url 'gestao:adicionar_cliente' %}"
+                  data-ajax-form="true"
+                  data-target-select="{{ target_select_id|default:'#id_cliente' }}" {# Usa a variável para saber qual campo atualizar #}
+                  novalidate>
+
+                {% csrf_token %}
+                <div class="modal-header bg-light">
+                    <h1 class="modal-title fs-5" id="addClienteModalLabel">
+                        <i class="bi bi-person-plus-fill me-2 text-primary"></i>
+                        Cadastro Rápido de Cliente
+                    </h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+
+                    <div class="alert alert-info bg-info-subtle border-info-subtle d-flex align-items-center gap-3" role="alert">
+                        <i class="bi bi-info-circle-fill fs-4"></i>
+                        <div>
+                            Este é um cadastro simplificado para uso imediato. Campos adicionais (endereço, estado civil, etc.) podem ser preenchidos posteriormente na tela de edição do cliente.
+                        </div>
+                    </div>
+
+                    <div class="alert alert-danger d-none p-2 small mt-3"></div>
+
+                    <div class="row g-3 mt-2">
+                        <div class="col-12">
+                            <label for="{{ form.nome_completo.id_for_label }}" class="form-label">{{ form.nome_completo.label }}</label>
+                            {{ form.nome_completo }}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="{{ form.tipo_pessoa.id_for_label }}" class="form-label">{{ form.tipo_pessoa.label }}</label>
+                            {{ form.tipo_pessoa }}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="{{ form.cpf_cnpj.id_for_label }}" class="form-label">{{ form.cpf_cnpj.label }}</label>
+                            {{ form.cpf_cnpj }}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="{{ form.email.id_for_label }}" class="form-label">{{ form.email.label }}</label>
+                            {{ form.email }}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="{{ form.telefone_principal.id_for_label }}" class="form-label">{{ form.telefone_principal.label }}</label>
+                            {{ form.telefone_principal }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle me-1"></i>
+                        Salvar Cliente
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
