@@ -1,0 +1,46 @@
+{% load l10n %}
+
+<table class="table table-hover">
+    <thead>
+        <tr>
+            <th>Descrição</th>
+            <th>Vencimento</th>
+            <th class="text-end">Valor</th>
+            <th>Status</th>
+            <th>Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for lancamento in lancamentos %}
+            <tr>
+                <td>
+                    <span class="fw-bold">{{ lancamento.descricao }}</span>
+                    <small class="d-block text-muted">
+                        {% if lancamento.processo %}
+                            Proc: {{ lancamento.processo }}
+                        {% elif lancamento.servico %}
+                            Serviço: {{ lancamento.servico }}
+                        {% elif lancamento.cliente %}
+                            Cliente: {{ lancamento.cliente }}
+                        {% endif %}
+                    </small>
+                </td>
+                <td>{{ lancamento.data_vencimento|date:"d/m/Y" }}</td>
+                <td class="text-end">R$ {{ lancamento.valor|floatformat:2|localize }}</td>
+                <td>
+                    {% if lancamento.status == 'PAGO' %}<span class="badge bg-success-subtle text-success-emphasis">Pago</span>
+                    {% elif lancamento.status == 'ATRASADO' %}<span class="badge bg-danger-subtle text-danger-emphasis">Atrasado</span>
+                    {% else %}<span class="badge bg-secondary-subtle text-secondary-emphasis">A Pagar</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil-fill"></i></button>
+                </td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="5" class="text-center text-muted p-4">Nenhuma {{ tipo }} encontrada.</td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>

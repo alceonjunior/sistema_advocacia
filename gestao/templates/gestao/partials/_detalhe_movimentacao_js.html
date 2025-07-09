@@ -1,29 +1,115 @@
 <script>
-// SCRIPT PARA O MODAL DE ADICIONAR MOVIMENTAÇÃO
-// Controla a visibilidade do campo "Horário" quando o tipo de movimentação é uma audiência.
-const movForm = document.querySelector('#adicionarMovimentacaoModal form');
-if(movForm) {
-    const tipoMovSelect = movForm.querySelector('#id_tipo_movimentacao');
-    const horaPrazoContainer = movForm.querySelector("#div_id_hora_prazo");
-    const dataPrazoLabel = movForm.querySelector("label[for='id_data_prazo_final']");
+$(document).ready(function () {
 
-    if(tipoMovSelect && horaPrazoContainer && dataPrazoLabel) {
-         if (!dataPrazoLabel.dataset.originalText) {
-             dataPrazoLabel.dataset.originalText = dataPrazoLabel.textContent;
+    // ===================================================================================
+    //  LÓGICA PARA O CAMPO DE HORÁRIO (APLICA-SE A AMBOS OS MODAIS)
+    // ===================================================================================
+    function setupAudienciaFields(modalSelector) {
+        const modal = $(modalSelector);
+        const tipoMovSelect = modal.find('[name="tipo_movimentacao"]');
+        const horaPrazoContainer = modal.find('[name="hora_prazo"]').closest('.mb-3, .col-md-6');
+        const dataPrazoLabel = modal.find('label[for="' + tipoMovSelect.closest_form().find('[name="data_prazo_final"]').attr('id') + '"]');
+
+        if (!dataPrazoLabel.data('original-text')) {
+            dataPrazoLabel.data('original-text', dataPrazoLabel.text());
         }
-        const originalLabelText = dataPrazoLabel.dataset.originalText;
 
-        $(tipoMovSelect).on('change', function() {
-            const selectedOptionText = $(this).find('option:selected').text();
-            if (selectedOptionText.toLowerCase().includes('audiência')) {
-                horaPrazoContainer.classList.remove('d-none');
-                dataPrazoLabel.textContent = 'Data da Audiência';
+        function toggleHoraField() {
+            const selectedOptionText = tipoMovSelect.find('option:selected').text().toLowerCase();
+            if (selectedOptionText.includes('audiência')) {
+                horaPrazoContainer.removeClass('d-none');
+                dataPrazoLabel.text('Data da Audiência');
             } else {
-                horaPrazoContainer.classList.add('d-none');
-                horaPrazoContainer.querySelector('#id_hora_prazo').value = '';
-                dataPrazoLabel.textContent = originalLabelText;
+                horaPrazoContainer.addClass('d-none');
+                horaPrazoContainer.find('[name="hora_prazo"]').val('');
+                dataPrazoLabel.text(dataPrazoLabel.data('original-text'));
             }
-        }).trigger('change');
+        }
+
+        tipoMovSelect.on('change', toggleHoraField);
+        // Garante que o estado inicial esteja correto ao carregar
+        toggleHoraField();
     }
-}
+
+    // Aplica a lógica aos dois modais
+    setupAudienciaFields('#adicionarMovimentacaoModal');
+    setupAudienciaFields('#movimentacaoModal');
+
+
+    // ===================================================================================
+    //  LÓGICA PARA O MODAL DE EDIÇÃO (BUSCAR DADOS, WHATSAPP, SALVAR)
+    // ===================================================================================
+    const movimentacaoModalEl = $('#movimentacaoModal');
+    if (movimentacaoModalEl.length) {
+        const form = movimentacaoModalEl.find('#formEditarMovimentacao');
+        const formDelete = movimentacaoModalEl.find('#formExcluirMovimentacao');
+        const whatsAppButton = movimentacaoModalEl.find('#btn-comunicar-whatsapp');
+
+        movimentacaoModalEl.on('show.bs.modal', function (event) {
+            const triggerElement = $(event.relatedTarget);
+
+            form.attr('action', triggerElement.data('url-edit'));
+            formDelete.attr('action', triggerElement.data('url-delete'));
+
+            form[0].reset();
+            whatsAppButton.hide();
+
+            // Busca os dados da movimentação
+            $.ajax({
+                url: triggerElement.data('url-json'),
+                type: 'GET',
+                success: function(data) {
+                    // Preenche o formulário
+                    form.find('[name="titulo"]').val(data.titulo || '');
+                    form.find('[name="tipo_movimentacao"]').val(data.tipo_movimentacao_id).trigger('change'); // Dispara o change para a lógica da audiência
+                    form.find('[name="data_prazo_final"]').val(data.data_prazo_final || '');
+                    form.find('[name="hora_prazo"]').val(data.hora_prazo || '');
+                    form.find('[name="detalhes"]').val(data.detalhes || '');
+                    form.find('[name="link_referencia"]').val(data.link_referencia || '');
+                    form.find('[name="responsavel"]').val(data.responsavel_id).trigger('change');
+                    form.find('[name="status"]').val(data.status || '');
+
+                    // Lógica do WhatsApp
+                    if (data.cliente_telefone) {
+                        let mensagem = `Olá, ${data.cliente_nome}. Sou ${data.remetente_nome}, do escritório de advocacia.\n\n`;
+                        mensagem += `Gostaria de informar sobre a seguinte movimentação no seu processo:\n\n`;
+                        mensagem += `*Título:* ${data.titulo}\n`;
+
+                        if (data.data_prazo_final) {
+                            const [ano, mes, dia] = data.data_prazo_final.split('-');
+                            mensagem += `*Data:* ${dia}/${mes}/${ano}\n`;
+                        }
+                        if (data.hora_prazo) {
+                            mensagem += `*Horário:* ${data.hora_prazo}\n`;
+                        }
+                        if (data.link_referencia) {
+                            mensagem += `*Link para acesso:* ${data.link_referencia}\n`;
+                        }
+
+                        const urlWhatsapp = `https://wa.me/55${data.cliente_telefone}?text=${encodeURIComponent(mensagem)}`;
+                        whatsAppButton.attr('href', urlWhatsapp);
+                        whatsAppButton.show();
+                    }
+                }
+            });
+        });
+
+        // Submissão do formulário de edição via AJAX
+        form.on('submit', function(e) {
+            e.preventDefault();
+            $.ajax({
+                url: form.attr('action'),
+                type: 'POST',
+                data: form.serialize(),
+                success: function(response) { window.location.reload(); },
+                error: function(xhr) { alert('Ocorreu um erro ao salvar.'); }
+            });
+        });
+    }
+});
+
+// Adiciona um helper ao jQuery para encontrar o form pai de um elemento
+$.fn.closest_form = function() {
+    return this.closest('form');
+};
 </script>

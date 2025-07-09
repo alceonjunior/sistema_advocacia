@@ -1,25 +1,32 @@
-{% load humanize %}
+{% if servico.movimentacoes.all %}
 <ul class="timeline">
-    {% for mov in movimentacoes %}
+    {% for mov in servico.movimentacoes.all %}
     <li class="timeline-item">
-        <div class="timeline-marker {% if mov.status == 'CONCLUIDA' %} bg-success {% else %} bg-primary {% endif %}">
-            <i class="bi {% if mov.status == 'CONCLUIDA' %}bi-check2-circle{% else %}bi-list-task{% endif %}"></i>
+        <div class="timeline-marker bg-primary text-white">
+            <i class="bi bi-list-check"></i>
         </div>
-        <div class="timeline-content">
+        <div class="timeline-content" style="cursor: pointer;"
+             data-bs-toggle="modal"
+             data-bs-target="#servicoMovimentacaoModal"
+             data-url-json="{% url 'gestao:get_movimentacao_servico_json' mov.pk %}"
+             data-url-edit="{% url 'gestao:editar_movimentacao_servico_ajax' mov.pk %}"
+             data-url-delete="{% url 'gestao:excluir_movimentacao_servico' mov.pk %}">
+
             <div class="d-flex justify-content-between align-items-start">
-                <div>
-                    <h6 class="mb-0">{{ mov.titulo }}</h6>
-                    <small class="text-muted">Em {{ mov.data_atividade|date:"d/m/Y" }} por {{ mov.responsavel.get_full_name|default:mov.responsavel.username }}</small>
-                </div>
-                <span class="badge rounded-pill {% if mov.status == 'CONCLUIDA' %}bg-success-subtle text-success-emphasis{% else %}bg-primary-subtle text-primary-emphasis{% endif %}">{{ mov.get_status_display }}</span>
+                <h6 class="mb-1 fw-bold">{{ mov.titulo }}</h6>
+                <small class="text-muted text-nowrap">{{ mov.data_atividade|date:"d/m/Y" }}</small>
             </div>
-            {% if mov.detalhes %}<p class="mb-0 mt-2 small text-muted">{{ mov.detalhes|linebreaksbr }}</p>{% endif %}
+            <p class="small text-muted mb-2">por {{ mov.responsavel.get_full_name|default:mov.responsavel.username }}</p>
+            {% if mov.detalhes %}
+            <p class="mb-0">{{ mov.detalhes|linebreaksbr }}</p>
+            {% endif %}
         </div>
-    </li>
-    {% empty %}
-    <li class="timeline-item">
-        <div class="timeline-marker bg-secondary"><i class="bi bi-info-lg"></i></div>
-        <div class="timeline-content"><p class="mb-0 text-muted">Nenhum andamento registrado para este serviço.</p></div>
     </li>
     {% endfor %}
 </ul>
+{% else %}
+<div class="text-center text-muted p-4">
+    <i class="bi bi-inbox-fill fs-2"></i>
+    <p class="mt-2 mb-0">Nenhuma atividade registrada para este serviço.</p>
+</div>
+{% endif %}

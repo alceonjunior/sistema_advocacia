@@ -6,7 +6,7 @@
 <div class="card">
     <div class="card-header">
         <h3>Editar Movimentação: {{ movimentacao.titulo }}</h3>
-        <p class="mb-0">Do Processo: <a href="{% url 'detalhe_processo' pk=movimentacao.processo.pk %}">{{ movimentacao.processo }}</a></p>
+        <p class="mb-0">Do Processo: <a href="{% url 'gestao:detalhe_processo' pk=movimentacao.processo.pk %}">{{ movimentacao.processo }}</a></p>
     </div>
     <div class="card-body">
         <form method="post">
@@ -15,7 +15,7 @@
             {{ form.as_p }}
 
             <button type="submit" class="btn btn-success mt-3">Salvar Alterações</button>
-            <a href="{% url 'detalhe_processo' pk=movimentacao.processo.pk %}" class="btn btn-secondary mt-3">Cancelar</a>
+            <a href="{% url 'gestao:detalhe_processo' pk=movimentacao.processo.pk %}" class="btn btn-secondary mt-3">Cancelar</a>
         </form>
     </div>
 </div>

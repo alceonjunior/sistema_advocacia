@@ -1,6 +1,5 @@
 {% extends 'gestao/base.html' %}
-{% load static %}
-{% load humanize %}
+{% load static humanize %}
 
 {% block title %}Dashboard Analítico{% endblock %}
 
@@ -50,47 +49,42 @@
         <a href="{% url 'gestao:adicionar_processo' %}" class="btn btn-primary">
             <i class="bi bi-folder-plus"></i> Novo Processo
         </a>
-        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#adicionarServicoModal">
+        <a href="{% url 'gestao:adicionar_servico' %}" class="btn btn-primary">
             <i class="bi bi-plus-circle-fill me-1"></i> Adicionar Novo Serviço
-        </button>
+        </a>
+        <a href="{% url 'gestao:importacao_projudi' %}" class="btn btn-info">
+            <i class="bi bi-cloud-upload-fill me-1"></i> Importar do Projudi
+        </a>
     </div>
 </div>
 
 <div class="row mb-4">
     <div class="col-lg-4 col-md-6 mb-3">
-        <div class="card shadow-sm h-100 kpi-card">
+        <div class="card shadow-sm h-100 kpi-card" data-bs-toggle="modal" data-bs-target="#managerialModal" data-filter="processos" style="cursor: pointer;">
             <div class="card-body d-flex align-items-center gap-3">
-                <div class="icon-circle bg-primary-subtle text-primary">
-                    <i class="bi bi-folder-fill fs-4"></i>
-                </div>
+                <div class="icon-circle bg-primary-subtle text-primary"><i class="bi bi-folder-fill fs-4"></i></div>
                 <div>
                     <h6 class="card-title text-muted mb-1">Processos Ativos</h6>
                     <div class="fs-2 fw-bold">{{ processos_ativos_count }}</div>
                 </div>
-                <a href="{% url 'gestao:lista_processos' %}" class="stretched-link" title="Ver todos os processos"></a>
             </div>
         </div>
     </div>
     <div class="col-lg-4 col-md-6 mb-3">
-        <div class="card shadow-sm h-100 kpi-card">
+        <div class="card shadow-sm h-100 kpi-card" data-bs-toggle="modal" data-bs-target="#managerialModal" data-filter="servicos" style="cursor: pointer;">
             <div class="card-body d-flex align-items-center gap-3">
-                <div class="icon-circle bg-success-subtle text-success">
-                    <i class="bi bi-briefcase-fill fs-4"></i>
-                </div>
+                <div class="icon-circle bg-success-subtle text-success"><i class="bi bi-briefcase-fill fs-4"></i></div>
                 <div>
                     <h6 class="card-title text-muted mb-1">Serviços em Andamento</h6>
                     <div class="fs-2 fw-bold">{{ servicos_ativos_count }}</div>
                 </div>
-                <a href="{% url 'gestao:lista_servicos' %}" class="stretched-link" title="Ver todos os serviços"></a>
             </div>
         </div>
     </div>
     <div class="col-lg-4 col-md-12 mb-3">
-        <div class="card shadow-sm h-100 kpi-card">
+        <div class="card shadow-sm h-100 kpi-card" data-bs-toggle="modal" data-bs-target="#managerialModal" data-filter="pendencias" style="cursor: pointer;">
             <div class="card-body d-flex align-items-center gap-3">
-                <div class="icon-circle bg-warning-subtle text-warning">
-                    <i class="bi bi-list-check fs-4"></i>
-                </div>
+                <div class="icon-circle bg-warning-subtle text-warning"><i class="bi bi-list-check fs-4"></i></div>
                 <div>
                     <h6 class="card-title text-muted mb-1">Total de Pendências</h6>
                     <div class="fs-2 fw-bold">{{ total_pendencias }}</div>
@@ -99,6 +93,7 @@
         </div>
     </div>
 </div>
+
 
 <hr class="section-divider">
 
@@ -112,13 +107,50 @@
                 </div>
                 <div class="list-group list-group-flush">
                     {% for item in itens_vencidos %}
-                        <a href="{{ item.url }}" class="list-group-item list-group-item-action">
-                            <div class="d-flex w-100 justify-content-between">
-                                <span class="fw-bold text-danger">{{ item.titulo }}</span>
-                                <small>Venceu em: {{ item.data|date:"d/m/Y" }}</small>
+                        {% if item.tipo == 'audiencia' or item.tipo == 'prazo_processo' %}
+                            <div class="list-group-item list-group-item-action" style="cursor: pointer;"
+                                 data-bs-toggle="modal" data-bs-target="#movimentacaoModal"
+                                 data-url-json="{% url 'gestao:get_movimentacao_json' item.pk %}"
+                                 data-url-edit="{% url 'gestao:editar_movimentacao_ajax' item.pk %}"
+                                 data-url-delete="{% url 'gestao:excluir_movimentacao' item.pk %}">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <span class="fw-bold text-danger">{{ item.titulo }}</span>
+                                    <small>Venceu em: {{ item.data|date:"d/m/Y" }}</small>
+                                </div>
+                                <small class="d-block text-muted">{{ item.objeto_str }}</small>
                             </div>
-                            <small class="d-block text-muted">{{ item.objeto_str }}</small>
-                        </a>
+                        {% elif item.tipo == 'tarefa_servico' %}
+                            <div class="list-group-item list-group-item-action" style="cursor: pointer;"
+                                 data-bs-toggle="modal" data-bs-target="#servicoMovimentacaoModal"
+                                 data-url-json="{% url 'gestao:get_movimentacao_servico_json' item.pk %}"
+                                 data-url-edit="{% url 'gestao:editar_movimentacao_servico_ajax' item.pk %}"
+                                 data-url-delete="{% url 'gestao:excluir_movimentacao_servico' item.pk %}">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <span class="fw-bold text-danger">{{ item.titulo }}</span>
+                                    <small>Venceu em: {{ item.data|date:"d/m/Y" }}</small>
+                                </div>
+                                <small class="d-block text-muted">{{ item.objeto_str }}</small>
+                            </div>
+                        {% elif item.tipo == 'prazo_servico' %}
+                            <div class="list-group-item list-group-item-action" style="cursor: pointer;"
+                                 data-bs-toggle="modal" data-bs-target="#servicoModal"
+                                 data-url-json="{% url 'gestao:get_servico_json' item.pk %}"
+                                 data-url-edit="{% url 'gestao:editar_servico_ajax' item.pk %}">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <span class="fw-bold text-danger">{{ item.titulo }}</span>
+                                    <small>Venceu em: {{ item.data|date:"d/m/Y" }}</small>
+                                </div>
+                                <small class="d-block text-muted">{{ item.objeto_str }}</small>
+                            </div>
+                        {% else %}
+                             <a href="{{ item.url }}" class="list-group-item list-group-item-action">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <span class="fw-bold text-danger">{{ item.titulo }}</span>
+                                    <small>Venceu em: {{ item.data|date:"d/m/Y" }}</small>
+                                </div>
+                                <small class="d-block text-muted">{{ item.objeto_str }}</small>
+                            </a>
+                        {% endif %}
                     {% empty %}
                         <div class="list-group-item text-muted p-4 text-center">
                             <i class="bi bi-patch-check-fill text-success fs-2"></i>
@@ -135,13 +167,48 @@
                 </div>
                 <div class="list-group list-group-flush">
                     {% for item in itens_para_hoje %}
-                        <a href="{{ item.url }}" class="list-group-item list-group-item-action">
-                            <div class="d-flex w-100 justify-content-between">
-                                <span class="fw-bold">{{ item.titulo }}</span>
-                                {% if item.hora %}<small class="badge bg-primary rounded-pill">{{ item.hora|time:"H:i" }}</small>{% endif %}
+                        {% if item.tipo == 'audiencia' or item.tipo == 'prazo_processo' %}
+                             <div class="list-group-item list-group-item-action" style="cursor: pointer;"
+                                 data-bs-toggle="modal" data-bs-target="#movimentacaoModal"
+                                 data-url-json="{% url 'gestao:get_movimentacao_json' item.pk %}"
+                                 data-url-edit="{% url 'gestao:editar_movimentacao_ajax' item.pk %}"
+                                 data-url-delete="{% url 'gestao:excluir_movimentacao' item.pk %}">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <span class="fw-bold">{{ item.titulo }}</span>
+                                    {% if item.hora %}<small class="badge bg-primary rounded-pill">{{ item.hora|time:"H:i" }}</small>{% endif %}
+                                </div>
+                                <small class="d-block text-muted">{{ item.objeto_str }}</small>
                             </div>
-                            <small class="d-block text-muted">{{ item.objeto_str }}</small>
-                        </a>
+                        {% elif item.tipo == 'tarefa_servico' %}
+                            <div class="list-group-item list-group-item-action" style="cursor: pointer;"
+                                 data-bs-toggle="modal" data-bs-target="#servicoMovimentacaoModal"
+                                 data-url-json="{% url 'gestao:get_movimentacao_servico_json' item.pk %}"
+                                 data-url-edit="{% url 'gestao:editar_movimentacao_servico_ajax' item.pk %}"
+                                 data-url-delete="{% url 'gestao:excluir_movimentacao_servico' item.pk %}">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <span class="fw-bold">{{ item.titulo }}</span>
+                                </div>
+                                <small class="d-block text-muted">{{ item.objeto_str }}</small>
+                            </div>
+                        {% elif item.tipo == 'prazo_servico' %}
+                            <div class="list-group-item list-group-item-action" style="cursor: pointer;"
+                                 data-bs-toggle="modal" data-bs-target="#servicoModal"
+                                 data-url-json="{% url 'gestao:get_servico_json' item.pk %}"
+                                 data-url-edit="{% url 'gestao:editar_servico_ajax' item.pk %}">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <span class="fw-bold">{{ item.titulo }}</span>
+                                </div>
+                                <small class="d-block text-muted">{{ item.objeto_str }}</small>
+                            </div>
+                        {% else %}
+                            <a href="{{ item.url }}" class="list-group-item list-group-item-action">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <span class="fw-bold">{{ item.titulo }}</span>
+                                    {% if item.hora %}<small class="badge bg-primary rounded-pill">{{ item.hora|time:"H:i" }}</small>{% endif %}
+                                </div>
+                                <small class="d-block text-muted">{{ item.objeto_str }}</small>
+                            </a>
+                        {% endif %}
                     {% empty %}
                         <div class="list-group-item text-muted p-4 text-center">
                             <i class="bi bi-cup-hot-fill text-info fs-2"></i>
@@ -164,14 +231,36 @@
                 <div class="card-body">
                     <h5 class="card-subtitle mb-2"><i class="bi bi-calendar2-week-fill me-2"></i>Próximas Audiências</h5>
                     <div class="list-group list-group-flush">
-                        {% for aud in proximas_audiencias|slice:":5" %} {# Limita para as 5 próximas #}
-                            <a href="{{ aud.url }}" class="list-group-item list-group-item-action px-0">
-                                <div class="d-flex w-100 justify-content-between">
-                                    <h6 class="mb-1">{{ aud.titulo }}</h6>
-                                    <small>{{ aud.data|date:"d/m" }}</small>
-                                </div>
-                                <p class="mb-1 small text-muted">{{ aud.objeto_str }}</p>
-                            </a>
+                        {% for aud in proximas_audiencias|slice:":5" %}
+                            <div class="list-group-item list-group-item-action px-0 py-3" style="cursor: pointer;"
+                                 data-bs-toggle="modal" data-bs-target="#movimentacaoModal"
+                                 data-url-json="{% url 'gestao:get_movimentacao_json' aud.pk %}"
+                                 data-url-edit="{% url 'gestao:editar_movimentacao_ajax' aud.pk %}"
+                                 data-url-delete="{% url 'gestao:excluir_movimentacao' aud.pk %}">
+                                <table class="table table-borderless table-sm mb-0">
+                                    <tbody>
+                                        <tr>
+                                            <td class="p-0" style="width: 100%;">
+                                                <div class="d-flex align-items-center">
+                                                    <h6 class="mb-0 text-truncate" title="{{ aud.titulo }}">{{ aud.titulo }}</h6>
+                                                    {% if aud.link_referencia %}
+                                                        <a href="{{ aud.link_referencia }}" target="_blank" class="badge bg-info text-decoration-none ms-2" onclick="event.stopPropagation();">Link</a>
+                                                    {% endif %}
+                                                </div>
+                                            </td>
+                                            <td class="p-0 text-end"><span class="fw-bold text-nowrap">{{ aud.data|date:"d/m" }}</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="p-0 pt-1" colspan="2">
+                                                <small class="text-muted d-block">Proc. {{ aud.numero_processo|default:"N/A" }}</small>
+                                                <small class="text-muted d-block">{{ aud.nome_parte }}</small>
+                                            </td>
+                                        </tr>
+
+                                        {# A linha que continha o link foi removida daqui #}
+                                    </tbody>
+                                </table>
+                            </div>
                         {% empty %}
                             <div class="list-group-item text-muted small px-0">Nenhuma audiência futura marcada.</div>
                         {% endfor %}
@@ -184,14 +273,39 @@
                 <div class="card-body">
                     <h5 class="card-subtitle mb-2"><i class="bi bi-calendar-x me-2"></i>Prazos Futuros</h5>
                     <div class="list-group list-group-flush">
-                        {% for prazo in proximos_prazos|slice:":5" %} {# Limita para os 5 próximos #}
-                            <a href="{{ prazo.url }}" class="list-group-item list-group-item-action px-0">
-                                <div class="d-flex w-100 justify-content-between">
-                                    <h6 class="mb-1">{{ prazo.titulo }}</h6>
-                                    <small>{{ prazo.data|date:"d/m" }}</small>
+                        {% for prazo in proximos_prazos|slice:":5" %}
+                            {% if prazo.tipo == 'prazo_processo' %}
+                                <div class="list-group-item list-group-item-action px-0" style="cursor: pointer;"
+                                     data-bs-toggle="modal" data-bs-target="#movimentacaoModal"
+                                     data-url-json="{% url 'gestao:get_movimentacao_json' prazo.pk %}"
+                                     data-url-edit="{% url 'gestao:editar_movimentacao_ajax' prazo.pk %}"
+                                     data-url-delete="{% url 'gestao:excluir_movimentacao' prazo.pk %}">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h6 class="mb-1">{{ prazo.titulo }}</h6>
+                                        <small>{{ prazo.data|date:"d/m" }}</small>
+                                    </div>
+                                    <p class="mb-1 small text-muted">{{ prazo.objeto_str }}</p>
                                 </div>
-                                <p class="mb-1 small text-muted">{{ prazo.objeto_str }}</p>
-                            </a>
+                            {% elif prazo.tipo == 'prazo_servico' %}
+                                <div class="list-group-item list-group-item-action px-0" style="cursor: pointer;"
+                                     data-bs-toggle="modal" data-bs-target="#servicoModal"
+                                     data-url-json="{% url 'gestao:get_servico_json' prazo.pk %}"
+                                     data-url-edit="{% url 'gestao:editar_servico_ajax' prazo.pk %}">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h6 class="mb-1">{{ prazo.titulo }}</h6>
+                                        <small>{{ prazo.data|date:"d/m" }}</small>
+                                    </div>
+                                    <p class="mb-1 small text-muted">{{ prazo.objeto_str }}</p>
+                                </div>
+                            {% else %}
+                                <a href="{{ prazo.url }}" class="list-group-item list-group-item-action px-0">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h6 class="mb-1">{{ prazo.titulo }}</h6>
+                                        <small>{{ prazo.data|date:"d/m" }}</small>
+                                    </div>
+                                    <p class="mb-1 small text-muted">{{ prazo.objeto_str }}</p>
+                                </a>
+                            {% endif %}
                         {% empty %}
                             <div class="list-group-item text-muted small px-0">Nenhum prazo futuro nos próximos 30 dias.</div>
                         {% endfor %}
@@ -204,11 +318,50 @@
                 <div class="card-body">
                     <h5 class="card-subtitle mb-2"><i class="bi bi-list-task me-2"></i>Tarefas Gerais Pendentes</h5>
                     <div class="list-group list-group-flush">
-                        {% for tarefa in tarefas_pendentes|slice:":5" %} {# Limita para as 5 mais recentes #}
-                            <a href="{{ tarefa.url }}" class="list-group-item list-group-item-action px-0">
-                                <h6 class="mb-1">{{ tarefa.titulo }}</h6>
-                                <p class="mb-1 small text-muted">{{ tarefa.objeto_str }}</p>
-                            </a>
+                        {% for tarefa in tarefas_pendentes|slice:":5" %}
+                             {% if tarefa.tipo == 'tarefa_servico' %}
+                                <div class="list-group-item list-group-item-action px-0" style="cursor: pointer;"
+                                     data-bs-toggle="modal" data-bs-target="#servicoMovimentacaoModal"
+                                     data-url-json="{% url 'gestao:get_movimentacao_servico_json' tarefa.pk %}"
+                                     data-url-edit="{% url 'gestao:editar_movimentacao_servico_ajax' tarefa.pk %}"
+                                     data-url-delete="{% url 'gestao:excluir_movimentacao_servico' tarefa.pk %}">
+
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h6 class="mb-1">{{ tarefa.titulo }}</h6>
+
+                                        {% if tarefa.status == 'PENDENTE' %}
+                                            <span class="badge bg-warning-subtle text-warning-emphasis rounded-pill">Pendente</span>
+                                        {% elif tarefa.status == 'EM_ANDAMENTO' %}
+                                            <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill">Em Andamento</span>
+                                        {% else %}
+                                            {# Adicionado para exibir qualquer outro status que possa surgir #}
+                                            <span class="badge bg-secondary-subtle text-secondary-emphasis rounded-pill">{{ tarefa.status|default:"N/A" }}</span>
+                                        {% endif %}
+                                        </div>
+                                    <p class="mb-1 small text-muted">{{ tarefa.objeto_str }}</p>
+                                </div>
+                            {% else %}
+                                {# Este é o bloco ELSE que precisa ser ajustado #}
+                                <a href="{{ tarefa.url }}" class="list-group-item list-group-item-action px-0">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h6 class="mb-1">{{ tarefa.titulo }}</h6>
+                                        {# Adicionar a lógica de badge de status aqui também #}
+                                        {% if tarefa.status == 'PENDENTE' %}
+                                            <span class="badge bg-warning-subtle text-warning-emphasis rounded-pill">Pendente</span>
+                                        {% elif tarefa.status == 'EM_ANDAMENTO' %}
+                                            <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill">Em Andamento</span>
+                                        {% elif tarefa.status == 'CONCLUIDA' %} {# Para movimentações de processo que foram concluídas #}
+                                            <span class="badge bg-success-subtle text-success-emphasis rounded-pill">Concluída</span>
+                                        {% elif tarefa.status == 'VENCIDO' %} {# Para prazos de serviço vencidos #}
+                                            <span class="badge bg-danger-subtle text-danger-emphasis rounded-pill">Vencido</span>
+                                        {% else %}
+                                            {# Fallback para qualquer outro status #}
+                                            <span class="badge bg-secondary-subtle text-secondary-emphasis rounded-pill">{{ tarefa.status|default:"N/A" }}</span>
+                                        {% endif %}
+                                    </div>
+                                    <p class="mb-1 small text-muted">{{ tarefa.objeto_str }}</p>
+                                </a>
+                            {% endif %}
                         {% empty %}
                             <div class="list-group-item text-muted small px-0">Nenhuma tarefa geral pendente.</div>
                         {% endfor %}
@@ -246,4 +399,21 @@
         </div>
     </div>
 </div>
+
+
+{% include 'gestao/partials/_modal_editar_movimentacao.html' %}
+{% include 'gestao/partials/_modal_editar_servico.html' %}
+{% include 'gestao/partials/_modal_editar_movimentacao_servico.html' %}
+{% include 'gestao/partials/_managerial_modal.html' %}
+
 {% endblock %}
+
+
+{% block javascript %}
+    {{ block.super }}
+    {% include 'gestao/partials/_detalhe_movimentacao_modal_js.html' %}
+    {% include 'gestao/partials/_lista_servicos_modal_js.html' %}
+    {% include 'gestao/partials/_detalhe_servico_modal_js.html' %}
+    {% include 'gestao/partials/_managerial_modal_js.html' %}
+
+    {% endblock %}

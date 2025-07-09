@@ -14,7 +14,8 @@ from django.contrib.auth.models import Group
 from .models import (
     Processo, Cliente, TipoAcao, Movimentacao, TipoMovimentacao,
     Pagamento, Servico, TipoServico, MovimentacaoServico, ContratoHonorarios,
-    ModeloDocumento, Documento, ParteProcesso, Recurso, Incidente, EscritorioConfiguracao, AreaProcesso, UsuarioPerfil
+    ModeloDocumento, Documento, ParteProcesso, Recurso, Incidente, EscritorioConfiguracao, AreaProcesso, UsuarioPerfil,
+    LancamentoFinanceiro
 )
 
 # Ferramenta do Django para criar conjuntos de formulários (formsets) a partir de
@@ -182,14 +183,25 @@ class DocumentoForm(forms.ModelForm):
     """Formulário para gerar ou editar documentos vinculados a um processo."""
     class Meta:
         model = Documento
-        # O campo 'conteudo' é um RichTextUploadingField, que já vem com seu próprio widget.
-        # Por isso, não precisa ser especificado aqui, a menos que se queira sobrescrevê-lo.
         fields = ['titulo', 'tipo_documento', 'data_protocolo', 'arquivo_upload', 'conteudo']
         widgets = {
             'titulo': forms.TextInput(attrs={'class': 'form-control'}),
             'tipo_documento': forms.Select(attrs={'class': 'form-select'}),
             'data_protocolo': forms.DateTimeInput(format='%Y-%m-%dT%H:%M', attrs={'type': 'datetime-local', 'class': 'form-control'}),
             'arquivo_upload': forms.FileInput(attrs={'class': 'form-control'}),
+        }
+
+# ===== INÍCIO DA CORREÇÃO =====
+# Adicione este novo formulário, mais simples e específico para a geração
+class GerarDocumentoForm(forms.ModelForm):
+    """Formulário simplificado, usado apenas para a criação inicial do documento a partir de um modelo."""
+    class Meta:
+        model = Documento
+        # Incluímos apenas os campos que o usuário edita nesta tela específica
+        fields = ['titulo', 'conteudo']
+        widgets = {
+            'titulo': forms.TextInput(attrs={'class': 'form-control'}),
+            # O widget do 'conteudo' (CKEditor) já é definido automaticamente pelo RichTextUploadingField
         }
 
 class RecursoForm(forms.ModelForm):
@@ -259,17 +271,25 @@ class ServicoForm(forms.ModelForm):
             'descricao': forms.TextInput(attrs={'class': 'form-control'}),
             'recorrente': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'prazo': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+
         }
 
 
 class ServicoEditForm(forms.ModelForm):
     """Formulário completo para a edição de um serviço existente."""
+
     class Meta:
         model = Servico
-        fields = ['responsavel', 'descricao', 'data_inicio', 'recorrente', 'prazo', 'data_encerramento', 'concluido', 'ativo']
+        # --- ADICIONE 'codigo_servico_municipal' À LISTA ---
+        fields = [
+            'responsavel', 'descricao', 'data_inicio', 'recorrente', 'prazo',
+            'data_encerramento', 'concluido', 'ativo', 'codigo_servico_municipal'
+        ]
         widgets = {
             'responsavel': forms.Select(attrs={'class': 'form-select'}),
             'descricao': forms.TextInput(attrs={'class': 'form-control'}),
+            # --- ADICIONE O WIDGET PARA O NOVO CAMPO ---
+            'codigo_servico_municipal': forms.TextInput(attrs={'class': 'form-control'}),
             'data_inicio': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
             'recorrente': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'prazo': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
@@ -277,6 +297,7 @@ class ServicoEditForm(forms.ModelForm):
             'concluido': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'ativo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
+
 
 class MovimentacaoServicoForm(forms.ModelForm):
     """Formulário para registrar andamentos e tarefas de um serviço."""
@@ -292,13 +313,18 @@ class MovimentacaoServicoForm(forms.ModelForm):
             'prazo_final': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
         }
 
-# --- ESTA É A CLASSE QUE ESTAVA FALTANDO NO SEU ARQUIVO ---
+
 class MovimentacaoForm(forms.ModelForm):
     """Formulário para andamentos, tarefas e prazos de um processo."""
+
     class Meta:
         model = Movimentacao
-        # O campo 'hora_prazo' foi adicionado à lista de campos.
-        fields = ['tipo_movimentacao', 'titulo', 'detalhes', 'data_publicacao', 'dias_prazo', 'data_prazo_final', 'hora_prazo', 'responsavel', 'status']
+        fields = [
+            'tipo_movimentacao', 'titulo', 'detalhes', 'data_publicacao',
+            'dias_prazo', 'data_prazo_final', 'hora_prazo', 'responsavel',
+            'status', 'link_referencia'
+        ]
+        # ... o dicionário de widgets permanece o mesmo ...
         widgets = {
             'tipo_movimentacao': forms.Select(attrs={'class': 'form-select select2'}),
             'titulo': forms.TextInput(attrs={'class': 'form-control'}),
@@ -306,12 +332,40 @@ class MovimentacaoForm(forms.ModelForm):
             'data_publicacao': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
             'dias_prazo': forms.NumberInput(attrs={'class': 'form-control'}),
             'data_prazo_final': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
-            # Widget para o novo campo 'hora_prazo' adicionado.
             'hora_prazo': forms.TimeInput(format='%H:%M', attrs={'type': 'time', 'class': 'form-control'}),
             'responsavel': forms.Select(attrs={'class': 'form-select'}),
+            'link_referencia': forms.URLInput(
+                attrs={'class': 'form-control', 'placeholder': 'https://tribunal.jus.br/consulta/...'}),
             'status': forms.Select(attrs={'class': 'form-select'}),
         }
 
+    # =======================================================
+    #     ADICIONE ESTE MÉTODO À CLASSE MOVIMENTACAOFORM
+    # =======================================================
+    def clean_tipo_movimentacao(self):
+        """
+        Processa o valor do campo 'tipo_movimentacao'.
+        Se for um número, trata como um ID de um objeto existente.
+        Se for um texto, cria um novo objeto TipoMovimentacao.
+        """
+        # Pega o dado enviado pelo formulário
+        tipo_movimentacao_valor = self.cleaned_data.get('tipo_movimentacao')
+
+        # Se o valor for um número (string contendo apenas dígitos),
+        # significa que o usuário selecionou uma opção existente.
+        if isinstance(tipo_movimentacao_valor, TipoMovimentacao):
+            # O ModelChoiceField já converteu para um objeto, então está tudo certo
+            return tipo_movimentacao_valor
+
+        # Se for um texto, é uma nova opção digitada pelo usuário.
+        # Usamos get_or_create para criar o novo tipo ou usar um que já exista com o mesmo nome.
+        # A função retorna uma tupla (objeto, foi_criado)
+        novo_tipo, criado = TipoMovimentacao.objects.get_or_create(
+            nome=str(tipo_movimentacao_valor).strip()
+        )
+
+        # O método clean_ deve sempre retornar o valor final limpo.
+        return novo_tipo
 
 
 class ServicoConcluirForm(forms.ModelForm):
@@ -342,17 +396,54 @@ class ContratoHonorariosForm(forms.ModelForm):
             'percentual_exito': forms.NumberInput(attrs={'class': 'form-control'}),
         }
 
+from django import forms
+# from .models import Pagamento # Certifique-se de importar seu modelo Pagamento
+
 class PagamentoForm(forms.ModelForm):
     """Formulário para registrar o recebimento de um pagamento de um lançamento."""
+
+    # Defina as escolhas e o campo forma_pagamento DIRETAMENTE na classe PagamentoForm,
+    # antes da classe Meta.
+    FORMA_PAGAMENTO_CHOICES = [
+        ('PIX', 'Pix'),
+        ('DINHEIRO', 'Dinheiro'),
+        ('CARTAO', 'Cartão'),
+        ('DEPOSITO', 'Depósito'),
+        ('OUTRO', 'Outro'),
+    ]
+
+    forma_pagamento = forms.ChoiceField(
+        choices=FORMA_PAGAMENTO_CHOICES,
+        required=False,
+        label="Tipo de Pagamento",
+        # Adicione o widget aqui para aplicar classes CSS
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+
     class Meta:
         model = Pagamento
         fields = ['data_pagamento', 'valor_pago', 'forma_pagamento', 'observacoes']
         widgets = {
             'data_pagamento': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
-            'valor_pago': forms.NumberInput(attrs={'class': 'form-control'}),
-            'forma_pagamento': forms.TextInput(attrs={'class': 'form-control'}),
+            'valor_pago': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}), # Adicione step='0.01' para valores monetários
+            # Não defina 'forma_pagamento' aqui novamente, pois já foi definido acima como ChoiceField
             'observacoes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk:  # Se for um novo pagamento (não edição)
+            self.fields['forma_pagamento'].initial = 'PIX'  # Define 'Pix' como padrão
+
+        # Adicionalmente, você pode garantir que todos os campos tenham a classe 'form-control'
+        # Isso é uma boa prática para formulários Bootstrap
+        for field_name, field in self.fields.items():
+            if isinstance(field.widget, forms.TextInput) or \
+               isinstance(field.widget, forms.NumberInput) or \
+               isinstance(field.widget, forms.Textarea) or \
+               isinstance(field.widget, forms.Select) or \
+               isinstance(field.widget, forms.DateInput):
+                field.widget.attrs.update({'class': 'form-control'})
 
 # -----------------------------------------------------------------------------
 # FORMULÁRIOS DE FERRAMENTAS (CÁLCULOS, MODELOS)
@@ -512,3 +603,109 @@ class UsuarioPerfilForm(forms.ModelForm):
             'data_admissao': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
             'foto': forms.FileInput(attrs={'class': 'form-control'}),
         }
+
+class LancamentoFinanceiroForm(forms.ModelForm):
+    """
+    Formulário para o cadastro manual de contas a pagar e a receber
+    que não estão vinculadas a contratos.
+    """
+    # Adicionamos o campo de cliente, que é obrigatório
+    cliente = forms.ModelChoiceField(
+        queryset=Cliente.objects.all(),
+        widget=forms.Select(attrs={'class': 'form-select select2-modal'}),
+        required=False,
+        label="Cliente (Opcional)"
+    )
+
+    class Meta:
+        model = LancamentoFinanceiro
+        # Campos que o usuário poderá preencher manualmente
+        fields = [
+            'descricao', 'valor', 'data_vencimento', 'tipo', 'cliente',
+            'processo', 'servico', 'categoria'
+        ]
+        widgets = {
+            'descricao': forms.TextInput(attrs={'class': 'form-control'}),
+            'valor': forms.NumberInput(attrs={'class': 'form-control'}),
+            'data_vencimento': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+            'tipo': forms.Select(attrs={'class': 'form-select'}),
+            # Select2 para os campos de relacionamento, para facilitar a busca
+            'processo': forms.Select(attrs={'class': 'form-select select2-modal'}),
+            'servico': forms.Select(attrs={'class': 'form-select select2-modal'}),
+            'categoria': forms.Select(attrs={'class': 'form-select'}),  # <--- ADICIONE ESTE WIDGET
+
+        }
+        labels = {
+            'processo': 'Vincular a um Processo (Opcional)',
+            'servico': 'Vincular a um Serviço (Opcional)',
+        }
+
+
+class DespesaTipoForm(forms.Form):
+    """Formulário simples para a seleção inicial do tipo de despesa no wizard."""
+    TIPO_DESPESA_CHOICES = [
+        ('', 'Selecione...'),
+        ('pontual', 'Pontual (Conta única)'),
+        ('recorrente_fixa', 'Recorrente Fixa (Aluguel, Salário)'),
+        ('recorrente_variavel', 'Recorrente Variável (Luz, Água)'),
+    ]
+    tipo_despesa = forms.ChoiceField(
+        choices=TIPO_DESPESA_CHOICES,
+        label="Qual o tipo de despesa?",
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    categoria = forms.ChoiceField(
+        choices=LancamentoFinanceiro.CATEGORIA_CHOICES, # Reutiliza as escolhas do modelo
+        label="Categoria da Despesa",
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+class DespesaPontualForm(forms.Form):
+    """Formulário para despesas pontuais."""
+    # NOVO: Adicione o campo cliente
+    cliente = forms.ModelChoiceField(
+        queryset=Cliente.objects.all(),
+        required=False, # Definido como opcional no formulário
+        label="Cliente Relacionado (Opcional)",
+        widget=forms.Select(attrs={'class': 'form-select select2-despesa-wizard'}) # Adicione uma classe para Select2
+    )
+    descricao = forms.CharField(label="Descrição da Despesa", widget=forms.TextInput(attrs={'class': 'form-control'}))
+    valor = forms.DecimalField(label="Valor (R$)", max_digits=12, decimal_places=2,
+                               widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}))
+    data_vencimento = forms.DateField(label="Data de Vencimento",
+                                      widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}))
+
+class DespesaRecorrenteFixaForm(forms.Form):
+    """Formulário para despesas recorrentes fixas."""
+    # NOVO: Adicione o campo cliente
+    cliente = forms.ModelChoiceField(
+        queryset=Cliente.objects.all(),
+        required=False,
+        label="Cliente Relacionado (Opcional)",
+        widget=forms.Select(attrs={'class': 'form-select select2-despesa-wizard'})
+    )
+    descricao = forms.CharField(label="Descrição da Despesa", widget=forms.TextInput(attrs={'class': 'form-control'}))
+    valor_recorrente = forms.DecimalField(label="Valor Fixo Mensal (R$)", max_digits=12, decimal_places=2,
+                                          widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}))
+    dia_vencimento_recorrente = forms.IntegerField(label="Dia do Vencimento no Mês", min_value=1, max_value=31,
+                                                   widget=forms.NumberInput(attrs={'class': 'form-control'}))
+    data_inicio_recorrencia = forms.DateField(label="Início da Recorrência",
+                                              widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}))
+    data_fim_recorrencia = forms.DateField(label="Fim da Recorrência (Opcional)", required=False,
+                                           widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}))
+
+class DespesaRecorrenteVariavelForm(forms.Form):
+    """Formulário para despesas recorrentes variáveis (lançamento do mês atual)."""
+    # NOVO: Adicione o campo cliente
+    cliente = forms.ModelChoiceField(
+        queryset=Cliente.objects.all(),
+        required=False,
+        label="Cliente Relacionado (Opcional)",
+        widget=forms.Select(attrs={'class': 'form-select select2-despesa-wizard'})
+    )
+    descricao = forms.CharField(label="Descrição da Despesa", widget=forms.TextInput(attrs={'class': 'form-control'}))
+    valor = forms.DecimalField(label="Valor (R$)", max_digits=12, decimal_places=2,
+                               widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}))
+    data_vencimento = forms.DateField(label="Data de Vencimento",
+                                      widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}))

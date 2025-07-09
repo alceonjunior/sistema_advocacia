@@ -10,7 +10,7 @@
         <p class="text-muted mb-0">Ajuste as informações para: <strong>{{ servico.descricao|truncatechars:50 }}</strong></p>
     </div>
     <div>
-        <a href="{% url 'detalhe_servico' pk=servico.pk %}" class="btn btn-secondary"><i class="bi bi-x-lg"></i> Cancelar</a>
+        <a href="{% url 'gestao:detalhe_servico' pk=servico.pk %}" class="btn btn-secondary"><i class="bi bi-x-lg"></i> Cancelar</a>
     </div>
 </div>
 
@@ -82,7 +82,7 @@
     </div>
 
     <div class="mt-4 text-end">
-        <a href="{% url 'detalhe_servico' pk=servico.pk %}" class="btn btn-secondary">Cancelar</a>
+        <a href="{% url 'gestao:detalhe_servico' pk=servico.pk %}" class="btn btn-secondary">Cancelar</a>
         <button type="submit" class="btn btn-primary px-4">Salvar Alterações</button>
     </div>
 </form>

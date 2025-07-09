@@ -1,0 +1,104 @@
+<div class="modal fade" id="managerialModal" tabindex="-1" aria-labelledby="managerialModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="managerialModalLabel">Detalhes</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="content-processos" class="filter-content" style="display: none;">
+                    <ul class="list-group list-group-flush">
+                        {% for processo in lista_processos_ativos %}
+                            <a href="{{ processo.get_absolute_url }}" class="list-group-item list-group-item-action">
+                                <div class="d-flex justify-content-between">
+                                    <span class="fw-bold">{{ processo.get_polo_ativo_display|default:processo.descricao_caso|truncatechars:40 }}</span>
+                                    <small class="text-muted">Proc. {{ processo.numero_processo|default:"N/A" }}</small>
+                                </div>
+                                <small class="d-block">{{ processo.tipo_acao|default:"-" }}</small>
+                            </a>
+                        {% empty %}
+                            <li class="list-group-item">Nenhum processo ativo.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+
+                <div id="content-servicos" class="filter-content" style="display: none;">
+                    <ul class="list-group list-group-flush">
+                        {% for servico in lista_servicos_ativos %}
+                            <div class="list-group-item list-group-item-action" style="cursor: pointer;"
+                                 data-bs-toggle="modal"
+                                 data-bs-target="#servicoModal"
+                                 data-url-json="{% url 'gestao:get_servico_json' servico.pk %}"
+                                 data-url-edit="{% url 'gestao:editar_servico_ajax' servico.pk %}">
+                                <div class="d-flex justify-content-between">
+                                    <span class="fw-bold">{{ servico.descricao }}</span>
+                                    {% if servico.prazo %}<small class="text-danger">Prazo: {{ servico.prazo|date:"d/m/Y" }}</small>{% endif %}
+                                </div>
+                                <small class="d-block text-muted">{{ servico.cliente.nome_completo }}</small>
+                            </div>
+                        {% empty %}
+                            <li class="list-group-item">Nenhum serviço em andamento.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+
+                <div id="content-pendencias" class="filter-content" style="display: none;">
+                    <ul class="list-group list-group-flush">
+                        {% for grupo in lista_total_pendencias %}
+
+                            {% if grupo.tipo_grupo == 'processo' %}
+                                <div class="list-group-item list-group-item-action" style="cursor: pointer;"
+                                     data-bs-toggle="modal" data-bs-target="#movimentacaoModal"
+                                     data-url-json="{% url 'gestao:get_movimentacao_json' grupo.item.pk %}"
+                                     data-url-edit="{% url 'gestao:editar_movimentacao_ajax' grupo.item.pk %}"
+                                     data-url-delete="{% url 'gestao:excluir_movimentacao' grupo.item.pk %}">
+                                    <div class="d-flex justify-content-between">
+                                        <span class="fw-bold {% if grupo.item.data < hoje %}text-danger{% endif %}">{{ grupo.item.titulo }}</span>
+                                        <small class="fw-bold {% if grupo.item.data < hoje %}text-danger{% endif %}">{{ grupo.item.data|date:"d/m/Y" }}</small>
+                                    </div>
+                                    <small class="d-block text-muted">{{ grupo.item.objeto_str }}</small>
+                                </div>
+                            {% endif %}
+
+                            {% if grupo.tipo_grupo == 'servico' %}
+                                {% if grupo.servico %}
+                                    <div class="list-group-item bg-light-subtle" style="cursor: pointer;"
+                                         data-bs-toggle="modal" data-bs-target="#servicoModal"
+                                         data-url-json="{% url 'gestao:get_servico_json' grupo.servico.pk %}"
+                                         data-url-edit="{% url 'gestao:editar_servico_ajax' grupo.servico.pk %}">
+                                        <div class="d-flex justify-content-between">
+                                            <span class="fw-bold {% if grupo.servico.data < hoje %}text-danger{% endif %}">{{ grupo.servico.titulo }}</span>
+                                            <small class="fw-bold {% if grupo.servico.data < hoje %}text-danger{% endif %}">{{ grupo.servico.data|date:"d/m/Y" }}</small>
+                                        </div>
+                                        <small class="d-block text-muted">{{ grupo.servico.objeto_str }}</small>
+                                    </div>
+                                {% endif %}
+
+                                {% for atividade in grupo.atividades %}
+                                    <div class="list-group-item list-group-item-action" style="cursor: pointer;"
+                                         data-bs-toggle="modal" data-bs-target="#servicoMovimentacaoModal"
+                                         data-url-json="{% url 'gestao:get_movimentacao_servico_json' atividade.pk %}"
+                                         data-url-edit="{% url 'gestao:editar_movimentacao_servico_ajax' atividade.pk %}"
+                                         data-url-delete="{% url 'gestao:excluir_movimentacao_servico' atividade.pk %}">
+                                        <div class="d-flex justify-content-between ps-3">
+                                            <span class="fw-bold {% if atividade.data < hoje %}text-danger{% endif %}">
+                                                <i class="bi bi-arrow-return-right me-2 text-muted"></i>{{ atividade.titulo }}
+                                            </span>
+                                            <small class="fw-bold {% if atividade.data < hoje %}text-danger{% endif %}">{{ atividade.data|date:"d/m/Y" }}</small>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+
+                        {% empty %}
+                            <li class="list-group-item">Nenhuma pendência encontrada.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>

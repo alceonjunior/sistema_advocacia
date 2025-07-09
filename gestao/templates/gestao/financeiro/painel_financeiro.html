@@ -1,0 +1,248 @@
+{% extends 'gestao/base.html' %}
+{% load static humanize l10n %}
+
+{% block title %}{{ titulo_pagina }}{% endblock %}
+
+{% block styles %}
+{{ block.super }}
+<style>
+    .kpi-card .valor {
+        font-size: 1.75rem;
+        font-weight: 600;
+    }
+    .kpi-card .valor.positivo { color: var(--bs-success); }
+    .kpi-card .valor.negativo { color: var(--bs-danger); }
+    .kpi-card .valor.neutro { color: var(--bs-body-color); }
+    .table-hover tbody tr:hover { background-color: #f8f9fa; }
+    .accordion-button:not(.collapsed) { background-color: var(--bs-light) !important; }
+    /* Este estilo não é mais estritamente necessário aqui, mas foi mantido para compatibilidade se outros modais usarem */
+    .form-section { display: none; }
+</style>
+{% endblock %}
+
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h2 d-flex align-items-center gap-2"><i class="bi bi-wallet2 text-primary"></i> {{ titulo_pagina }}</h1>
+    <div class="d-flex gap-2">
+        {# Botão "Nova Despesa" agora direciona para a página do wizard de despesas, passando a URL atual #}
+        <a href="{% url 'gestao:adicionar_despesa_wizard' %}?next={% url 'gestao:painel_financeiro' %}" class="btn btn-danger">
+            <i class="bi bi-arrow-down-circle me-1"></i> Nova Despesa
+        </a>
+        {# Botão "Nova Receita" continua chamando o modal "lancamentoModal" #}
+        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#lancamentoModal" data-tipo-lancamento="RECEITA">
+            <i class="bi bi-arrow-up-circle me-1"></i> Nova Receita
+        </button>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body p-3">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-5">
+                <label for="id_data_inicio" class="form-label small">Data Inicial</label>
+                <input type="date" name="data_inicio" class="form-control" id="id_data_inicio" value="{{ data_inicio|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-5">
+                <label for="id_data_fim" class="form-label small">Data Final</label>
+                <input type="date" name="data_fim" class="form-control" id="id_data_fim" value="{{ data_fim|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-2 d-grid">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Filtrar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-lg-3 col-md-6 mb-3"><div class="card shadow-sm kpi-card"><div class="card-body text-center p-3"><h6 class="card-subtitle text-muted mb-2">SALDO REALIZADO</h6><div class="valor {% if saldo_realizado > 0 %}positivo{% elif saldo_realizado < 0 %}negativo{% else %}neutro{% endif %}">R$ {{ saldo_realizado|floatformat:2|localize }}</div></div></div></div>
+    <div class="col-lg-3 col-md-6 mb-3"><div class="card shadow-sm kpi-card"><div class="card-body text-center p-3"><h6 class="card-subtitle text-muted mb-2">RECEITAS PREVISTAS</h6><div class="valor positivo">R$ {{ previsao_receitas|floatformat:2|localize }}</div></div></div></div>
+    <div class="col-lg-3 col-md-6 mb-3"><div class="card shadow-sm kpi-card"><div class="card-body text-center p-3"><h6 class="card-subtitle text-muted mb-2">DESPESAS PREVISTAS</h6><div class="valor negativo">R$ {{ previsao_despesas|floatformat:2|localize }}</div></div></div></div>
+    <div class="col-lg-3 col-md-6 mb-3"><div class="card shadow-sm kpi-card"><div class="card-body text-center p-3"><h6 class="card-subtitle text-muted mb-2">TOTAL INADIMPLENTE</h6><div class="valor negativo">R$ {{ total_inadimplencia|floatformat:2|localize }}</div></div></div></div>
+</div>
+
+<ul class="nav nav-tabs nav-tabs-bordered mb-3" id="financeiroTab" role="tablist">
+    <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#analise-cliente-pane"><i class="bi bi-people-fill me-2"></i>Análise por Cliente</button></li>
+    <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#inadimplencia-pane"><i class="bi bi-exclamation-triangle-fill me-2"></i>Inadimplência</button></li>
+    <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#contas-receber-pane"><i class="bi bi-graph-up-arrow me-2"></i>Contas a Receber</button></li>
+    <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#contas-pagar-pane"><i class="bi bi-graph-down-arrow me-2"></i>Contas a Pagar</button></li>
+</ul>
+
+<div class="tab-content" id="financeiroTabContent">
+    <div class="tab-pane fade show active" id="analise-cliente-pane" role="tabpanel">
+        <div class="accordion" id="accordionClientes">
+            {% for item in analise_por_cliente %}
+            <div class="accordion-item">
+                <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ item.cliente.pk }}"><div class="d-flex justify-content-between w-100 me-3"><span class="fw-bold">{{ item.cliente.nome_completo }}</span><span class="badge bg-success-subtle text-success-emphasis rounded-pill">Faturado: R$ {{ item.total_faturado_periodo|floatformat:2|localize }}</span></div></button></h2>
+                <div id="collapse-{{ item.cliente.pk }}" class="accordion-collapse collapse" data-bs-parent="#accordionClientes">
+                    <div class="accordion-body">
+                        <ul class="list-group">
+                            {% for processo in item.processos %}<li class="list-group-item d-flex justify-content-between align-items-center"><div><i class="bi bi-folder2-open me-2 text-muted"></i>Proc. {{ processo.processo__numero_processo }}</div><span class="badge bg-light text-dark">R$ {{ processo.total|floatformat:2|localize }}</span></li>{% endfor %}
+                            {% for servico in item.servicos %}<li class="list-group-item d-flex justify-content-between align-items-center"><div><i class="bi bi-briefcase-fill me-2 text-muted"></i>{{ servico.servico__descricao }}</div><span class="badge bg-light text-dark">R$ {{ servico.total|floatformat:2|localize }}</span></li>{% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            {% empty %}<div class="text-center p-4 text-muted">Nenhum faturamento de cliente no período selecionado.</div>{% endfor %}
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="inadimplencia-pane" role="tabpanel"><div class="card"><div class="card-body">{% include 'gestao/partials/_tabela_financeira_geral.html' with lancamentos=inadimplentes tipo="Lançamentos Inadimplentes" %}</div></div></div>
+
+    <div class="tab-pane fade" id="contas-receber-pane" role="tabpanel"><div class="card"><div class="card-body">{% include 'gestao/partials/_tabela_financeira_geral.html' with lancamentos=contas_a_receber tipo="Receitas" %}</div></div></div>
+
+    <div class="tab-pane fade" id="contas-pagar-pane" role="tabpanel">
+        <div class="card">
+            <div class="card-header d-flex justify-content-end">
+                {# Este link agora direciona para a página do wizard de despesas #}
+                <a href="{% url 'gestao:adicionar_despesa_wizard' %}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-sliders me-1"></i> Gerenciamento Avançado de Despesas
+                </a>
+            </div>
+            <div class="card-body">
+                {% include 'gestao/partials/_tabela_financeira_geral.html' with lancamentos=contas_a_pagar tipo="Despesas" %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal para adicionar Nova Receita/Despesa (Lançamento Financeiro) #}
+<div class="modal fade" id="lancamentoModal" tabindex="-1" aria-labelledby="lancamentoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            {# Ação para salvar o lançamento via AJAX (precisa de uma view @require_POST que aceite AJAX) #}
+            <form id="formLancamento" method="post" action="{% url 'gestao:adicionar_lancamento_financeiro_ajax' %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="lancamentoModalLabel">Novo Lançamento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    {# Div para exibir erros do formulário #}
+                    <div id="lancamentoFormErrors" class="alert alert-danger d-none p-2 small" role="alert"></div>
+
+                    <input type="hidden" name="tipo" id="id_tipo_lancamento"> {# Campo hidden para definir se é RECEITA ou DESPESA #}
+
+                    <div class="mb-3">
+                        <label for="id_descricao" class="form-label">Descrição</label>
+                        {{ form_lancamento.descricao }}
+                    </div>
+
+                    {# Adicionado campo de categoria #}
+                    <div class="mb-3">
+                        <label for="id_categoria" class="form-label">{{ form_lancamento.categoria.label }}</label>
+                        {{ form_lancamento.categoria }}
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="id_valor" class="form-label">Valor (R$)</label>
+                            {{ form_lancamento.valor }}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="id_data_vencimento" class="form-label">Data de Vencimento</label>
+                            {{ form_lancamento.data_vencimento }}
+                        </div>
+                    </div>
+                    <hr class="my-3">
+                    <p class="small text-muted mb-2">Vincular a um registro existente (opcional):</p>
+                    <div class="row g-3">
+                        <div class="col-md-4">{{ form_lancamento.cliente.label_tag }} {{ form_lancamento.cliente }}</div>
+                        <div class="col-md-4">{{ form_lancamento.processo.label_tag }} {{ form_lancamento.processo }}</div>
+                        <div class="col-md-4">{{ form_lancamento.servico.label_tag }} {{ form_lancamento.servico }}</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Lançamento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# O partial do modal de despesa foi removido daqui #}
+
+{% endblock %}
+
+
+{% block javascript %}
+<script>
+$(document).ready(function() {
+    // Lógica para o Modal de Lançamento (Receita/Despesa avulsa) - MANTIDA
+    const lancamentoModal = $('#lancamentoModal');
+    const lancamentoModalLabel = $('#lancamentoModalLabel');
+    const tipoLancamentoInput = $('#id_tipo_lancamento');
+    const lancamentoFormErrorsDiv = $('#lancamentoFormErrors'); // Div para erros
+
+    lancamentoModal.on('show.bs.modal', function(event) {
+        const button = $(event.relatedTarget);
+        const tipo = button.data('tipo-lancamento');
+
+        lancamentoFormErrorsDiv.addClass('d-none').empty(); // Limpa e oculta erros anteriores
+
+        if (tipo === 'RECEITA') {
+            lancamentoModalLabel.text('Adicionar Nova Receita');
+            tipoLancamentoInput.val('RECEITA');
+        } else {
+            lancamentoModalLabel.text('Adicionar Nova Despesa');
+            tipoLancamentoInput.val('DESPESA');
+        }
+
+        // Inicializa Select2 para campos dentro deste modal quando ele é aberto
+        lancamentoModal.find('.select2-modal').each(function() {
+            if (!$(this).data('select2')) { // Evita reinicializar
+                $(this).select2({
+                    theme: 'bootstrap-5',
+                    dropdownParent: lancamentoModal,
+                    placeholder: 'Selecione ou busque...',
+                    allowClear: true // Permite desmarcar a seleção
+                });
+            }
+        });
+    });
+
+    // Lógica para submissão AJAX do formulário de Lançamento Financeiro - MANTIDA
+    $('#formLancamento').on('submit', function(e) {
+        e.preventDefault();
+        const form = $(this);
+        const url = form.attr('action');
+        const formData = form.serialize();
+
+        $.ajax({
+            type: 'POST',
+            url: url,
+            data: formData,
+            success: function(response) {
+                if (response.status === 'success') {
+                    // Fechar o modal
+                    const modalInstance = bootstrap.Modal.getInstance(lancamentoModal[0]);
+                    modalInstance.hide();
+
+                    // Exibir mensagem de sucesso (opcional, pode ser via messages do Django após refresh)
+                    alert('Lançamento salvo com sucesso!');
+                    // Recarregar a página para atualizar os dados do painel
+                    window.location.reload();
+                } else if (response.status === 'error') {
+                    // Exibir erros no div de erros
+                    let errorsHtml = '<ul class="mb-0 list-unstyled">';
+                    for (const field in response.errors) {
+                        response.errors[field].forEach(error => {
+                            errorsHtml += `<li><small>${error.message}</small></li>`;
+                        });
+                    }
+                    lancamentoFormErrorsDiv.html(errorsHtml).removeClass('d-none');
+                }
+            },
+            error: function(xhr) {
+                console.error("Erro na requisição AJAX:", xhr.responseText);
+                lancamentoFormErrorsDiv.html('Ocorreu um erro ao salvar o lançamento. Tente novamente.').removeClass('d-none');
+            }
+        });
+    });
+
+    // Toda a lógica JavaScript relacionada ao modal de despesas (despesaModal, selectTipoDespesa, formDespesa, etc.) foi removida
+    // pois a funcionalidade foi movida para a página de wizard de despesas.
+});
+</script>
+{% endblock %}

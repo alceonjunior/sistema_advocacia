@@ -61,33 +61,83 @@ class ProcessoFilter(django_filters.FilterSet):
 
 
 class ServicoFilter(django_filters.FilterSet):
-    """Filtro para a lista de serviços."""
+    """
+    Filtro aprimorado para a lista de serviços, com múltiplos campos de busca.
+    """
+    # Campo de busca geral que procura em vários campos do modelo
     busca_geral = django_filters.CharFilter(
-        method='filtro_geral_servico',
-        label="Buscar por Descrição ou Cliente",
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Descrição ou nome do cliente'})
+        method='filter_busca_geral',
+        label='Buscar por Descrição, Cliente ou Tipo',
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Digite aqui...'})
     )
-    tipo_servico = django_filters.ModelChoiceFilter(
-        queryset=TipoServico.objects.all(),
-        label="Tipo de Serviço",
-        empty_label="Qualquer Tipo",
-        widget=forms.Select(attrs={'class': 'form-select'})
+
+    # Filtro por Cliente, usando um dropdown com busca (Select2)
+    cliente = django_filters.ModelChoiceFilter(
+        queryset=Cliente.objects.all(),
+        label='Cliente',
+        widget=forms.Select(attrs={'class': 'form-select select2'})
     )
-    concluido = django_filters.ChoiceFilter(
-        choices=[(True, 'Sim'), (False, 'Não')],
-        label='Concluído?',
+
+    # Filtro pelo usuário responsável pelo serviço
+    responsavel = django_filters.ModelChoiceFilter(
+        queryset=User.objects.filter(is_active=True).order_by('first_name', 'last_name'),
+        label='Responsável',
+        widget=forms.Select(attrs={'class': 'form-select select2'})
+    )
+
+    # Filtro para data de início (a partir de)
+    data_inicio_depois_de = django_filters.DateFilter(
+        field_name='data_inicio',
+        lookup_expr='gte',
+        label='Iniciado Após',
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
+    )
+
+    # Filtro para data de início (até)
+    data_inicio_antes_de = django_filters.DateFilter(
+        field_name='data_inicio',
+        lookup_expr='lte',
+        label='Iniciado Antes de',
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
+    )
+
+    # Filtro de status melhorado
+    status = django_filters.ChoiceFilter(
+        label='Status',
+        choices=(('em_andamento', 'Em Andamento'), ('concluido', 'Concluído')),
+        method='filter_status',
         widget=forms.Select(attrs={'class': 'form-select'}),
         empty_label="Todos"
     )
 
     class Meta:
         model = Servico
-        fields = ['busca_geral', 'tipo_servico', 'concluido']
+        # Definimos os campos aqui, mas a maior parte da lógica está customizada acima
+        # O tipo_servico será pego daqui, pois não precisa de lógica customizada
+        fields = ['busca_geral', 'cliente', 'responsavel', 'tipo_servico', 'status', 'data_inicio_depois_de', 'data_inicio_antes_de']
 
-    def filtro_geral_servico(self, queryset, name, value):
+    def filter_busca_geral(self, queryset, name, value):
+        """
+        Método customizado para a busca geral. Procura o valor em múltiplos campos.
+        """
+        if not value:
+            return queryset
         return queryset.filter(
-            Q(descricao__icontains=value) | Q(cliente__nome_completo__icontains=value)
+            Q(descricao__icontains=value) |
+            Q(cliente__nome_completo__icontains=value) |
+            Q(tipo_servico__nome__icontains=value)
         )
+
+    def filter_status(self, queryset, name, value):
+        """
+        Método customizado para filtrar por status (concluído ou em andamento).
+        """
+        if value == 'em_andamento':
+            return queryset.filter(concluido=False)
+        if value == 'concluido':
+            return queryset.filter(concluido=True)
+        return queryset
+
 
 
 class ClienteFilter(django_filters.FilterSet):

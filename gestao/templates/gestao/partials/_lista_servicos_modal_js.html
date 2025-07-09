@@ -1,0 +1,55 @@
+<script>
+$(document).ready(function () {
+    const servicoModalEl = $('#servicoModal');
+
+    servicoModalEl.on('show.bs.modal', function (event) {
+        const triggerElement = $(event.relatedTarget);
+        const form = $('#formEditarServico');
+
+        const jsonUrl = triggerElement.data('url-json');
+        const editUrl = triggerElement.data('url-edit');
+
+        form.attr('action', editUrl);
+        form[0].reset();
+
+        $.ajax({
+            url: jsonUrl,
+            type: 'GET',
+            success: function(data) {
+                // Preenche os campos
+                form.find('[name="responsavel"]').val(data.responsavel_id).trigger('change');
+                form.find('[name="descricao"]').val(data.descricao);
+                form.find('[name="data_inicio"]').val(data.data_inicio);
+                form.find('[name="prazo"]').val(data.prazo);
+                form.find('[name="data_encerramento"]').val(data.data_encerramento);
+
+                // Preenche os checkboxes
+                form.find('[name="recorrente"]').prop('checked', data.recorrente);
+                form.find('[name="concluido"]').prop('checked', data.concluido);
+                form.find('[name="ativo"]').prop('checked', data.ativo);
+            },
+            error: function(error) {
+                console.error('Erro ao buscar dados do serviço:', error);
+                alert('Não foi possível carregar os dados do serviço.');
+            }
+        });
+    });
+
+    $('#formEditarServico').on('submit', function(e) {
+        e.preventDefault();
+        const form = $(this);
+
+        $.ajax({
+            url: form.attr('action'),
+            type: 'POST',
+            data: form.serialize(),
+            success: function(response) {
+                window.location.reload();
+            },
+            error: function(xhr) {
+                alert('Ocorreu um erro ao salvar o serviço.');
+            }
+        });
+    });
+});
+</script>

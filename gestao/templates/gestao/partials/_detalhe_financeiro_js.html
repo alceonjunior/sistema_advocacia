@@ -28,22 +28,24 @@ document.addEventListener('DOMContentLoaded', function() {
         // Eles representam o processo/serviço pai da página atual.
 
         if (mode === 'add') {
-            const lancamentoId = button.dataset.lancamentoId;
+            // const lancamentoId = button.dataset.lancamentoId; // Não é mais necessário para a URL
             const lancamentoDescricao = button.dataset.lancamentoDescricao;
             const saldoDevedor = button.dataset.saldoDevedor;
+            const urlAdicao = button.dataset.urlAdicao; // <-- Nova linha
 
             modalLabel.textContent = 'Adicionar Novo Pagamento';
             modalLancamentoDescricao.textContent = `Para o lançamento: ${lancamentoDescricao}`;
-            pagamentoForm.action = `/adicionar_pagamento/${lancamentoId}/`;
+            pagamentoForm.action = urlAdicao; // <-- Usar a URL do data-attribute
             pagamentoForm.querySelector('#id_valor_pago').value = saldoDevedor.replace(',', '.');
 
         } else if (mode === 'edit') {
-            const pagamentoId = button.dataset.pagamentoId;
+            // const pagamentoId = button.dataset.pagamentoId; // Não é mais necessário para a URL
             const lancamentoDescricao = button.dataset.lancamentoDescricao;
+            const urlEdicao = button.dataset.urlEdicao; // <-- Nova linha
 
             modalLabel.textContent = 'Editar Pagamento';
             modalLancamentoDescricao.textContent = `Para o lançamento: ${lancamentoDescricao}`;
-            pagamentoForm.action = `/editar_pagamento/${pagamentoId}/`;
+            pagamentoForm.action = urlEdicao; // <-- Usar a URL do data-attribute
 
             pagamentoForm.querySelector('#id_data_pagamento').value = button.dataset.pagamentoData;
             pagamentoForm.querySelector('#id_valor_pago').value = button.dataset.pagamentoValor.replace(',', '.');

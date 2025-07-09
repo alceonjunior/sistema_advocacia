@@ -1,4 +1,5 @@
 {% extends 'gestao/base.html' %}
+
 {% load static %}
 
 {% block title %}Adicionar Novo Processo{% endblock %}
@@ -15,16 +16,33 @@
     .wizard-steps::before { content: ''; position: absolute; top: 20px; left: 0; right: 0; height: 2px; background-color: #e9ecef; z-index: -1; }
     .step-content { display: none; }
     .step-content.active { display: block; }
-    .modal-body-scrollable { max-height: 70vh; overflow-y: auto; }
 
-    /* --- Estilos da Seção de Partes (Aprimorados) --- */
-    .partes-column { background-color: #f8f9fa; border-radius: 0.5rem; padding: 1rem; min-height: 150px; height: 100%; }
+    /* --- Novos Estilos para a Seção de Partes --- */
+    .partes-column {
+        background-color: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .partes-list {
+        flex-grow: 1;
+        min-height: 150px;
+        margin-bottom: 1.5rem; /* Espaço entre a lista e o seletor */
+    }
 
     .parte-card {
         display: flex; align-items: center; gap: 0.75rem;
         background-color: white; border: 1px solid #e9ecef;
         border-left-width: 4px; border-radius: 0.375rem;
-        padding: 0.75rem 1rem; margin-bottom: 0.5rem;
+        padding: 0.75rem 1rem; margin-bottom: 0.75rem;
+        transition: transform 0.2s ease;
+    }
+    .parte-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 .125rem .25rem rgba(0,0,0,.075);
     }
     .parte-card.polo-ativo { border-left-color: var(--bs-success); }
     .parte-card.polo-passivo { border-left-color: var(--bs-danger); }
@@ -34,10 +52,25 @@
     .parte-card-info small { color: #6c757d; }
 
     .empty-state-message { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; color: #6c757d; text-align: center; }
-    .empty-state-message i { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .empty-state-message i { font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5; }
 
-    /* O formset do Django gera os formulários como divs, então o display: none é aplicado diretamente a eles */
-    #partes-form-container .parte-form { display: none; }
+    .add-parte-section {
+        border-top: 1px solid #dee2e6;
+        padding-top: 1.5rem;
+    }
+    .add-parte-section .select2-container {
+        width: 100% !important;
+    }
+
+    /* --- NOVO: Estilos para a Tela de Resumo --- */
+    .summary-section { margin-bottom: 1.5rem; }
+    .summary-section h6 { font-weight: bold; color: var(--bs-primary); border-bottom: 2px solid #e9ecef; padding-bottom: 0.5rem; margin-bottom: 1rem; }
+    .summary-item { display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem; }
+    .summary-item .label { color: #6c757d; }
+    .summary-item .value { font-weight: 500; text-align: right; }
+    .summary-partes ul { padding-left: 0; list-style-type: none; margin-bottom: 0; }
+    .summary-partes li { background-color: #f8f9fa; padding: 0.5rem; border-radius: 0.25rem; margin-bottom: 0.25rem; }
+
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -53,7 +86,7 @@
                 <div class="wizard-step active" data-step="1"><div class="step-circle">1</div><p>Partes Envolvidas</p></div>
                 <div class="wizard-step" data-step="2"><div class="step-circle">2</div><p>Dados do Processo</p></div>
                 <div class="wizard-step" data-step="3"><div class="step-circle">3</div><p>Gestão Interna</p></div>
-                <div class="wizard-step" data-step="4"><div class="step-circle"><i class="bi bi-check-lg"></i></div><p>Concluir</p></div>
+                <div class="wizard-step" data-step="4"><div class="step-circle"><i class="bi bi-check-lg"></i></div><p>Revisão</p></div>
             </div>
 
             {% if form.errors or formset.errors %}
@@ -61,58 +94,56 @@
                 <strong>Por favor, corrija os erros abaixo:</strong>
                 {{ form.errors }}
                 {{ formset.non_form_errors }}
-                {% for form_parte in formset %}
-                    {{ form_parte.errors }}
-                {% endfor %}
+                {% for form_parte in formset %}{{ form_parte.errors }}{% endfor %}
             </div>
             {% endif %}
 
             <div id="step-1" class="step-content active">
-                <h4 class="mb-4 border-bottom pb-2">1. Partes Envolvidas</h4>
-
-                <div class="card bg-light-subtle border-0 p-3 mb-4">
-                     <div class="mb-3">
-                        <label for="parte-cliente-selector" class="form-label fw-bold">1. Selecione um cliente ou cadastre um novo</label>
-                        <div class="d-flex align-items-center">
-                            <select id="parte-cliente-selector" class="form-select" style="width: 100%;"></select>
-                            <button id="btn-abrir-modal-cliente" class="btn btn-outline-primary ms-2" type="button" title="Adicionar Novo Cliente">
-                                <i class="bi bi-person-plus-fill"></i>
-                            </button>
+                <div class="text-center mb-4">
+                    <h4 class="mb-1">1. Partes Envolvidas</h4>
+                    <p class="text-muted">Adicione os clientes que fazem parte do processo nos polos correspondentes.</p>
+                </div>
+                <div class="row g-4 mt-2">
+                    <div class="col-lg-6">
+                        <div class="partes-column">
+                            <h6 class="text-success fw-bold text-center mb-3">POLO ATIVO (AUTORES)</h6>
+                            <div class="partes-list" id="polo-ativo-container">
+                                <div class="empty-state-message" id="empty-polo-ativo">
+                                    <i class="bi bi-person-plus"></i>
+                                    <span>Adicione partes a este polo</span>
+                                </div>
+                            </div>
+                            <div class="add-parte-section">
+                                <label for="polo-ativo-selector" class="form-label small fw-bold">Buscar e Adicionar Cliente ao Polo Ativo</label>
+                                <select id="polo-ativo-selector" class="form-select"></select>
+                            </div>
                         </div>
                     </div>
-                    <div>
-                        <label class="form-label fw-bold">2. Adicione o cliente selecionado ao polo correto</label>
-                        <div class="d-flex gap-2">
-                            <button type="button" id="btn-add-to-ativo" class="btn btn-success"><i class="bi bi-plus-circle me-1"></i> Adicionar ao Polo Ativo</button>
-                            <button type="button" id="btn-add-to-passivo" class="btn btn-danger"><i class="bi bi-plus-circle me-1"></i> Adicionar ao Polo Passivo</button>
+                    <div class="col-lg-6">
+                         <div class="partes-column">
+                            <h6 class="text-danger fw-bold text-center mb-3">POLO PASSIVO (RÉUS)</h6>
+                            <div class="partes-list" id="polo-passivo-container">
+                                <div class="empty-state-message" id="empty-polo-passivo">
+                                    <i class="bi bi-person-plus"></i>
+                                    <span>Adicione partes a este polo</span>
+                                </div>
+                            </div>
+                             <div class="add-parte-section">
+                                <label for="polo-passivo-selector" class="form-label small fw-bold">Buscar e Adicionar Cliente ao Polo Passivo</label>
+                                <select id="polo-passivo-selector" class="form-select"></select>
+                            </div>
                         </div>
                     </div>
                 </div>
-
-                <div class="row g-4 mt-2">
-                    <div class="col-md-6">
-                        <h6 class="text-success fw-bold">POLO ATIVO (AUTORES)</h6>
-                        <div class="partes-column" id="polo-ativo-container">
-                            <div class="empty-state-message" id="empty-polo-ativo">
-                                <i class="bi bi-people"></i>
-                                <span>Nenhuma parte adicionada</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <h6 class="text-danger fw-bold">POLO PASSIVO (RÉUS)</h6>
-                        <div class="partes-column" id="polo-passivo-container">
-                             <div class="empty-state-message" id="empty-polo-passivo">
-                                <i class="bi bi-people"></i>
-                                <span>Nenhuma parte adicionada</span>
-                            </div>
-                        </div>
-                    </div>
+                 <div class="d-flex justify-content-end mt-4">
+                    <button id="btn-abrir-modal-cliente" class="btn btn-sm btn-outline-primary" type="button">
+                        <i class="bi bi-person-plus-fill me-1"></i> Não encontrou a parte? Cadastre uma nova
+                    </button>
                 </div>
             </div>
 
             <div id="step-2" class="step-content">
-                <h4 class="mb-4 border-bottom pb-2">2. Dados Fundamentais e Trâmite</h4>
+                 <h4 class="mb-4 border-bottom pb-2">2. Dados Fundamentais e Trâmite</h4>
                  <div class="row g-3">
                     <div class="col-md-8">{{ form.tipo_acao.label_tag }}{{ form.tipo_acao }}</div>
                     <div class="col-md-4">{{ form.numero_processo.label_tag }}{{ form.numero_processo }}</div>
@@ -149,12 +180,41 @@
                 </div>
             </div>
 
-            <div id="step-4" class="step-content text-center py-5">
-                <h4 class="mb-3">Revisão Final</h4>
-                <p class="text-muted">Todos os passos foram preenchidos. Clique em "Salvar Processo" para concluir o cadastro.</p>
-                <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+            <div id="step-4" class="step-content">
+                <div class="text-center mb-4">
+                    <h4 class="mb-1">4. Revisão e Confirmação</h4>
+                    <p class="text-muted">Revise os dados informados antes de salvar o processo.</p>
+                </div>
+                <div class="row g-5">
+                    <div class="col-lg-6">
+                        <div class="summary-section">
+                            <h6>Partes Envolvidas</h6>
+                            <div class="summary-partes">
+                                <strong>Polo Ativo:</strong>
+                                <ul id="summary-polo-ativo"><li>Nenhuma parte informada.</li></ul>
+                            </div>
+                            <div class="summary-partes mt-3">
+                                <strong>Polo Passivo:</strong>
+                                <ul id="summary-polo-passivo"><li>Nenhuma parte informada.</li></ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="summary-section">
+                            <h6>Dados do Processo</h6>
+                            <div class="summary-item"><span class="label">Nº do Processo:</span><span class="value" id="summary-numero-processo"></span></div>
+                            <div class="summary-item"><span class="label">Classe Processual:</span><span class="value" id="summary-tipo-acao"></span></div>
+                             <div class="summary-item"><span class="label">Data de Distribuição:</span><span class="value" id="summary-data-distribuicao"></span></div>
+                            <div class="summary-item"><span class="label">Valor da Causa:</span><span class="value" id="summary-valor-causa"></span></div>
+                        </div>
+                         <div class="summary-section">
+                            <h6>Gestão Interna</h6>
+                            <div class="summary-item"><span class="label">Advogado Responsável:</span><span class="value" id="summary-advogado-responsavel"></span></div>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
+            </div>
 
         <div id="partes-form-container" style="display: none;">
             {{ formset.management_form }}
@@ -164,8 +224,9 @@
                 </div>
             {% endfor %}
         </div>
-        <div class="card-footer p-3 bg-light d-flex justify-content-between">
+        <div class="card-footer p-3 bg-light d-flex">
             <button type="button" class="btn btn-secondary" id="prev-btn" style="display: none;"><i class="bi bi-arrow-left"></i> Voltar</button>
+            <div class="me-auto"></div>
             <button type="button" class="btn btn-primary" id="next-btn">Próximo <i class="bi bi-arrow-right"></i></button>
             <button type="submit" class="btn btn-success" id="save-btn" style="display: none;"><i class="bi bi-check-lg"></i> Salvar Processo</button>
         </div>
@@ -185,16 +246,13 @@
 
 {% include 'gestao/partials/_modal_adicionar_cliente.html' with form=form_cliente_modal %}
 
-<script id="client-data" type="application/json">{{ all_clients_json|safe }}</script>
 {% endblock %}
 
 
 {% block javascript %}
 {{ block.super }}
 <script>
-// Usando a forma padrão e mais segura do jQuery para garantir que o DOM está pronto.
 $(function() {
-
     // --- LÓGICA DO WIZARD ---
     const steps = $('.wizard-step');
     const stepContents = $('.step-content');
@@ -202,7 +260,49 @@ $(function() {
     const prevBtn = $('#prev-btn');
     const saveBtn = $('#save-btn');
     let currentStep = 1;
-    const totalSteps = steps.length;
+    const totalSteps = 4;
+
+    // --- FUNÇÃO PARA PREENCHER O RESUMO ---
+    function populateSummary() {
+        // Dados do Processo
+        $('#summary-numero-processo').text($('#id_numero_processo').val() || 'Não informado');
+        $('#summary-tipo-acao').text($('#id_tipo_acao option:selected').text() || 'Não informado');
+
+        // Formata a data para o padrão brasileiro
+        const dataRaw = $('#id_data_distribuicao').val();
+        if (dataRaw) {
+            const [year, month, day] = dataRaw.split('-');
+            $('#summary-data-distribuicao').text(`${day}/${month}/${year}`);
+        } else {
+            $('#summary-data-distribuicao').text('Não informado');
+        }
+
+        const valorCausa = $('#id_valor_causa').val();
+        $('#summary-valor-causa').text(valorCausa ? `R$ ${parseFloat(valorCausa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Não informado');
+
+        // Gestão Interna
+        $('#summary-advogado-responsavel').text($('#id_advogado_responsavel option:selected').text() || 'Não informado');
+
+        // Partes Envolvidas
+        const poloAtivoList = $('#polo-ativo-container .parte-card');
+        const poloPassivoList = $('#polo-passivo-container .parte-card');
+
+        const populatePolo = (poloList, summaryElementId) => {
+            const summaryList = $(summaryElementId);
+            summaryList.empty();
+            if (poloList.length > 0) {
+                poloList.each(function() {
+                    const nome = $(this).find('[data-name]').text();
+                    summaryList.append(`<li>${nome}</li>`);
+                });
+            } else {
+                summaryList.append(`<li class="text-muted fst-italic">Nenhuma parte informada.</li>`);
+            }
+        };
+
+        populatePolo(poloAtivoList, '#summary-polo-ativo');
+        populatePolo(poloPassivoList, '#summary-polo-passivo');
+    }
 
     function updateWizard() {
         steps.each(function() {
@@ -210,18 +310,15 @@ $(function() {
             const stepNum = step.data('step');
             step.toggleClass('active', stepNum === currentStep).toggleClass('completed', stepNum < currentStep);
         });
-
-        stepContents.each(function() {
-            const content = $(this);
-            const stepNum = parseInt(content.attr('id').replace('step-', ''));
-            content.toggleClass('active', stepNum === currentStep);
-        });
-
+        stepContents.removeClass('active').eq(currentStep - 1).addClass('active');
         prevBtn.toggle(currentStep > 1);
         nextBtn.toggle(currentStep < totalSteps);
         saveBtn.toggle(currentStep === totalSteps);
 
-        // AJUSTE 2: Inicialização segura e condicional do Select2 para o campo oculto
+        if (currentStep === totalSteps) {
+            populateSummary();
+        }
+
         if (currentStep === 3) {
             const advogadosSelect = $('#id_advogados_envolvidos');
             if (advogadosSelect.length && !advogadosSelect.hasClass("select2-hidden-accessible")) {
@@ -234,77 +331,72 @@ $(function() {
         }
     }
 
-    // --- LÓGICA PARA ABRIR O MODAL MANUALMENTE (RESOLVE O CONFLITO BS5/JQUERY) ---
-    // AJUSTE 3: Listener de clique manual para o botão com o novo ID
+    // --- LÓGICA DO MODAL DE CLIENTE ---
     $('#btn-abrir-modal-cliente').on('click', function() {
-        var clienteModalEl = document.getElementById('addClienteModal');
-        if (clienteModalEl) {
-            var clienteModal = new bootstrap.Modal(clienteModalEl);
-            clienteModal.show();
-        } else {
-            console.error("Elemento do Modal #addClienteModal não encontrado.");
-        }
+        new bootstrap.Modal(document.getElementById('addClienteModal')).show();
     });
-
 
     // --- LÓGICA DAS PARTES (CLIENTES) ---
     const partesFormContainer = $('#partes-form-container');
     const totalFormsInput = $('#id_partes-TOTAL_FORMS');
     const emptyFormTemplate = $('#empty-form-template').html();
     const parteCardTemplate = $('#parte-card-template').html();
-    const clienteSelector = $('#parte-cliente-selector');
+    const poloAtivoSelector = $('#polo-ativo-selector');
+    const poloPassivoSelector = $('#polo-passivo-selector');
     const poloAtivoContainer = $('#polo-ativo-container');
     const poloPassivoContainer = $('#polo-passivo-container');
 
-    function updateEmptyState(container) {
-        const emptyMessage = container.find('.empty-state-message');
-        const hasCards = container.find('.parte-card').length > 0;
-        emptyMessage.toggle(!hasCards);
+    const select2Options = {
+        theme: "bootstrap-5",
+        placeholder: 'Buscar por nome ou CPF/CNPJ...',
+        allowClear: true
+    };
+
+    function carregarClientesNosSeletores(clienteSelecionadoId = null) {
+        $.ajax({
+            url: "{% url 'gestao:get_all_clients_json' %}",
+            type: 'GET',
+            success: function(clientes) {
+                const data = [{id: '', text: ''}].concat(clientes);
+                poloAtivoSelector.empty().select2({ data: data, ...select2Options });
+                poloPassivoSelector.empty().select2({ data: data, ...select2Options });
+                if (clienteSelecionadoId) {
+                    poloAtivoSelector.val(clienteSelecionadoId).trigger('change');
+                }
+            },
+            error: function() {
+                alert('Erro ao carregar a lista de clientes.');
+            }
+        });
     }
 
-    function populateClientSelector() {
-        const clientDataTag = document.getElementById('client-data');
-        if (!clientDataTag) return;
-        try {
-            const clients = JSON.parse(clientDataTag.textContent || '[]');
-            clienteSelector.select2({
-                theme: "bootstrap-5",
-                placeholder: 'Buscar por nome ou CPF/CNPJ...',
-                data: clients
-            });
-        } catch (e) { console.error("Erro ao processar JSON dos clientes:", e); }
-    }
-
-    // Ouve o evento global que o base.html dispara quando um cliente é salvo no modal.
     $(document).on('itemAdicionado', function(event) {
         if (event.detail && event.detail.tipo === 'cliente') {
-            const novoCliente = event.detail.dados;
-            const newOption = new Option(novoCliente.nome, novoCliente.pk, true, true);
-            clienteSelector.append(newOption).trigger('change');
-            clienteSelector.val(novoCliente.pk).trigger('change');
+            const novoClientePk = event.detail.dados.pk;
+            carregarClientesNosSeletores(novoClientePk);
         }
     });
 
-    function addParte(tipoPolo) {
-        const selectedData = clienteSelector.select2('data')[0];
-        if (!selectedData || !selectedData.id) {
-            alert('Por favor, selecione um cliente da lista.');
-            return;
-        }
+    function addParte(tipoPolo, selectedData) {
+        if (!selectedData || !selectedData.id) { return; }
+
         const clienteId = selectedData.id;
         const clienteNome = selectedData.text;
 
         let formJaExiste = false;
         partesFormContainer.find('select[name$="-cliente"]').each(function() {
             const formDiv = $(this).closest('.parte-form');
+            if (!formDiv.length) return;
             const isMarkedForDeletion = formDiv.find('input[name$="-DELETE"]:checked').length > 0;
             if (this.value == clienteId && !isMarkedForDeletion) {
                 formJaExiste = true; return false;
             }
         });
-
         if (formJaExiste) {
             alert('Este cliente já foi adicionado como parte no processo.');
+            // Limpa o seletor para evitar que o usuário tente adicionar de novo
+            if (tipoPolo === 'AUTOR') poloAtivoSelector.val(null).trigger('change');
+            else poloPassivoSelector.val(null).trigger('change');
             return;
         }
 
@@ -323,7 +415,6 @@ $(function() {
         container.append(newCard);
         updateEmptyState(container);
         totalFormsInput.val(formIndex + 1);
-        clienteSelector.val(null).trigger('change');
     }
 
     function removeParte(cardElement) {
@@ -335,27 +426,33 @@ $(function() {
             const deleteCheckbox = formToRemove.find('input[type=checkbox][name$="-DELETE"]');
             if (deleteCheckbox.length) {
                 deleteCheckbox.prop('checked', true);
-                formToRemove.hide();
             } else {
+                // Se o formulário não foi salvo ainda, podemos removê-lo do DOM
                 formToRemove.remove();
+                 // Precisamos recalcular os índices se removermos um do meio,
+                 // mas para esta implementação, marcar para deletar é mais seguro.
             }
         }
         card.remove();
         updateEmptyState(container);
     }
 
+    function updateEmptyState(container) {
+        const emptyMessage = container.find('.empty-state-message');
+        const hasCards = container.find('.parte-card').length > 0;
+        emptyMessage.toggle(!hasCards);
+    }
+
     // --- Vinculando Eventos ---
+    poloAtivoSelector.on('select2:select', function(e) { addParte('AUTOR', e.params.data); $(this).val(null).trigger('change'); });
+    poloPassivoSelector.on('select2:select', function(e) { addParte('REU', e.params.data); $(this).val(null).trigger('change'); });
     nextBtn.on('click', () => { if (currentStep < totalSteps) { currentStep++; updateWizard(); } });
     prevBtn.on('click', () => { if (currentStep > 1) { currentStep--; updateWizard(); } });
-    $('#btn-add-to-ativo').on('click', () => addParte('AUTOR'));
-    $('#btn-add-to-passivo').on('click', () => addParte('REU'));
-    $(document).on('click', '.remove-parte-btn', function() {
-        removeParte($(this).closest('.parte-card'));
-    });
+    $(document).on('click', '.remove-parte-btn', function() { removeParte($(this).closest('.parte-card')); });
 
     // --- INICIALIZAÇÃO DA PÁGINA ---
     updateWizard();
-    populateClientSelector();
+    carregarClientesNosSeletores();
     updateEmptyState(poloAtivoContainer);
     updateEmptyState(poloPassivoContainer);
 });

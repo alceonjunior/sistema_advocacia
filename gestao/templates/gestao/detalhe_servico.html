@@ -30,9 +30,13 @@
         <p class="text-muted mb-0" title="{{ servico.descricao }}">{{ servico.descricao|truncatechars:70 }}</p>
     </div>
     <div class="d-flex gap-2">
+        <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#nfseModal">
+            <i class="bi bi-receipt-cutoff me-1"></i> Emitir NFS-e
+        </button>
+
         {% if not servico.concluido %}<button id="btn-concluir-servico" type="button" class="btn btn-success"><i class="bi bi-check-circle-fill me-1"></i> Concluir Serviço</button>{% endif %}
-        <a href="{% url 'editar_servico' pk=servico.pk %}" class="btn btn-outline-secondary"><i class="bi bi-pencil"></i> Editar</a>
-        <a href="{% url 'lista_servicos' %}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle"></i> Voltar</a>
+        <a href="{% url 'gestao:editar_servico' pk=servico.pk %}" class="btn btn-outline-secondary"><i class="bi bi-pencil"></i> Editar</a>
+        <a href="{% url 'gestao:lista_servicos' %}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle"></i> Voltar</a>
     </div>
 </div>
 
@@ -73,7 +77,7 @@
     </div>
     <div class="tab-pane fade" id="financeiro-tab-pane" role="tabpanel">
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center"><h5 class="mb-0">Lançamentos Financeiros</h5><a href="{% url 'adicionar_contrato_servico' servico_pk=servico.pk %}" class="btn btn-sm btn-outline-success">+ Contrato</a></div>
+            <div class="card-header d-flex justify-content-between align-items-center"><h5 class="mb-0">Lançamentos Financeiros</h5><a href="{% url 'gestao:adicionar_contrato_servico' servico_pk=servico.pk %}" class="btn btn-sm btn-outline-success">+ Contrato</a></div>
             <div class="card-body p-0" id="servico-tabela-financeira-container">
                 {% include 'gestao/partials/_tabela_financeira.html' %}
             </div>
@@ -83,7 +87,7 @@
 
 <div class="modal fade" id="addAndamentoModal" tabindex="-1">
     <div class="modal-dialog"><div class="modal-content">
-        <form method="post" action="{% url 'adicionar_movimentacao_servico_ajax' servico_pk=servico.pk %}" data-ajax-form="true" data-reload-container="#andamento-timeline-container" data-reload-url="{% url 'atualizar_historico_servico_partial' servico_pk=servico.pk %}">
+        <form method="post" action="{% url 'gestao:adicionar_movimentacao_servico_ajax' servico_pk=servico.pk %}" data-ajax-form="true" data-reload-container="#andamento-timeline-container" data-reload-url="{% url 'gestao:atualizar_historico_servico_partial' servico_pk=servico.pk %}">
             {% csrf_token %}
             <div class="modal-header"><h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Adicionar Novo Andamento</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
@@ -100,7 +104,7 @@
 
 <div class="modal fade" id="concluirServicoModal" tabindex="-1">
   <div class="modal-dialog"><div class="modal-content">
-      <form action="{% url 'concluir_servico' pk=servico.pk %}" method="post">
+      <form action="{% url 'gestao:concluir_servico' pk=servico.pk %}" method="post">
           {% csrf_token %}
           <div class="modal-header"><h5 class="modal-title"><i class="bi bi-check-circle-fill me-2"></i>Concluir Serviço</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
           <div class="modal-body"><p>Você tem certeza?</p>{{ financeiro.form_concluir.as_p }}</div>
@@ -110,6 +114,9 @@
 </div>
 
 {% include 'gestao/partials/_modal_pagamento.html' %}
+
+{% include 'gestao/partials/_modal_editar_movimentacao_servico.html' %}
+
 {% endblock %}
 
 
@@ -133,7 +140,7 @@ $(function() {
     $('#btn-concluir-servico').on('click', () => concluirServicoModal.show());
 
     // --- LÓGICA DE ATUALIZAÇÃO AUTOMÁTICA DOS COMPONENTES ---
-    const updateUrl = "{% url 'atualizar_componentes_financeiros_servico' pk=servico.pk %}";
+    const updateUrl = "{% url 'gestao:atualizar_componentes_financeiros_servico' pk=servico.pk %}";
     const resumoContainer = $('#servico-resumo-financeiro-container');
     const tabelaContainer = $('#servico-tabela-financeira-container');
 
@@ -170,4 +177,8 @@ $(function() {
 });
 </script>
 {% include 'gestao/partials/_detalhe_financeiro_js.html' %}
+{% include 'gestao/partials/_detalhe_servico_modal_js.html' %}
+{% include 'gestao/partials/_modal_emitir_nfse.html' %}
+
+
 {% endblock %}

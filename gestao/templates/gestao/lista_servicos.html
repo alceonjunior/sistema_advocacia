@@ -17,7 +17,6 @@
 </style>
 {% endblock %}
 
-
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h2 d-flex align-items-center gap-2">
@@ -55,6 +54,9 @@
     {% include 'gestao/partials/_lista_servicos_partial.html' %}
 </div>
 
+{% include 'gestao/partials/_modal_excluir_servico.html' %}
+
+{% include 'gestao/partials/_modal_editar_servico.html' %}
 {% endblock %}
 
 
@@ -62,6 +64,7 @@
 {{ block.super }}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // --- LÓGICA EXISTENTE PARA FILTROS (Mantida) ---
     const filterForm = document.getElementById('filter-form');
     const serviceListContainer = document.getElementById('service-list-container');
     const clearFiltersBtn = document.getElementById('btn-clear-filters');
@@ -99,6 +102,28 @@ document.addEventListener('DOMContentLoaded', function () {
             updateServiceList();
         });
     }
+
+    // --- LÓGICA EXISTENTE PARA O MODAL DE EXCLUSÃO (Mantida) ---
+    const excluirServicoModalEl = document.getElementById('excluirServicoModal');
+    if (excluirServicoModalEl) {
+        excluirServicoModalEl.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+
+            const servicoId = button.dataset.servicoId;
+            const servicoNome = button.dataset.servicoNome;
+            const hasContract = button.dataset.hasContract === 'true';
+
+            const confirmTextEl = excluirServicoModalEl.querySelector('#modal-confirm-text');
+            const alertContractEl = excluirServicoModalEl.querySelector('#modal-alert-contract');
+            const formEl = excluirServicoModalEl.querySelector('#excluirServicoForm');
+
+            confirmTextEl.innerHTML = `Você tem certeza que deseja excluir o serviço "<strong>${servicoNome}</strong>"?`;
+            alertContractEl.style.display = hasContract ? 'block' : 'none';
+            formEl.action = `{% url 'gestao:excluir_servico' 0 %}`.replace('0', servicoId);
+        });
+    }
 });
 </script>
+
+{% include 'gestao/partials/_lista_servicos_modal_js.html' %}
 {% endblock %}

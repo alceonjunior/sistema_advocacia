@@ -96,13 +96,13 @@
     <div>
         <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal"
                 data-bs-target="#confirmDeleteModal"
-                data-delete-url="{% url 'excluir_todos_calculos' processo_pk=processo.pk %}"
+                data-delete-url="{% url 'gestao:excluir_todos_calculos' processo_pk=processo.pk %}"
                 data-modal-title="Excluir Todos os Cálculos"
                 data-modal-body="Você tem certeza que deseja excluir PERMANENTEMENTE todos os {{ calculos_salvos.count }} cálculo(s) deste processo? Esta ação não pode ser desfeita."
                 {% if not calculos_salvos %}disabled{% endif %}>
             <i class="bi bi-trash-fill"></i> Excluir Todos
         </button>
-        <a href="{% url 'detalhe_processo' pk=processo.pk %}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle"></i> Voltar ao Processo</a>
+        <a href="{% url 'gestao:detalhe_processo' pk=processo.pk %}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle"></i> Voltar ao Processo</a>
         <button type="button" class="btn btn-outline-secondary" onclick="window.print();" {% if not resultado %}disabled{% endif %}><i class="bi bi-printer-fill"></i> Imprimir</button>
     </div>
 </div>
@@ -116,24 +116,24 @@
                 <h5 class="mb-0"><i class="bi bi-clock-history"></i> Histórico</h5>
             </div>
             <div class="list-group list-group-flush" style="max-height: 75vh; overflow-y: auto;">
-                <a href="{% url 'pagina_de_calculos' processo_pk=processo.pk %}" class="list-group-item list-group-item-action {% if not calculo_carregado %}active{% endif %}">
+                <a href="{% url 'gestao:pagina_de_calculos' processo_pk=processo.pk %}" class="list-group-item list-group-item-action {% if not calculo_carregado %}active{% endif %}">
                     <i class="bi bi-plus-circle-fill me-2"></i><strong>Novo Cálculo</strong>
                 </a>
                 {% for calculo in calculos_salvos %}
                 <div class="list-group-item {% if calculo_carregado and calculo_carregado.pk == calculo.pk %}active{% endif %}">
                     <div class="d-flex w-100 justify-content-between align-items-start">
-                        <a href="{% url 'carregar_calculo' processo_pk=processo.pk calculo_pk=calculo.pk %}" class="text-decoration-none text-reset flex-grow-1">
+                        <a href="{% url 'gestao:carregar_calculo' processo_pk=processo.pk calculo_pk=calculo.pk %}" class="text-decoration-none text-reset flex-grow-1">
                             <p class="mb-1 fw-bold text-truncate" title="{{ calculo.descricao }}">{{ calculo.descricao }}</p>
                         </a>
                         <button type="button" class="btn btn-sm btn-danger py-0 px-1 ms-2 btn-delete"
                                 data-bs-toggle="modal" data-bs-target="#confirmDeleteModal"
-                                data-delete-url="{% url 'excluir_calculo' calculo_pk=calculo.pk %}"
+                                data-delete-url="{% url 'gestao:excluir_calculo' calculo_pk=calculo.pk %}"
                                 data-modal-title="Excluir Cálculo"
                                 data-modal-body="Você tem certeza que deseja excluir o cálculo '{{ calculo.descricao }}'? Esta ação não pode ser desfeita.">
                             <i class="bi bi-x-lg"></i>
                         </button>
                     </div>
-                     <a href="{% url 'carregar_calculo' processo_pk=processo.pk calculo_pk=calculo.pk %}" class="text-decoration-none text-reset">
+                     <a href="{% url 'gestao:carregar_calculo' processo_pk=processo.pk calculo_pk=calculo.pk %}" class="text-decoration-none text-reset">
                         <small>R$ {{ calculo.valor_final|floatformat:2|intcomma }} <span class="text-muted">· {{ calculo.data_calculo|date:"d/m/y" }}</span></small>
                     </a>
                 </div>
@@ -150,7 +150,7 @@
                     {% if calculo_carregado %}<i class="bi bi-pencil-square text-primary"></i> Parâmetros do Cálculo Carregado{% else %}<i class="bi bi-file-earmark-text-fill text-primary"></i> Parâmetros para Novo Cálculo{% endif %}
                 </h5>
             </div>
-            <form id="calculo-form" method="post" action="{% if calculo_carregado %}{% url 'carregar_calculo' processo_pk=processo.pk calculo_pk=calculo_carregado.pk %}{% else %}{% url 'novo_calculo' processo_pk=processo.pk %}{% endif %}" class="d-flex flex-column h-100" novalidate>
+            <form id="calculo-form" method="post" action="{% if calculo_carregado %}{% url 'gestao:carregar_calculo' processo_pk=processo.pk calculo_pk=calculo_carregado.pk %}{% else %}{% url 'gestao:novo_calculo' processo_pk=processo.pk %}{% endif %}" class="d-flex flex-column h-100" novalidate>
                 {% csrf_token %}
                 <div class="card-body" style="overflow-y: auto;">
                     {% if form.non_field_errors %}

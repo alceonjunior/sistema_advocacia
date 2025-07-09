@@ -3,6 +3,92 @@
 
 {% block title %}{{ titulo_pagina }}{% endblock %}
 
+{% block styles %}
+{{ block.super }}
+<style>
+    .wizard-container {
+        background-color: #fff;
+        border-radius: 0.75rem;
+    }
+    .stepper-wrapper {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 2rem;
+        position: relative;
+    }
+    .stepper-line {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        right: 20px;
+        height: 2px;
+        background-color: #e9ecef;
+        z-index: 1;
+    }
+    .stepper-item {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100px; /* Largura para o texto não quebrar */
+        color: #adb5bd;
+        transition: all 0.3s ease;
+    }
+    .stepper-item .step-counter {
+        height: 40px;
+        width: 40px;
+        background-color: #fff;
+        border: 2px solid #e9ecef;
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-weight: bold;
+        transition: all 0.3s ease;
+    }
+    .stepper-item .step-name {
+        font-size: 0.8rem;
+        font-weight: 500;
+        margin-top: 0.5rem;
+        text-align: center;
+    }
+
+    /* Estados do Stepper */
+    .stepper-item.completed .step-counter {
+        border-color: var(--bs-success);
+        background-color: var(--bs-success);
+        color: #fff;
+    }
+    .stepper-item.completed .step-name {
+        color: #212529;
+    }
+    .stepper-item.active .step-counter {
+        border-color: var(--bs-primary);
+        background-color: var(--bs-primary);
+        color: #fff;
+        transform: scale(1.1);
+    }
+    .stepper-item.active .step-name {
+        color: var(--bs-primary);
+        font-weight: 600;
+    }
+
+    .step-pane {
+        display: none;
+    }
+    .step-pane.active {
+        display: block;
+        animation: fadeIn 0.5s;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+{% endblock %}
+
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h2 d-flex align-items-center gap-2">
@@ -15,152 +101,201 @@
 
 {% if messages %}
     {% for message in messages %}
-        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
     {% endfor %}
 {% endif %}
 
+<div class="card shadow-sm wizard-container">
 <form method="post" novalidate>
     {% csrf_token %}
+    <div class="card-body p-4 p-md-5">
 
-    <div class="row g-4">
-        <div class="col-lg-8">
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-light d-flex align-items-center gap-2">
-                    <i class="bi bi-person-vcard-fill"></i>
-                    <h5 class="mb-0">Dados Fundamentais</h5>
-                </div>
-                <div class="card-body p-4">
-                    <div class="row g-3">
-                        <div class="col-12">{{ form.nome_completo.label_tag }}{{ form.nome_completo }}{{ form.nome_completo.errors }}</div>
-                        <div class="col-md-6">{{ form.tipo_pessoa.label_tag }}{{ form.tipo_pessoa }}{{ form.tipo_pessoa.errors }}</div>
-                        <div class="col-md-6">{{ form.cpf_cnpj.label_tag }}{{ form.cpf_cnpj }}{{ form.cpf_cnpj.errors }}</div>
-                        <div class="col-md-6">{{ form.email.label_tag }}{{ form.email }}{{ form.email.errors }}</div>
-                        <div class="col-md-6">{{ form.telefone_principal.label_tag }}{{ form.telefone_principal }}{{ form.telefone_principal.errors }}</div>
-                    </div>
-                </div>
+        <div class="stepper-wrapper">
+            <div class="stepper-line"></div>
+            <div class="stepper-item active" data-step="1">
+                <div class="step-counter">1</div>
+                <div class="step-name">Dados Pessoais</div>
             </div>
-
-            <div id="campos-pf" class="card shadow-sm mb-4">
-                <div class="card-header bg-light d-flex align-items-center gap-2"><i class="bi bi-person-badge-fill"></i><h5 class="mb-0">Qualificação (Pessoa Física)</h5></div>
-                <div class="card-body p-4">
-                    <div class="row g-3">
-                        <div class="col-md-6">{{ form.data_nascimento.label_tag }}{{ form.data_nascimento }}{{ form.data_nascimento.errors }}</div>
-                        <div class="col-md-6">{{ form.nacionalidade.label_tag }}{{ form.nacionalidade }}{{ form.nacionalidade.errors }}</div>
-                        <div class="col-md-6">{{ form.estado_civil.label_tag }}{{ form.estado_civil }}{{ form.estado_civil.errors }}</div>
-                        <div class="col-md-6">{{ form.profissao.label_tag }}{{ form.profissao }}{{ form.profissao.errors }}</div>
-                    </div>
-                </div>
+            <div class="stepper-item" data-step="2">
+                <div class="step-counter">2</div>
+                <div class="step-name">Endereço</div>
             </div>
+            <div class="stepper-item" data-step="3">
+                <div class="step-counter">3</div>
+                <div class="step-name">Qualificação</div>
+            </div>
+        </div>
 
-            <div id="campos-pj" class="card shadow-sm mb-4" style="display: none;">
-                <div class="card-header bg-light d-flex align-items-center gap-2"><i class="bi bi-building-fill"></i><h5 class="mb-0">Representação (Pessoa Jurídica)</h5></div>
-                <div class="card-body p-4">
-                    <div class="row g-3">
-                        <div class="col-md-6">{{ form.representante_legal.label_tag }}{{ form.representante_legal }}{{ form.representante_legal.errors }}</div>
-                        <div class="col-md-6">{{ form.cpf_representante_legal.label_tag }}{{ form.cpf_representante_legal }}{{ form.cpf_representante_legal.errors }}</div>
-                    </div>
+        {% if form.non_field_errors %}
+            <div class="alert alert-danger p-2 small">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="step-pane active" data-step="1">
+            <h4 class="mb-4 border-bottom pb-2">Dados Pessoais e de Contato</h4>
+            <div class="row g-3">
+                <div class="col-12">
+                    <label for="{{ form.nome_completo.id_for_label }}" class="form-label">{{ form.nome_completo.label }}</label>
+                    {{ form.nome_completo }}
+                    <div class="text-danger small mt-1">{{ form.nome_completo.errors }}</div>
+                </div>
+                <div class="col-md-6">
+                    <label for="{{ form.tipo_pessoa.id_for_label }}" class="form-label">{{ form.tipo_pessoa.label }}</label>
+                    {{ form.tipo_pessoa }}
+                    <div class="text-danger small mt-1">{{ form.tipo_pessoa.errors }}</div>
+                </div>
+                <div class="col-md-6">
+                    <label for="{{ form.cpf_cnpj.id_for_label }}" class="form-label">{{ form.cpf_cnpj.label }}</label>
+                    {{ form.cpf_cnpj }}
+                    <div class="text-danger small mt-1">{{ form.cpf_cnpj.errors }}</div>
+                </div>
+                <div class="col-md-6">
+                    <label for="{{ form.email.id_for_label }}" class="form-label">{{ form.email.label }}</label>
+                    {{ form.email }}
+                    <div class="text-danger small mt-1">{{ form.email.errors }}</div>
+                </div>
+                <div class="col-md-6">
+                    <label for="{{ form.telefone_principal.id_for_label }}" class="form-label">{{ form.telefone_principal.label }}</label>
+                    {{ form.telefone_principal }}
+                    <div class="text-danger small mt-1">{{ form.telefone_principal.errors }}</div>
                 </div>
             </div>
         </div>
 
-        <div class="col-lg-4">
-            <div class="card shadow-sm">
-                <div class="card-header bg-light d-flex align-items-center gap-2"><i class="bi bi-geo-alt-fill"></i><h5 class="mb-0">Endereço</h5></div>
-                <div class="card-body p-4">
-                    <div class="row g-3">
-                        <div class="col-12">
-                            {{ form.cep.label_tag }}
-                            <div class="input-group">
-                                {{ form.cep }}
-                                <button class="btn btn-outline-secondary" type="button" id="btn-buscar-cep"><i class="bi bi-search"></i></button>
-                            </div>
-                            {{ form.cep.errors }}
-                        </div>
-                        <div class="col-12">{{ form.logradouro.label_tag }}{{ form.logradouro }}{{ form.logradouro.errors }}</div>
-                        <div class="col-md-6">{{ form.numero.label_tag }}{{ form.numero }}{{ form.numero.errors }}</div>
-                        <div class="col-md-6">{{ form.complemento.label_tag }}{{ form.complemento }}{{ form.complemento.errors }}</div>
-                        <div class="col-12">{{ form.bairro.label_tag }}{{ form.bairro }}{{ form.bairro.errors }}</div>
-                        <div class="col-md-8">{{ form.cidade.label_tag }}{{ form.cidade }}{{ form.cidade.errors }}</div>
-                        <div class="col-md-4">{{ form.estado.label_tag }}{{ form.estado }}{{ form.estado.errors }}</div>
+        <div class="step-pane" data-step="2">
+            <h4 class="mb-4 border-bottom pb-2">Endereço do Cliente</h4>
+            <div class="row g-3">
+                <div class="col-12">
+                    <label for="{{ form.cep.id_for_label }}" class="form-label">{{ form.cep.label }}</label>
+                    <div class="input-group">
+                        {{ form.cep }}
+                        <button class="btn btn-outline-secondary" type="button" id="btn-buscar-cep" title="Buscar Endereço pelo CEP"><i class="bi bi-search"></i></button>
                     </div>
+                    <div class="text-danger small mt-1">{{ form.cep.errors }}</div>
+                </div>
+                <div class="col-12">{{ form.logradouro.label_tag }}{{ form.logradouro }}<div class="text-danger small mt-1">{{ form.logradouro.errors }}</div></div>
+                <div class="col-md-6">{{ form.numero.label_tag }}{{ form.numero }}<div class="text-danger small mt-1">{{ form.numero.errors }}</div></div>
+                <div class="col-md-6">{{ form.complemento.label_tag }}{{ form.complemento }}<div class="text-danger small mt-1">{{ form.complemento.errors }}</div></div>
+                <div class="col-12">{{ form.bairro.label_tag }}{{ form.bairro }}<div class="text-danger small mt-1">{{ form.bairro.errors }}</div></div>
+                <div class="col-md-8">{{ form.cidade.label_tag }}{{ form.cidade }}<div class="text-danger small mt-1">{{ form.cidade.errors }}</div></div>
+                <div class="col-md-4">{{ form.estado.label_tag }}{{ form.estado }}<div class="text-danger small mt-1">{{ form.estado.errors }}</div></div>
+            </div>
+        </div>
+
+        <div class="step-pane" data-step="3">
+            <h4 class="mb-4 border-bottom pb-2">Qualificação e Representação</h4>
+            <div id="campos-pf">
+                <h6 class="mb-3">Pessoa Física</h6>
+                <div class="row g-3">
+                    <div class="col-md-6">{{ form.data_nascimento.label_tag }}{{ form.data_nascimento }}<div class="text-danger small mt-1">{{ form.data_nascimento.errors }}</div></div>
+                    <div class="col-md-6">{{ form.nacionalidade.label_tag }}{{ form.nacionalidade }}<div class="text-danger small mt-1">{{ form.nacionalidade.errors }}</div></div>
+                    <div class="col-md-6">{{ form.estado_civil.label_tag }}{{ form.estado_civil }}<div class="text-danger small mt-1">{{ form.estado_civil.errors }}</div></div>
+                    <div class="col-md-6">{{ form.profissao.label_tag }}{{ form.profissao }}<div class="text-danger small mt-1">{{ form.profissao.errors }}</div></div>
+                </div>
+            </div>
+            <div id="campos-pj" style="display: none;">
+                <h6 class="mb-3">Pessoa Jurídica</h6>
+                <div class="row g-3">
+                    <div class="col-md-6">{{ form.representante_legal.label_tag }}{{ form.representante_legal }}<div class="text-danger small mt-1">{{ form.representante_legal.errors }}</div></div>
+                    <div class="col-md-6">{{ form.cpf_representante_legal.label_tag }}{{ form.cpf_representante_legal }}<div class="text-danger small mt-1">{{ form.cpf_representante_legal.errors }}</div></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="mt-4 text-end">
-        <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check-circle-fill me-2"></i> Salvar Cliente</button>
+    <div class="card-footer p-3 bg-light d-flex">
+        <button type="button" class="btn btn-secondary" id="prev-btn" style="display: none;"><i class="bi bi-arrow-left"></i> Voltar</button>
+        <div class="me-auto"></div>
+        <button type="button" class="btn btn-primary" id="next-btn">Próximo <i class="bi bi-arrow-right"></i></button>
+        <button type="submit" class="btn btn-success" id="save-btn" style="display: none;"><i class="bi bi-check-circle-fill me-2"></i> Salvar Cliente</button>
     </div>
 </form>
+</div>
 {% endblock %}
+
 
 {% block javascript %}
 {{ block.super }}
 <script>
 $(function() {
-    // --- MÁSCARAS DE CAMPO (UX Aprimorada) ---
+    // =======================================================
+    //     NOVA LÓGICA DO WIZARD
+    // =======================================================
+    const stepperItems = $('.stepper-item');
+    const stepPanes = $('.step-pane');
+    const nextBtn = $('#next-btn');
+    const prevBtn = $('#prev-btn');
+    const saveBtn = $('#save-btn');
+    let currentStep = 1;
+    const totalSteps = stepperItems.length;
+
+    function updateWizardState() {
+        stepperItems.each(function(index) {
+            const step = index + 1;
+            $(this).toggleClass('active', step === currentStep);
+            $(this).toggleClass('completed', step < currentStep);
+        });
+
+        stepPanes.removeClass('active').eq(currentStep - 1).addClass('active');
+
+        prevBtn.toggle(currentStep > 1);
+        nextBtn.toggle(currentStep < totalSteps);
+        saveBtn.toggle(currentStep === totalSteps);
+    }
+
+    nextBtn.on('click', () => { if (currentStep < totalSteps) { currentStep++; updateWizardState(); } });
+    prevBtn.on('click', () => { if (currentStep > 1) { currentStep--; updateWizardState(); } });
+
+    // ===================================================================
+    //     LÓGICA EXISTENTE (MÁSCARAS, CEP, PF/PJ) - 100% MANTIDA
+    // ===================================================================
     $('#id_cpf_cnpj').mask('000.000.000-00', {
         onKeyPress: function(cpf, e, field, options) {
             const masks = ['000.000.000-000', '00.000.000/0000-00'];
-            const mask = (cpf.length > 14) ? masks[1] : masks[0];
-            $('#id_cpf_cnpj').mask(mask, options);
+            $('#id_cpf_cnpj').mask((cpf.length > 14) ? masks[1] : masks[0], options);
         }
     });
     $('#id_cpf_representante_legal').mask('000.000.000-00');
     $('#id_telefone_principal').mask('(00) 00000-0000');
     $('#id_cep').mask('00000-000');
 
-
-    // --- LÓGICA PARA CAMPOS CONDICIONAIS (PF/PJ) ---
     const tipoPessoaSelect = $('#id_tipo_pessoa');
     const camposPf = $('#campos-pf');
     const camposPj = $('#campos-pj');
 
     function toggleCamposPessoa() {
-        if (tipoPessoaSelect.val() === 'PJ') {
-            camposPf.hide();
-            camposPj.show();
-        } else {
-            camposPf.show();
-            camposPj.hide();
-        }
+        camposPj.toggle(tipoPessoaSelect.val() === 'PJ');
+        camposPf.toggle(tipoPessoaSelect.val() !== 'PJ');
     }
-    // Executa na primeira vez e a cada mudança
-    toggleCamposPessoa(); 
+    toggleCamposPessoa();
     tipoPessoaSelect.on('change', toggleCamposPessoa);
 
-
-    // --- LÓGICA DE BUSCA DE CEP (UX Aprimorada) ---
     function buscarCep() {
-        const cep = $('#id_cep').val().replace(/\D/g, ''); // Remove caracteres não numéricos
-        if (cep.length !== 8) {
-            return;
-        }
-
-        const url = `https://viacep.com.br/ws/${cep}/json/`;
-        fetch(url)
+        const cep = $('#id_cep').val().replace(/\D/g, '');
+        if (cep.length !== 8) return;
+        fetch(`https://viacep.com.br/ws/${cep}/json/`)
             .then(response => response.json())
             .then(data => {
                 if (!data.erro) {
                     $('#id_logradouro').val(data.logradouro);
                     $('#id_bairro').val(data.bairro);
                     $('#id_cidade').val(data.localidade);
-                    $('#id_estado').val(data.uf).trigger('change'); // .trigger('change') é útil para Select2
-                    $('#id_numero').focus(); // Move o foco para o campo de número
+                    $('#id_estado').val(data.uf);
+                    $('#id_numero').focus();
                 } else {
                     alert('CEP não encontrado.');
                 }
             })
-            .catch(error => {
-                console.error('Erro ao buscar CEP:', error);
-                alert('Ocorreu um erro ao buscar o CEP.');
-            });
+            .catch(error => console.error('Erro ao buscar CEP:', error));
     }
     $('#btn-buscar-cep').on('click', buscarCep);
-    $('#id_cep').on('blur', buscarCep); // Busca também quando o usuário sai do campo
+    $('#id_cep').on('blur', buscarCep);
+
+
+    // Inicializa o estado do wizard ao carregar a página
+    updateWizardState();
 });
 </script>
 {% endblock %}

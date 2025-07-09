@@ -1,6 +1,5 @@
 {% extends 'gestao/base.html' %}
-{% load static %}
-{% load humanize %}
+{% load static humanize l10n %}
 
 {% block title %}Detalhe do Processo {{ processo.numero_processo|default:"N/A" }}{% endblock %}
 
@@ -45,9 +44,18 @@
         font-size: 0.85rem !important;
         padding: 0.4em 0.7em;
     }
+    .resumo-principal-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+    }
     .select2-container .select2-selection--single { height: auto !important; padding: 0.375rem 0.75rem; }
     .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered { white-space: normal !important; line-height: 1.5; }
 </style>
+
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+
 {% endblock %}
 
 {% block content %}
@@ -61,13 +69,13 @@
         <p class="text-muted mb-0">Nº: {{ processo.numero_processo|default:"Ainda sem número" }}</p>
     </div>
     <div class="d-flex gap-2">
-        <a href="{% url 'pagina_de_calculos' processo_pk=processo.pk %}" class="btn btn-outline-success"><i class="bi bi-calculator"></i> Cálculos</a>
+        <a href="{% url 'gestao:pagina_de_calculos' processo_pk=processo.pk %}" class="btn btn-outline-success"><i class="bi bi-calculator"></i> Cálculos</a>
         <div class="dropdown">
             <button class="btn btn-primary dropdown-toggle" type="button" id="acoesDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                 <i class="bi bi-gear-fill"></i> Ações
             </button>
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="acoesDropdown">
-                <li><a class="dropdown-item" href="{% url 'editar_processo' pk=processo.pk %}">Editar Dados Gerais</a></li>
+                <li><a class="dropdown-item" href="{% url 'gestao:editar_processo' pk=processo.pk %}">Editar Dados Gerais</a></li>
                 <li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#gerenciarPartesModal">Gerenciar Partes</button></li>
                 <li><hr class="dropdown-divider"></li>
                 {% if processo.status_processo == 'ARQUIVADO' %}
@@ -77,7 +85,7 @@
                 {% endif %}
             </ul>
         </div>
-        <a href="{% url 'lista_processos' %}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle"></i> Voltar</a>
+        <a href="{% url 'gestao:lista_processos' %}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle"></i> Voltar</a>
     </div>
 </div>
 
@@ -92,57 +100,26 @@
 
     <div class="tab-content" id="processoTabContent">
         <div class="tab-pane fade show active" id="info-gerais-pane" role="tabpanel" aria-labelledby="info-gerais-tab" tabindex="0">
-            <div class="card-body p-4 bg-light">
+            <div class="card-body p-4">
+                <div class="info-card">
+                    <div class="info-card-header"><i class="bi bi-info-circle-fill text-primary"></i> Resumo Principal do Processo</div>
+                    <div class="info-card-body resumo-principal-grid">
+                        <div><p><strong>Nº do Processo:</strong>{{ processo.numero_processo|default:"Não informado" }}</p></div>
+                        <div><p><strong>Status:</strong><span class="badge fs-6 {% if processo.status_processo == 'ARQUIVADO' %}bg-secondary-subtle text-secondary-emphasis{% elif processo.status_processo == 'ATIVO' %}bg-success-subtle text-success-emphasis{% else %}bg-primary-subtle text-primary-emphasis{% endif %}">{{ processo.get_status_processo_display }}</span></p></div>
+                        <div><p><strong>Fase Atual:</strong><span class="badge fs-6 bg-info-subtle text-info-emphasis">{{ processo.get_fase_display }}</span></p></div>
+                        <div><p><strong>Adv. Responsável:</strong>{% if processo.advogado_responsavel %}{{ processo.advogado_responsavel.get_full_name|default:processo.advogado_responsavel.username }}{% else %}Não definido{% endif %}</p></div>
+                    </div>
+                </div>
+
                 <div class="row g-4">
                     <div class="col-lg-7">
                         <div class="info-card">
-                            <div class="info-card-header"><i class="bi bi-file-text-fill text-primary"></i> Resumo e Situação</div>
-                            <div class="info-card-body">
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <p><strong>Classe Processual:</strong>{{ processo.tipo_acao|default:"Não especificado" }}</p>
-                                        <p><strong>Distribuído em:</strong>{{ processo.data_distribuicao|date:"d/m/Y" }}</p>
-                                        <p><strong>Valor da Causa:</strong>R$ {{ processo.valor_causa|intcomma|default:"N/A" }}</p>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <p><strong>Fase Atual:</strong><span class="badge fs-6 bg-info-subtle text-info-emphasis">{{ processo.get_fase_display }}</span></p>
-                                        <p><strong>Status do Processo:</strong><span class="badge fs-6 {% if processo.status_processo == 'ARQUIVADO' %}bg-secondary-subtle text-secondary-emphasis{% elif processo.status_processo == 'ATIVO' %}bg-success-subtle text-success-emphasis{% else %}bg-primary-subtle text-primary-emphasis{% endif %}">{{ processo.get_status_processo_display }}</span></p>
-                                    </div>
-                                </div>
-                                <hr class="my-3"> {# Adiciona um separador #}
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <p><strong>Cálculos Judiciais:</strong>
-                                            {% if processo.calculos.exists %}
-                                                <span class="badge bg-success-subtle text-success-emphasis">Existem</span>
-                                                <a href="{% url 'pagina_de_calculos' processo_pk=processo.pk %}" class="btn btn-sm btn-outline-info ms-2">Ver Cálculos</a>
-                                            {% else %}
-                                                <span class="badge bg-warning-subtle text-warning-emphasis">Nenhum</span>
-                                                <a href="{% url 'pagina_de_calculos' processo_pk=processo.pk %}" class="btn btn-sm btn-outline-primary ms-2">Adicionar Cálculo</a>
-                                            {% endif %}
-                                        </p>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <p><strong>Total de Movimentações:</strong>
-                                            <span class="badge bg-primary-subtle text-primary-emphasis">{{ processo.movimentacoes.count }}</span>
-                                        </p>
-                                    </div>
-                                </div>
+                            <div class="info-card-header"><i class="bi bi-people-fill text-primary"></i> Partes Envolvidas</div>
+                            <div class="info-card-body p-0">
+                                {% include 'gestao/partials/_card_partes_envolvidas.html' %}
                             </div>
                         </div>
-
                         <div class="info-card">
-                            <div class="info-card-header"><i class="bi bi-building-fill text-primary"></i> Dados do Juízo</div>
-                            <div class="info-card-body">
-                                <div class="row g-3">
-                                    <div class="col-md-4"><p><strong>Tribunal:</strong> {{ processo.get_tribunal_display|default:"N/A" }}</p></div>
-                                    <div class="col-md-4"><p><strong>Grau de Jurisdição:</strong> {{ processo.get_grau_jurisdicao_display|default:"N/A" }}</p></div>
-                                    <div class="col-md-4"><p><strong>Órgão Julgador:</strong> {{ processo.vara_comarca_orgao|default:"N/A" }}</p></div>
-                                </div>
-                            </div>
-                        </div>
-
-                         <div class="info-card">
                             <div class="info-card-header"><i class="bi bi-chat-left-text-fill text-primary"></i> Assunto Principal / Descrição do Caso</div>
                             <div class="info-card-body">
                                 <p class="mb-0 lh-base">{{ processo.descricao_caso|linebreaksbr|default:"Nenhuma descrição fornecida." }}</p>
@@ -151,43 +128,35 @@
                     </div>
 
                     <div class="col-lg-5">
-                        {# NOVO CARD - RESUMO FINANCEIRO #}
                         <div class="info-card">
                             <div class="info-card-header"><i class="bi bi-cash-stack text-primary"></i> Resumo Financeiro</div>
                             <div class="info-card-body">
-                                <p><strong>Valor da Causa:</strong> R$ {{ processo.valor_causa|intcomma|default:"N/A" }}</p>
-                                <p><strong>Valor Executado:</strong> R$ {{ processo.valor_executado|intcomma|default:"N/A" }}</p>
-                                <p><strong>Resultado Final:</strong> <span class="badge bg-info-subtle text-info-emphasis">{{ processo.get_resultado_display|default:"Não definido" }}</span></p>
-                                <hr>
-                                <p><strong>Total Contratado:</strong> R$ {{ resumo_financeiro_processo.valor_total_contratado|intcomma }}</p>
-                                <p><strong>Total Recebido:</strong> R$ {{ resumo_financeiro_processo.total_recebido|intcomma }}</p>
-                                <p><strong>Saldo Devedor:</strong> <span class="text-danger fw-bold">R$ {{ resumo_financeiro_processo.saldo_devedor|intcomma }}</span></p>
+                                <p><strong>Valor da Causa:</strong>{% if processo.valor_causa %} R$ {{ processo.valor_causa|floatformat:2|localize }}{% else %} N/A {% endif %}</p>
+                                <p><strong>Total Contratado:</strong> R$ {{ resumo_financeiro_processo.valor_total_contratado|floatformat:2|localize }}</p>
+                                <p><strong>Total Recebido:</strong> R$ {{ resumo_financeiro_processo.total_recebido|floatformat:2|localize }}</p>
+                                <p><strong>Saldo Devedor:</strong> <span class="text-danger fw-bold">R$ {{ resumo_financeiro_processo.saldo_devedor|floatformat:2|localize }}</span></p>
                             </div>
                         </div>
-                        {# FIM NOVO CARD #}
 
                         <div class="info-card">
-                             <div class="info-card-header"><i class="bi bi-people-fill text-primary"></i> Partes Envolvidas</div>
-                             <div class="info-card-body p-0">
-                                {% include 'gestao/partials/_card_partes_envolvidas.html' %}
-                             </div>
+                            <div class="info-card-header"><i class="bi bi-building-fill text-primary"></i> Dados do Juízo</div>
+                            <div class="info-card-body">
+                                <p><strong>Tribunal:</strong> {{ processo.get_tribunal_display|default:"N/A" }}</p>
+                                <p><strong>Grau de Jurisdição:</strong> {{ processo.get_grau_jurisdicao_display|default:"N/A" }}</p>
+                                <p><strong>Órgão Julgador:</strong> {{ processo.vara_comarca_orgao|default:"N/A" }}</p>
+                                <p class="mb-0"><strong>Distribuído em:</strong> {{ processo.data_distribuicao|date:"d/m/Y" }}</p>
+                            </div>
                         </div>
 
-                        <div class="info-card">
-                             <div class="info-card-header"><i class="bi bi-person-workspace text-primary"></i> Equipe Responsável</div>
+                         <div class="info-card">
+                             <div class="info-card-header"><i class="bi bi-person-workspace text-primary"></i> Equipe Interna</div>
                              <div class="info-card-body">
-                                <p><strong>Adv. Responsável:</strong>
-                                    {% if processo.advogado_responsavel %}
-                                        {{ processo.advogado_responsavel.get_full_name|default:processo.advogado_responsavel.username }}
-                                    {% else %}
-                                        Não definido
-                                    {% endif %}
-                                </p>
-
                                 {% if processo.advogados_envolvidos.all %}
-                                <p><strong>Outros Colaboradores:</strong>
+                                <p class="mb-0"><strong>Outros Colaboradores:</strong>
                                     {% for advogado in processo.advogados_envolvidos.all %}{{ advogado.get_full_name|default:advogado.username }}{% if not forloop.last %}, {% endif %}{% endfor %}
                                 </p>
+                                {% else %}
+                                <p class="mb-0 text-muted">Nenhum outro colaborador envolvido.</p>
                                 {% endif %}
                             </div>
                         </div>
@@ -209,13 +178,23 @@
                 <div class="p-3 mb-4 rounded bg-light border">
                     <h6 class="mb-3"><i class="bi bi-file-earmark-plus-fill text-primary me-2"></i>Gerar Novo Documento a partir de um Modelo</h6>
                     <form id="formGerarDocumento" class="d-flex flex-wrap gap-2">
-                        <div class="flex-grow-1"><select id="selectModelo" class="form-select" aria-label="Selecione um modelo"><option value="" selected>Selecione um modelo...</option>{% for modelo in todos_modelos %}<option value="{% url 'gerar_documento' processo_pk=processo.pk modelo_pk=modelo.pk %}">{{ modelo.titulo }}</option>{% endfor %}</select></div>
+                        <div class="flex-grow-1"><select id="selectModelo" class="form-select" aria-label="Selecione um modelo"><option value="" selected>Selecione um modelo...</option>{% for modelo in todos_modelos %}<option value="{% url 'gestao:gerar_documento' processo_pk=processo.pk modelo_pk=modelo.pk %}">{{ modelo.titulo }}</option>{% endfor %}</select></div>
                         <button type="submit" class="btn btn-primary"><i class="bi bi-play-circle-fill"></i> Gerar</button>
                     </form>
                 </div>
                 <h6 class="mb-3"><i class="bi bi-files text-primary me-2"></i>Documentos Vinculados ao Processo</h6>
                 <div class="list-group">
-                    {% for doc in processo.documentos.all %}<a href="{% url 'editar_documento' pk=doc.pk %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"><p class="mb-1 fw-bold">{{ doc.titulo }}</p><small class="text-muted">Modificado em {{ doc.data_modificacao|date:"d/m/Y" }}</small></a>{% empty %}<div class="list-group-item text-center text-muted">Nenhum documento gerado.</div>{% endfor %}
+                {% for doc in processo.documentos.all %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div><h6 class="mb-1">{{ doc.titulo }}</h6><small class="text-muted">Criado em {{ doc.data_criacao|date:"d/m/Y \à\s H:i" }}</small></div>
+                        <div class="d-flex gap-2">
+                            <a href="{% url 'gestao:editar_documento' pk=doc.pk %}" class="btn btn-sm btn-outline-primary" title="Editar"><i class="bi bi-pencil-square"></i> Editar</a>
+                            <a href="{% url 'gestao:imprimir_documento' pk=doc.pk %}" class="btn btn-sm btn-outline-secondary" title="Visualizar/Imprimir"><i class="bi bi-printer-fill"></i> Imprimir</a>
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="list-group-item text-center text-muted">Nenhum documento gerado para este processo.</div>
+                {% endfor %}
                 </div>
             </div>
         </div>
@@ -223,10 +202,10 @@
         <div class="tab-pane fade" id="financeiro-pane" role="tabpanel" aria-labelledby="financeiro-tab" tabindex="0">
             <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
                 <h5 class="mb-0"><i class="bi bi-cash-coin me-2 text-primary"></i> Lançamentos Financeiros</h5>
-                <a href="{% url 'adicionar_contrato_processo' processo_pk=processo.pk %}" class="btn btn-sm btn-outline-success">+ Contrato</a>
+                <a href="{% url 'gestao:adicionar_contrato_processo' processo_pk=processo.pk %}" class="btn btn-sm btn-outline-success">+ Contrato</a>
             </div>
-            <div class="card-body p-0" id="financial-table-container" data-parent-pk="{{ processo.pk }}" data-parent-type="processo"> {# <-- ADICIONADO DATA-ATTRIBUTES AQUI #}
-                {% include 'gestao/partials/_tabela_financeira.html' with lancamentos_agrupados=lancamentos_agrupados %}
+            <div class="card-body p-0" id="financial-table-container" data-parent-pk="{{ processo.pk }}" data-parent-type="processo">
+                {% include 'gestao/partials/_tabela_financeira.html' %}
             </div>
         </div>
 
@@ -236,16 +215,10 @@
                     <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRecursos" aria-expanded="false" aria-controls="collapseRecursos"><i class="bi bi-send-fill text-secondary me-2"></i> Recursos Interpostos</button></h2><div id="collapseRecursos" class="accordion-collapse collapse" data-bs-parent="#accordionDetalhesAdicionais"><div class="accordion-body">{% include 'gestao/partials/_detalhe_recursos.html' %}</div></div></div>
                     <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseIncidentes" aria-expanded="false" aria-controls="collapseIncidentes"><i class="bi bi-exclamation-triangle-fill text-warning me-2"></i> Incidentes Processuais</button></h2><div id="collapseIncidentes" class="accordion-collapse collapse" data-bs-parent="#accordionDetalhesAdicionais"><div class="accordion-body">{% include 'gestao/partials/_detalhe_incidentes.html' %}</div></div></div>
                     <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOutros" aria-expanded="false" aria-controls="collapseOutros"><i class="bi bi-plus-circle-dotted text-secondary me-2"></i> Outras Informações e Acesso</button></h2><div id="collapseOutros" class="accordion-collapse collapse" data-bs-parent="#accordionDetalhesAdicionais"><div class="accordion-body"><div class="info-group">{% if processo.link_acesso %}<p><strong>Acesso Eletrônico:</strong><a href="{{ processo.link_acesso }}" target="_blank" class="btn btn-sm btn-outline-primary mt-1"><i class="bi bi-link-45deg me-1"></i> Acessar Link</a></p>{% endif %}<div class="d-flex flex-wrap gap-2 mt-2">
-    {% if processo.segredo_justica %}
-        <span class="badge bg-secondary"><i class="bi bi-shield-lock-fill"></i> Segredo de Justiça</span>
-    {% endif %}
-    {% if processo.justica_gratuita %}
-        <span class="badge bg-secondary"><i class="bi bi-file-earmark-person-fill"></i> Justiça Gratuita</span>
-    {% endif %}
-    {% if processo.prioridade_tramitacao %}
-        <span class="badge bg-secondary"><i class="bi bi-stopwatch-fill"></i> Prioridade</span>
-    {% endif %}
-</div><p class="mt-2"><strong>Número SEI:</strong> {{ processo.numero_sei|default:"N/A" }}</p><p><strong>Outro Número:</strong> {{ processo.numero_outro_sistema|default:"N/A" }}</p><p><strong>Observações:</strong><br><small class="text-muted">{{ processo.observacoes_internas|linebreaksbr|default:"Nenhuma observação." }}</small></p></div></div></div></div>
+                        {% if processo.segredo_justica %}<span class="badge bg-secondary"><i class="bi bi-shield-lock-fill"></i> Segredo de Justiça</span>{% endif %}
+                        {% if processo.justica_gratuita %}<span class="badge bg-secondary"><i class="bi bi-file-earmark-person-fill"></i> Justiça Gratuita</span>{% endif %}
+                        {% if processo.prioridade_tramitacao %}<span class="badge bg-secondary"><i class="bi bi-stopwatch-fill"></i> Prioridade</span>{% endif %}
+                    </div><p class="mt-2"><strong>Número SEI:</strong> {{ processo.numero_sei|default:"N/A" }}</p><p><strong>Outro Número:</strong> {{ processo.numero_outro_sistema|default:"N/A" }}</p><p><strong>Observações:</strong><br><small class="text-muted">{{ processo.observacoes_internas|linebreaksbr|default:"Nenhuma observação." }}</small></p></div></div></div></div>
                 </div>
             </div>
         </div>
@@ -256,15 +229,34 @@
 {% include 'gestao/partials/_modal_gerenciar_partes.html' %}
 {% include 'gestao/partials/_modal_pagamento.html' %}
 {% include 'gestao/partials/_modal_arquivamento.html' with processo=processo %}
+{% include 'gestao/partials/_modal_editar_movimentacao.html' %}
 
 {% endblock %}
 
 
 {% block javascript %}
 {{ block.super }}
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.full.min.js"></script>
+
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // SCRIPT PARA GERAR DOCUMENTOS (Mantido)
+$(document).ready(function() {
+    // --- LÓGICA DO SELECT2 PARA O MODAL DE ADIÇÃO ---
+    const seletorTipoMovimentacao = '#adicionarMovimentacaoModal .select2';
+    $(seletorTipoMovimentacao).select2({
+        theme: 'bootstrap-5',
+        tags: true,
+        dropdownParent: $('#adicionarMovimentacaoModal'),
+        placeholder: 'Selecione ou digite um novo tipo',
+        createTag: function (params) {
+            var term = $.trim(params.term);
+            if (term === '') { return null; }
+            return { id: term, text: term, newTag: true }
+        }
+    });
+
+    // --- LÓGICA PARA GERAR DOCUMENTOS ---
     const formGerarDocumento = document.getElementById('formGerarDocumento');
     if (formGerarDocumento) {
         formGerarDocumento.addEventListener('submit', function(e) {
@@ -275,24 +267,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // =======================================================
-    // SCRIPT PARA ATIVAR A ABA CORRETA (AJUSTE FINO)
-    // =======================================================
-    // Este script lê o #hash da URL quando a página carrega
+    // --- LÓGICA PARA ATIVAR A ABA CORRETA VIA HASH NA URL ---
     const url = new URL(window.location.href);
     if (url.hash) {
-        // Encontra o botão da aba que corresponde ao hash (ex: data-bs-target="#financeiro-pane")
         const tabTrigger = document.querySelector(`.nav-tabs button[data-bs-target="${url.hash}"]`);
         if (tabTrigger) {
-            const tab = new bootstrap.Tab(tabTrigger);
-            tab.show();
+            new bootstrap.Tab(tabTrigger).show();
         }
     }
 });
 </script>
 
-{# INCLUSÃO DOS OUTROS SCRIPTS PARCIAIS (Mantido) #}
 {% include 'gestao/partials/_detalhe_gerenciar_partes_js.html' %}
-{% include 'gestao/partials/_detalhe_movimentacao_js.html' %}
 {% include 'gestao/partials/_detalhe_financeiro_js.html' %}
+{% include 'gestao/partials/_detalhe_movimentacao_modal_js.html' %}
 {% endblock %}

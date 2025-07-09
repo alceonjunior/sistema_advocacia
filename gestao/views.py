@@ -9,10 +9,11 @@ import datetime
 import itertools
 import json
 import unicodedata
-from datetime import date
+from datetime import datetime, date, timedelta
 from decimal import Decimal
 from operator import attrgetter, itemgetter
 
+from dateutil.relativedelta import relativedelta
 # Django Core
 from django.apps import apps
 from django.contrib import messages
@@ -22,7 +23,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import (Q, Case, Count, DateField, DecimalField, F,
+from django.db.models import (Q, Case, CharField, DateField, DecimalField, F,
                               OuterRef, Subquery, Sum, Value, When)
 from django.http import (Http404, HttpResponse, HttpResponseBadRequest,
                          JsonResponse)
@@ -30,9 +31,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template import Context, Template
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.utils import timezone
 from django.views.decorators.http import require_POST
-
+from django.db.models.functions import Coalesce
+from django.db.models import Sum, Count, Q
+from django.utils import timezone
+from datetime import timedelta
+from dateutil.relativedelta import relativedelta
 # Local Application
 from . import models
 from .calculators import CalculadoraMonetaria
@@ -46,14 +50,22 @@ from .forms import (AreaProcessoForm, CalculoForm, ClienteForm,
                     ParteProcessoFormSet, ProcessoCreateForm, ProcessoForm,
                     RecursoForm, ServicoConcluirForm, ServicoEditForm,
                     ServicoForm, TipoAcaoForm, TipoServicoForm,
-                    UsuarioPerfilForm)
+                    UsuarioPerfilForm, DocumentoForm, GerarDocumentoForm, LancamentoFinanceiroForm,
+                    DespesaRecorrenteVariavelForm, DespesaRecorrenteFixaForm, DespesaPontualForm, DespesaTipoForm)
 from .models import (AreaProcesso, CalculoJudicial, Cliente, Documento,
                      EscritorioConfiguracao, Incidente, LancamentoFinanceiro,
                      ModeloDocumento, Movimentacao, MovimentacaoServico,
                      Pagamento, Processo, Recurso, Servico, TipoAcao,
-                     TipoServico, UsuarioPerfil)
+                     TipoServico, UsuarioPerfil, ContratoHonorarios, ParteProcesso)
 from .services import ServicoIndices
 from .utils import data_por_extenso, valor_por_extenso
+from .nfse_service import NFSEService # Adicione este import no topo
+from django.conf import settings  # <--- ADICIONE ESTE IMPORT
+from .models import Processo, Cliente, TipoMovimentacao # <--- GARANTA QUE TipoMovimentacao ESTÁ AQUI
+from django.conf import settings  # <--- ADICIONE ESTE IMPORT
+from .models import Processo, Cliente, TipoMovimentacao # <--- GARANTA QUE TipoMovimentacao ESTÁ AQUI
+from django.middleware.csrf import get_token # Adicione este import no topo
+
 
 PERMISSOES_MAPEADAS = {
     "Processos": [
@@ -93,15 +105,24 @@ PERMISSOES_MAPEADAS = {
 def dashboard(request):
     """
     Dashboard Analítico e de Gestão.
-    Fornece uma visão completa das urgências, agenda e pulso do escritório.
+    Versão com lógica de agrupamento de pendências de serviço.
     """
+    # --- 1. CONFIGURAÇÕES INICIAIS ---
     hoje = timezone.now().date()
-    proximos_30_dias = hoje + datetime.timedelta(days=30)
+    # CORREÇÃO: Usamos timedelta diretamente, pois foi importado acima
+    proximos_30_dias = hoje + timedelta(days=30)
     status_aberto = ['PENDENTE', 'EM_ANDAMENTO']
     usuario = request.user
-    agenda_completa = []
 
-    # Otimização: Evitar chamadas desnecessárias ao banco de dados dentro do loop
+    # --- 2. QUERIES PRINCIPAIS ---
+    processos_ativos_qs = Processo.objects.filter(
+        advogado_responsavel=usuario, status_processo='ATIVO'
+    ).select_related('tipo_acao')
+
+    servicos_ativos_qs = Servico.objects.filter(
+        responsavel=usuario, concluido=False
+    ).select_related('cliente', 'tipo_servico')
+
     movimentacoes_qs = Movimentacao.objects.filter(
         responsavel=usuario, status__in=status_aberto
     ).select_related('processo__tipo_acao', 'tipo_movimentacao')
@@ -110,63 +131,130 @@ def dashboard(request):
         responsavel=usuario, status__in=status_aberto
     ).select_related('servico__cliente', 'servico__tipo_servico')
 
+    servicos_com_prazo_qs = Servico.objects.filter(
+        responsavel=usuario, concluido=False, prazo__isnull=False
+    ).select_related('cliente', 'tipo_servico')
+
+    ultimas_movimentacoes = Movimentacao.objects.filter(processo__advogado_responsavel=usuario).order_by(
+        '-data_criacao').select_related('processo')[:5]
+
     def remove_accents(input_str):
         if not input_str: return ""
         nfkd_form = unicodedata.normalize('NFKD', input_str)
         return "".join([c for c in nfkd_form if not unicodedata.combining(c)])
 
+    # --- 3. MONTAGEM DA LISTA PLANA (PARA O 'FOCO DO DIA') E LISTAS SEPARADAS ---
+    agenda_completa = []
+    lista_de_pendencias = []
+    agenda_audiencias = []
+
     for m in movimentacoes_qs:
-        if not m.tipo_movimentacao: continue  # Pula movimentações sem tipo
+        if not m.tipo_movimentacao: continue
+        is_audiencia = 'audiencia' in m.titulo.lower() or 'audiencia' in remove_accents(
+            m.tipo_movimentacao.nome.lower())
 
-        tipo_mov_sem_acento = remove_accents(m.tipo_movimentacao.nome.lower())
-        titulo_sem_acento = remove_accents(m.titulo.lower())
-        is_audiencia = 'audiencia' in tipo_mov_sem_acento or 'audiencia' in titulo_sem_acento
+        item_data = {
+            'pk': m.pk, 'data': m.data_prazo_final, 'hora': m.hora_prazo, 'titulo': m.titulo,
+            'numero_processo': m.processo.numero_processo, 'nome_parte': m.processo.get_polo_ativo_display(),
+            'url': f"{reverse('gestao:detalhe_processo', args=[m.processo.pk])}#movimentacoes-pane",
+            'objeto_str': str(m.processo), 'cliente': m.processo.get_polo_ativo_display(),
+            'data_criacao': m.data_criacao, 'link_referencia': m.link_referencia,
+            'status': m.status # JÁ EXISTE NO CÓDIGO FORNECIDO
 
-        agenda_completa.append({
-            'tipo': 'audiencia' if is_audiencia else 'prazo',
-            'data': m.data_prazo_final,
-            'hora': m.hora_prazo,
-            'titulo': m.titulo,
-            'url': reverse('gestao:detalhe_processo', args=[m.processo.pk]),
-            'objeto_str': str(m.processo),
-            'cliente': m.processo.get_polo_ativo_display(),
-            'data_criacao': m.data_criacao
-        })
+        }
+        if is_audiencia:
+            item_data['tipo'] = 'audiencia'
+            agenda_audiencias.append(item_data)
+        else:
+            item_data['tipo'] = 'prazo_processo'
+            lista_de_pendencias.append(item_data)
 
     for ts in tarefas_servico_qs:
-        agenda_completa.append({
-            'tipo': 'tarefa_servico',
-            'data': ts.prazo_final,
-            'hora': None,
-            'titulo': ts.titulo,
-            'url': reverse('gestao:detalhe_servico', args=[ts.servico.pk]),
-            'objeto_str': str(ts.servico),
-            'cliente': ts.servico.cliente.nome_completo,
-            'data_criacao': ts.data_criacao
+        lista_de_pendencias.append({
+            'pk': ts.pk, 'tipo': 'tarefa_servico', 'data': ts.prazo_final, 'hora': None, 'titulo': ts.titulo,
+            'url': reverse('gestao:detalhe_servico', args=[ts.servico.pk]), 'objeto_str': str(ts.servico),
+            'cliente': ts.servico.cliente.nome_completo, 'data_criacao': ts.data_criacao,
+            'status': ts.status # JÁ EXISTE NO CÓDIGO FORNECIDO
+
         })
 
-    # Acesso seguro a chaves de dicionário com .get()
+    for s in servicos_com_prazo_qs:
+        current_status = 'EM_ANDAMENTO'  # Status padrão
+        if s.concluido:
+            current_status = 'CONCLUIDO'
+        elif s.prazo and s.prazo < hoje:
+            current_status = 'VENCIDO'  # Se não concluído e prazo passado
+
+        lista_de_pendencias.append({
+            'pk': s.pk,
+            'tipo': 'prazo_servico',
+            'data': s.prazo,
+            'hora': None,
+            'titulo': f"Prazo Final: {s.descricao}",
+            'url': f"{s.get_absolute_url()}#andamentos-pane",
+            'objeto_str': str(s),
+            'cliente': s.cliente.nome_completo,
+            'data_criacao': s.data_inicio,
+            'status': current_status  # Adicione esta linha
+        })
+
+    agenda_completa = agenda_audiencias + lista_de_pendencias
+
+    # --- 4. MONTAGEM DA LISTA HIERÁRQUICA (PARA O MODAL DE PENDÊNCIAS) ---
+    pendencias_agrupadas = []
+
+    for item in lista_de_pendencias:
+        if item['tipo'] == 'prazo_processo':
+            pendencias_agrupadas.append({'tipo_grupo': 'processo', 'item': item})
+
+    servicos_processados = set()
+    for item in lista_de_pendencias:
+        if item['tipo'] in ['prazo_servico', 'tarefa_servico']:
+            servico_pk_str = item['url'].split('/')[-2]
+            if not servico_pk_str.isdigit(): continue
+            servico_pk = int(servico_pk_str)
+
+            if servico_pk not in servicos_processados:
+                try:
+                    servico_obj = Servico.objects.get(pk=servico_pk)
+
+                    servico_dict = None
+                    if servico_obj.prazo:
+                        servico_dict = {
+                            'pk': servico_obj.pk, 'titulo': f"Prazo Final: {servico_obj.descricao}",
+                            'data': servico_obj.prazo,
+                            'objeto_str': f"Serviço - {servico_obj.cliente.nome_completo}",
+                            'url': servico_obj.get_absolute_url()
+                        }
+
+                    atividades = [p for p in lista_de_pendencias if
+                                  p['tipo'] == 'tarefa_servico' and str(servico_pk) in p['url']]
+
+                    pendencias_agrupadas.append({
+                        'tipo_grupo': 'servico',
+                        'servico': servico_dict,
+                        'atividades': sorted(atividades, key=lambda x: x['data'] if x['data'] else hoje)
+                    })
+                    servicos_processados.add(servico_pk)
+                except Servico.DoesNotExist:
+                    continue
+
+    # --- 5. PROCESSAMENTO FINAL E CONTEXTO ---
     itens_para_hoje = sorted([item for item in agenda_completa if item.get('data') == hoje],
                              key=lambda x: (x.get('hora') is not None, x.get('hora')), reverse=True)
     itens_vencidos = sorted([item for item in agenda_completa if item.get('data') and item['data'] < hoje],
                             key=itemgetter('data'))
-    proximas_audiencias = sorted(
-        [item for item in agenda_completa if item['tipo'] == 'audiencia' and item.get('data') and item['data'] > hoje],
+    proximas_audiencias = sorted([item for item in agenda_audiencias if item.get('data') and item['data'] > hoje],
+                                 key=itemgetter('data'))
+    proximos_prazos = sorted(
+        [item for item in lista_de_pendencias if item.get('data') and hoje < item['data'] <= proximos_30_dias],
         key=itemgetter('data'))
-    proximos_prazos = sorted([item for item in agenda_completa if
-                              item['tipo'] == 'prazo' and item.get('data') and hoje < item['data'] <= proximos_30_dias],
-                             key=itemgetter('data'))
-    tarefas_pendentes = sorted(
-        [item for item in agenda_completa if item['tipo'] == 'tarefa_servico' or not item.get('data')],
-        key=itemgetter('data_criacao'), reverse=True)
+    tarefas_pendentes = sorted([item for item in lista_de_pendencias if not item.get('data')],
+                               key=itemgetter('data_criacao'), reverse=True)
 
-    ultimas_movimentacoes = Movimentacao.objects.filter(processo__advogado_responsavel=usuario).order_by(
-        '-data_criacao').select_related('processo')[:5]
-    processos_ativos_count = Processo.objects.filter(advogado_responsavel=usuario, status_processo='ATIVO').count()
-    servicos_ativos_count = Servico.objects.filter(responsavel=usuario, concluido=False).count()
-    total_pendencias = len(
-        [item for item in agenda_completa if item['tipo'] != 'audiencia' and item.get('data') is not None]) + len(
-        tarefas_pendentes)
+    processos_ativos_count = processos_ativos_qs.count()
+    servicos_ativos_count = servicos_ativos_qs.count()
+    total_pendencias = len(lista_de_pendencias)
 
     context = {
         'processos_ativos_count': processos_ativos_count,
@@ -178,11 +266,17 @@ def dashboard(request):
         'proximos_prazos': proximos_prazos,
         'tarefas_pendentes': tarefas_pendentes,
         'ultimas_movimentacoes': ultimas_movimentacoes,
+        'hoje': hoje,
+        'lista_processos_ativos': processos_ativos_qs,
+        'lista_servicos_ativos': servicos_ativos_qs,
+        'lista_total_pendencias': pendencias_agrupadas,
+        'form_movimentacao': MovimentacaoForm(),
+        'form_edit_servico': ServicoEditForm(),
+        'form_movimentacao_servico': MovimentacaoServicoForm(),
         'form_servico': ServicoForm(),
         'form_contrato': ContratoHonorariosForm(),
         'form_tipo_servico': TipoServicoForm(),
         'form_cliente': ClienteForm(),
-        'hoje': hoje,
     }
     return render(request, 'gestao/dashboard.html', context)
 
@@ -354,6 +448,7 @@ def lista_servicos(request):
     context = {
         'filter': servico_filter,
         'servicos': servicos_filtrados,
+        'form_edit': ServicoEditForm()
     }
     return render(request, 'gestao/lista_servicos.html', context)
 
@@ -405,11 +500,16 @@ def detalhe_servico(request, pk):
             info_prazo = {'status': 'EM_DIA', 'texto': f"Restam {delta.days} dia(s)"}
 
     context = {
-        'servico': servico,
+                'servico': servico,
         'movimentacoes': servico.movimentacoes.all().order_by('-data_atividade', '-data_criacao'),
-        'form_movimentacao': form_movimentacao,
+        # =======================================================
+        # AJUSTE: Passamos o formulário com um nome específico
+        # =======================================================
+        'form_movimentacao_servico': form_movimentacao,
+        # =======================================================
         'form_pagamento': PagamentoForm(),
         'today': timezone.now().date(),
+
         'info_prazo': info_prazo,
         'financeiro': {
             'valor_total': valor_total_contratado,
@@ -666,10 +766,12 @@ def excluir_modelo(request, pk):
 def gerar_documento(request, processo_pk, modelo_pk):
     """
     Gera um novo documento a partir de um modelo para um processo.
+    Versão corrigida para não duplicar cabeçalho/rodapé.
     """
     processo = get_object_or_404(Processo, pk=processo_pk)
     modelo = get_object_or_404(ModeloDocumento, pk=modelo_pk)
 
+    # Lógica para obter o cliente e montar o contexto das variáveis
     cliente_principal = None
     parte_autora = processo.partes.filter(tipo_participacao='AUTOR').first()
     if parte_autora:
@@ -682,19 +784,28 @@ def gerar_documento(request, processo_pk, modelo_pk):
         'cidade_escritorio': EscritorioConfiguracao.objects.first().cidade if EscritorioConfiguracao.objects.first() else ''
     })
 
-    conteudo_renderizado = Template(modelo.conteudo).render(contexto_variaveis)
+    # ===== CORREÇÃO DEFINITIVA APLICADA AQUI =====
+    # Renderizamos APENAS o corpo principal do modelo para o campo 'conteudo'.
+    # O cabeçalho e o rodapé serão adicionados pelo template de impressão.
+    conteudo_renderizado = ""
+    if modelo.conteudo:
+        conteudo_renderizado = Template(modelo.conteudo).render(contexto_variaveis)
+
     titulo_sugerido = f"{modelo.titulo} - {cliente_principal.nome_completo if cliente_principal else 'Processo'}"
 
     if request.method == 'POST':
-        form = DocumentoForm(request.POST, request.FILES)
+        form = GerarDocumentoForm(request.POST)
         if form.is_valid():
             documento = form.save(commit=False)
             documento.processo = processo
+            # É crucial manter a referência ao modelo original para buscar o cabeçalho/rodapé depois
             documento.modelo_origem = modelo
             documento.save()
-            return redirect('gestao:detalhe_processo', pk=processo.pk)
+            # Redireciona para a página de impressão correta
+            return redirect('gestao:imprimir_documento', pk=documento.pk)
     else:
-        form = DocumentoForm(initial={'titulo': titulo_sugerido, 'conteudo': conteudo_renderizado})
+        # Passa apenas o conteúdo principal renderizado para o formulário
+        form = GerarDocumentoForm(initial={'titulo': titulo_sugerido, 'conteudo': conteudo_renderizado})
 
     context = {
         'form': form,
@@ -712,7 +823,9 @@ def editar_documento(request, pk):
         form = DocumentoForm(request.POST, request.FILES, instance=documento)
         if form.is_valid():
             form.save()
-            return redirect('gestao:detalhe_processo', pk=documento.processo.pk)
+            # ===== LINHA ALTERADA =====
+            # Redireciona para a nova página de impressão com o PK do documento editado
+            return redirect('gestao:imprimir_documento', pk=documento.pk)
     else:
         form = DocumentoForm(instance=documento)
 
@@ -1052,8 +1165,10 @@ def adicionar_tipo_servico_modal(request):
 def adicionar_servico_view(request):
     """Renderiza a página com o assistente para adicionar um novo serviço."""
     context = {
-        'form_servico': ServicoForm(),
-        'form_contrato': ContratoHonorariosForm(),
+        # ===== CORREÇÃO APLICADA AQUI =====
+        'form_servico': ServicoForm(prefix='servico'),
+        'form_contrato': ContratoHonorariosForm(prefix='contrato'),
+        # ====================================
         'form_cliente_modal': ClienteModalForm(),
         'form_tipo_servico': TipoServicoForm(),
     }
@@ -1062,50 +1177,89 @@ def adicionar_servico_view(request):
 
 @require_POST
 @login_required
+@transaction.atomic  # Garante que ou tudo é salvo, ou nada é.
 def salvar_servico_ajax(request):
-    """Processa os dados enviados via AJAX pelo wizard de cadastro de serviço."""
+    """
+    Recebe os dados do wizard via AJAX, valida e salva o serviço e, opcionalmente, o contrato.
+    Versão final e robusta.
+    """
     try:
         data = json.loads(request.body)
         servico_data = data.get('servico', {})
         contrato_data = data.get('contrato', {})
         has_contrato = data.get('has_contrato', False)
 
-        if not servico_data.get('responsavel'):
-            servico_data['responsavel'] = request.user.pk
-
+        # ===== INÍCIO DA CORREÇÃO DEFINITIVA =====
+        # 1. Os dados já vêm separados do JavaScript, então instanciamos os formulários
+        #    passando diretamente os dicionários correspondentes, SEM o argumento 'prefix'.
         form_servico = ServicoForm(servico_data)
-        if form_servico.is_valid():
-            servico = form_servico.save()
 
-            if has_contrato:
-                # [REINTEGRADO] Validação explícita para garantir dados mínimos do contrato na criação do serviço.
-                # Nota: Os nomes das chaves 'valor_pagamento_fixo' e 'data_primeiro_vencimento' devem corresponder
-                # ao que o JavaScript envia no objeto 'contrato_data'.
-                if not contrato_data.get('valor_pagamento_fixo') or not contrato_data.get('data_primeiro_vencimento'):
-                    servico.delete()  # Desfaz a criação do serviço se o contrato for inválido
-                    return JsonResponse({'status': 'error', 'errors': {'Contrato': [
-                        'Para adicionar um contrato, o Valor da Parcela e a Data do Primeiro Vencimento são obrigatórios.']}},
-                                        status=400)
+        form_contrato = None
+        if has_contrato:
+            form_contrato = ContratoHonorariosForm(contrato_data)
+        # ===== FIM DA CORREÇÃO DEFINITIVA =====
 
-                form_contrato = ContratoHonorariosForm(contrato_data)
-                if form_contrato.is_valid():
-                    contrato = form_contrato.save(commit=False)
-                    contrato.content_object = servico
-                    contrato.cliente = servico.cliente
-                    contrato.save()
-                else:
-                    servico.delete()  # Desfaz a criação do serviço se o formulário do contrato for inválido
-                    return JsonResponse({'status': 'error', 'errors': form_contrato.errors}, status=400)
+        # Validação dos formulários
+        servico_is_valid = form_servico.is_valid()
+        contrato_is_valid = not has_contrato or (form_contrato and form_contrato.is_valid())
 
-            return JsonResponse({'status': 'success', 'redirect_url': servico.get_absolute_url()})
+        if servico_is_valid and contrato_is_valid:
+            # Salva o serviço primeiro para obter seu ID
+            novo_servico = form_servico.save()
+
+            # Se for para criar um contrato e os dados essenciais foram preenchidos
+            if has_contrato and form_contrato and form_contrato.cleaned_data.get('valor_pagamento_fixo'):
+                # Cria o objeto ContratoHonorarios manualmente para garantir que todos os
+                # campos obrigatórios e relacionamentos sejam preenchidos antes de salvar.
+                ContratoHonorarios.objects.create(
+                    content_object=novo_servico,
+                    cliente=novo_servico.cliente,
+                    descricao=form_contrato.cleaned_data.get('descricao'),
+                    valor_pagamento_fixo=form_contrato.cleaned_data.get('valor_pagamento_fixo'),
+                    qtde_pagamentos_fixos=form_contrato.cleaned_data.get('qtde_pagamentos_fixos'),
+                    data_primeiro_vencimento=form_contrato.cleaned_data.get('data_primeiro_vencimento'),
+                    percentual_exito=form_contrato.cleaned_data.get('percentual_exito')
+                )
+
+            return JsonResponse({
+                'status': 'success',
+                'redirect_url': novo_servico.get_absolute_url()
+            })
         else:
-            return JsonResponse({'status': 'error', 'errors': form_servico.errors}, status=400)
+            # Combina os erros dos dois formulários em um único dicionário para exibição
+            errors = {}
+            errors.update(form_servico.errors.get_json_data())
+            if has_contrato and form_contrato:
+                errors.update(form_contrato.errors.get_json_data())
+
+            return JsonResponse({'status': 'error', 'errors': errors}, status=400)
 
     except json.JSONDecodeError:
-        return HttpResponseBadRequest('Requisição com JSON inválido.')
+        return JsonResponse({'status': 'error', 'errors': {'Requisição': [{'message': 'Formato de dados inválido.'}]}},
+                            status=400)
     except Exception as e:
-        return JsonResponse({'status': 'error', 'errors': {'Erro Geral': [f'Ocorreu um erro inesperado: {str(e)}']}},
+        print(f"Erro inesperado em salvar_servico_ajax: {e}")
+        return JsonResponse({'status': 'error', 'errors': {'Servidor': [{'message': f'Ocorreu um erro interno: {e}'}]}},
                             status=500)
+
+@require_POST
+@login_required
+@transaction.atomic # Garante que ou tudo é salvo, ou nada é.
+def excluir_servico(request, pk):
+    """
+    Exclui um serviço e qualquer contrato de honorários associado a ele.
+    """
+    servico = get_object_or_404(Servico, pk=pk)
+
+    # Busca e exclui qualquer contrato vinculado a este serviço
+    content_type = ContentType.objects.get_for_model(servico)
+    ContratoHonorarios.objects.filter(content_type=content_type, object_id=servico.pk).delete()
+
+    servico_nome = str(servico)
+    servico.delete()
+
+    messages.success(request, f'O serviço "{servico_nome}" e seus vínculos foram excluídos com sucesso.')
+    return redirect('gestao:lista_servicos')
 
 
 # ==============================================================================
@@ -1149,6 +1303,7 @@ def realizar_calculo(request, processo_pk, calculo_pk=None):
     """
     processo = get_object_or_404(Processo, pk=processo_pk)
 
+    # --- LÓGICA POST (quando um novo cálculo é submetido) ---
     if request.method == 'POST':
         form = CalculoForm(request.POST)
         if form.is_valid():
@@ -1158,12 +1313,13 @@ def realizar_calculo(request, processo_pk, calculo_pk=None):
             if resultado and not erro:
                 memoria_calculo_json = []
                 if resultado.get('memorial'):
+                    # Converte o memorial para um formato serializável (JSON)
                     memoria_calculo_json = [
                         {'termo_inicial': l['termo_inicial'].isoformat(), 'termo_final': l['termo_final'].isoformat(),
                          'variacao_periodo': str(l['variacao_periodo']),
                          'valor_atualizado_mes': str(l['valor_atualizado_mes'])} for l in resultado['memorial']]
 
-                # Versão limpa de salvar o cálculo
+                # Salva o novo cálculo no banco de dados
                 novo_calculo_salvo = CalculoJudicial.objects.create(
                     processo=processo, responsavel=request.user, descricao=dados_calculo['descricao'],
                     valor_original=dados_calculo['valor_original'], data_inicio_correcao=dados_calculo['data_inicio'],
@@ -1179,8 +1335,10 @@ def realizar_calculo(request, processo_pk, calculo_pk=None):
                     valor_corrigido=resultado['resumo']['valor_corrigido_total'],
                     valor_final=resultado['resumo']['valor_final'], memoria_calculo=memoria_calculo_json
                 )
+                # Redireciona para a página de visualização do cálculo recém-criado
                 return redirect('gestao:carregar_calculo', processo_pk=processo.pk, calculo_pk=novo_calculo_salvo.pk)
 
+        # Se o formulário for inválido, renderiza a página novamente com os erros
         contexto = {
             'processo': processo,
             'calculos_salvos': processo.calculos.all().order_by('-data_calculo'),
@@ -1190,13 +1348,15 @@ def realizar_calculo(request, processo_pk, calculo_pk=None):
         }
         return render(request, 'gestao/calculo_judicial.html', contexto)
 
-    # --- LÓGICA GET ---
+    # --- LÓGICA GET (quando a página é carregada ou um cálculo é visualizado) ---
     form = CalculoForm(initial=request.session.pop('form_initial_data', None))
     resultado_final, erro_final, calculo_carregado = None, None, None
+    form_data = {}  # ===== PONTO 1 DA CORREÇÃO: Inicializa o dicionário
 
     if calculo_pk:
         calculo_carregado = get_object_or_404(CalculoJudicial, pk=calculo_pk, processo=processo)
-        # Versão limpa de popular o formulário
+
+        # Popula o dicionário 'form_data' com os dados do cálculo carregado
         form_data = {
             'descricao': calculo_carregado.descricao, 'valor_original': calculo_carregado.valor_original,
             'data_inicio': calculo_carregado.data_inicio_correcao, 'data_fim': calculo_carregado.data_fim_correcao,
@@ -1208,11 +1368,14 @@ def realizar_calculo(request, processo_pk, calculo_pk=None):
             'multa_percentual': calculo_carregado.multa_percentual,
             'multa_sobre_juros': calculo_carregado.multa_sobre_juros,
             'honorarios_percentual': calculo_carregado.honorarios_percentual,
-            'gerar_memorial': True,
+            'gerar_memorial': True,  # Assume que sempre queremos ver o memorial ao carregar
         }
+        # Preenche o formulário com os dados carregados
         form = CalculoForm(initial=form_data)
+        # Recalcula o resultado para exibição
         resultado_final, erro_final = _perform_calculation(form_data)
 
+    # Monta o contexto final para o template
     contexto = {
         'processo': processo,
         'calculos_salvos': processo.calculos.all().order_by('-data_calculo'),
@@ -1220,6 +1383,7 @@ def realizar_calculo(request, processo_pk, calculo_pk=None):
         'calculo_carregado': calculo_carregado,
         'resultado': resultado_final,
         'erro': erro_final,
+        'form_data': form_data,  # ===== PONTO 2 DA CORREÇÃO: Adiciona ao contexto
     }
     return render(request, 'gestao/calculo_judicial.html', contexto)
 
@@ -1608,3 +1772,638 @@ def excluir_cadastro_auxiliar_ajax(request, modelo, pk):
         # para uma investigação mais aprofundada.
         return JsonResponse(
             {'status': 'error', 'message': 'Não foi possível excluir o item, pois ele pode estar em uso.'}, status=500)
+
+@login_required
+def imprimir_documento(request, pk):
+    """
+    Prepara uma página otimizada para a impressão de um documento gerado.
+    """
+    documento = get_object_or_404(Documento, pk=pk)
+    context = {
+        'documento': documento,
+        'escritorio': EscritorioConfiguracao.objects.first(),  # Para dados do cabeçalho/rodapé
+    }
+    return render(request, 'gestao/documentos/imprimir_documento.html', context)
+
+
+@login_required
+def get_movimentacao_json(request, pk):
+    """
+    Retorna os dados de uma movimentação específica em formato JSON para ser
+    usado pelo modal de edição.
+    """
+    try:
+        mov = get_object_or_404(Movimentacao, pk=pk)
+
+        # --- AJUSTE: Buscar dados do cliente principal do processo ---
+        cliente_principal = mov.processo.partes.filter(tipo_participacao='AUTOR').first()
+        cliente_nome = ""
+        cliente_telefone = ""
+        if cliente_principal and cliente_principal.cliente.telefone_principal:
+            cliente_nome = cliente_principal.cliente.nome_completo
+            # Limpa o telefone para conter apenas números
+            cliente_telefone = ''.join(filter(str.isdigit, cliente_principal.cliente.telefone_principal))
+
+        data = {
+            'pk': mov.pk,
+            'titulo': mov.titulo,
+            'tipo_movimentacao_id': mov.tipo_movimentacao_id,
+            'data_prazo_final': mov.data_prazo_final.strftime('%Y-%m-%d') if mov.data_prazo_final else '',
+            'hora_prazo': mov.hora_prazo.strftime('%H:%M') if mov.hora_prazo else '',
+            'detalhes': mov.detalhes,
+            'link_referencia': mov.link_referencia,
+            'responsavel_id': mov.responsavel_id,
+            'status': mov.status,
+
+            # --- NOVOS DADOS ADICIONADOS AO JSON ---
+            'cliente_nome': cliente_nome,
+            'cliente_telefone': cliente_telefone,
+            'remetente_nome': request.user.get_full_name() or request.user.username,
+        }
+        return JsonResponse(data)
+    except Http404:
+        return JsonResponse({'error': 'Movimentação não encontrada'}, status=404)
+
+
+@require_POST
+@login_required
+def editar_movimentacao_ajax(request, pk):
+    """
+    Processa a submissão do formulário de edição da movimentação via AJAX.
+    """
+    movimentacao = get_object_or_404(Movimentacao, pk=pk)
+    form = MovimentacaoForm(request.POST, instance=movimentacao)
+
+    if form.is_valid():
+        form.save()
+        messages.success(request, 'Movimentação atualizada com sucesso!')
+        return JsonResponse({'status': 'success'})
+    else:
+        # Retorna os erros do formulário em formato JSON para o frontend
+        return JsonResponse({'status': 'error', 'errors': form.errors.get_json_data()}, status=400)
+
+@login_required
+def get_servico_json(request, pk):
+    """
+    Retorna os dados de um serviço específico em formato JSON para ser
+    usado pelo modal de edição.
+    """
+    try:
+        servico = get_object_or_404(Servico, pk=pk)
+        data = {
+            'pk': servico.pk,
+            'responsavel_id': servico.responsavel_id,
+            'descricao': servico.descricao,
+            'data_inicio': servico.data_inicio.strftime('%Y-%m-%d') if servico.data_inicio else '',
+            'recorrente': servico.recorrente,
+            'prazo': servico.prazo.strftime('%Y-%m-%d') if servico.prazo else '',
+            'data_encerramento': servico.data_encerramento.strftime('%Y-%m-%d') if servico.data_encerramento else '',
+            'concluido': servico.concluido,
+            'ativo': servico.ativo,
+        }
+        return JsonResponse(data)
+    except Http404:
+        return JsonResponse({'error': 'Serviço não encontrado'}, status=404)
+
+@require_POST
+@login_required
+def editar_servico_ajax(request, pk):
+    """
+    Processa a submissão do formulário de edição do serviço via AJAX.
+    """
+    servico = get_object_or_404(Servico, pk=pk)
+    # Usamos o ServicoEditForm que já existe
+    form = ServicoEditForm(request.POST, instance=servico)
+
+    if form.is_valid():
+        form.save()
+        messages.success(request, 'Serviço atualizado com sucesso!')
+        return JsonResponse({'status': 'success'})
+    else:
+        return JsonResponse({'status': 'error', 'errors': form.errors.get_json_data()}, status=400)
+
+
+@login_required
+def get_movimentacao_servico_json(request, pk):
+    """ Retorna os dados de uma movimentação de serviço em formato JSON. """
+    try:
+        mov = get_object_or_404(MovimentacaoServico, pk=pk)
+        data = {
+            'pk': mov.pk,
+            'titulo': mov.titulo,
+            'detalhes': mov.detalhes,
+            'data_atividade': mov.data_atividade.strftime('%Y-%m-%d') if mov.data_atividade else '',
+            'responsavel_id': mov.responsavel_id,
+            'status': mov.status,
+            'prazo_final': mov.prazo_final.strftime('%Y-%m-%d') if mov.prazo_final else '',
+        }
+        return JsonResponse(data)
+    except Http404:
+        return JsonResponse({'error': 'Movimentação não encontrada'}, status=404)
+
+@require_POST
+@login_required
+def editar_movimentacao_servico_ajax(request, pk):
+    """ Processa a submissão do formulário de edição da movimentação de serviço via AJAX. """
+    movimentacao = get_object_or_404(MovimentacaoServico, pk=pk)
+    form = MovimentacaoServicoForm(request.POST, instance=movimentacao)
+
+    if form.is_valid():
+        form.save()
+        messages.success(request, 'Atividade atualizada com sucesso!')
+        return JsonResponse({'status': 'success'})
+    else:
+        return JsonResponse({'status': 'error', 'errors': form.errors.get_json_data()}, status=400)
+
+
+@require_POST
+@login_required
+def emitir_nfse_view(request, servico_pk):
+    """ View que dispara o serviço de emissão de NFS-e. """
+    service = NFSEService()
+    resultado = service.enviar_rps_para_emissao(servico_pk)
+
+    if resultado['status'] == 'sucesso':
+        messages.success(request, resultado['mensagem'])
+    else:
+        messages.error(request, resultado['mensagem'])
+
+    return redirect('gestao:detalhe_servico', pk=servico_pk)
+
+
+@login_required
+def get_all_clients_json(request):
+    """
+    Retorna uma lista de todos os clientes formatada para uso com a biblioteca Select2.
+    """
+    # Ordena os clientes por nome para uma melhor experiência no dropdown
+    clientes = Cliente.objects.all().order_by('nome_completo')
+
+    # Formata os dados no padrão que o Select2 espera: uma lista de objetos com 'id' e 'text'
+    client_data = [{"id": cliente.pk, "text": cliente.nome_completo} for cliente in clientes]
+
+    return JsonResponse(client_data, safe=False)
+
+
+@login_required
+def painel_financeiro(request):
+    """
+    Renderiza o painel financeiro aprimorado com KPIs, gráficos e projeções.
+    Versão com todas as correções de erros.
+    """
+    hoje = timezone.now().date()
+
+    # --- Lógica de Filtros ---
+    data_inicio_str = request.GET.get('data_inicio', hoje.replace(day=1).strftime('%Y-%m-%d'))
+    # CORREÇÃO DO AttributeError: Parênteses ajustados para calcular a data antes de formatar
+    data_fim_default = (hoje.replace(day=1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+    data_fim_str = request.GET.get('data_fim', data_fim_default.strftime('%Y-%m-%d'))
+
+    data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
+    data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
+
+    # --- Consulta Base com Anotações ---
+    lancamentos_base = LancamentoFinanceiro.objects.all()
+
+    lancamentos_com_status = lancamentos_base.annotate(
+        total_pago=Coalesce(Sum('pagamentos__valor_pago'), Decimal(0), output_field=DecimalField())
+    ).annotate(
+        status_calculado=Case(
+            When(valor__lte=F('total_pago'), then=Value('PAGO')),
+            When(data_vencimento__lt=hoje, then=Value('ATRASADO')),
+            When(total_pago__gt=0, then=Value('PARCIALMENTE_PAGO')),
+            default=Value('A_PAGAR'),
+            output_field=CharField()
+        )
+    )
+
+    lancamentos_periodo = lancamentos_com_status.filter(data_vencimento__range=[data_inicio, data_fim])
+
+    # --- KPIs (Indicadores Chave) ---
+    pagamentos_periodo = Pagamento.objects.filter(data_pagamento__range=[data_inicio, data_fim])
+    total_recebido = \
+    pagamentos_periodo.filter(lancamento__tipo='RECEITA').aggregate(total=Coalesce(Sum('valor_pago'), Decimal(0)))[
+        'total']
+    total_pago = \
+    pagamentos_periodo.filter(lancamento__tipo='DESPESA').aggregate(total=Coalesce(Sum('valor_pago'), Decimal(0)))[
+        'total']
+    saldo_realizado = total_recebido - total_pago
+
+    previsao_receitas = lancamentos_periodo.filter(tipo='RECEITA').aggregate(total=Coalesce(Sum('valor'), Decimal(0)))[
+        'total']
+    previsao_despesas = lancamentos_periodo.filter(tipo='DESPESA').aggregate(total=Coalesce(Sum('valor'), Decimal(0)))[
+        'total']
+
+    # --- Análise de Inadimplência ---
+    inadimplentes = lancamentos_com_status.filter(status_calculado='ATRASADO').order_by('data_vencimento')
+    total_inadimplencia = sum(lanc.valor - lanc.total_pago for lanc in inadimplentes)
+
+    # --- Estrutura de Dados Hierárquica ---
+    analise_por_cliente = []
+    clientes_no_periodo = Cliente.objects.filter(lancamentos__in=lancamentos_periodo).distinct()
+
+    for cliente in clientes_no_periodo:
+        lancamentos_cliente = lancamentos_periodo.filter(cliente=cliente)
+        processos_cliente = lancamentos_cliente.filter(processo__isnull=False).values('processo_id',
+                                                                                      'processo__numero_processo').annotate(
+            total=Sum('valor'))
+        servicos_cliente = lancamentos_cliente.filter(servico__isnull=False).values('servico_id',
+                                                                                    'servico__descricao').annotate(
+            total=Sum('valor'))
+
+        analise_por_cliente.append({
+            'cliente': cliente,
+            'total_faturado_periodo': lancamentos_cliente.filter(tipo='RECEITA').aggregate(total=Sum('valor'))[
+                                          'total'] or 0,
+            'processos': list(processos_cliente),
+            'servicos': list(servicos_cliente)
+        })
+    analise_por_cliente = sorted(analise_por_cliente, key=lambda x: x['total_faturado_periodo'], reverse=True)
+
+    # --- Contexto Final ---
+    context = {
+        'titulo_pagina': "Painel Financeiro",
+        'form_lancamento': LancamentoFinanceiroForm(),
+        'data_inicio': data_inicio,
+        'data_fim': data_fim,
+        'saldo_realizado': saldo_realizado,
+        'previsao_receitas': previsao_receitas,
+        'previsao_despesas': previsao_despesas,
+        'total_inadimplencia': total_inadimplencia,
+        'analise_por_cliente': analise_por_cliente,
+        'inadimplentes': inadimplentes,
+        'contas_a_pagar': lancamentos_periodo.filter(tipo='DESPESA').order_by('data_vencimento'),
+        'contas_a_receber': lancamentos_periodo.filter(tipo='RECEITA').order_by('data_vencimento'),
+    }
+    return render(request, 'gestao/financeiro/painel_financeiro.html', context)
+
+
+@login_required
+@transaction.atomic
+def adicionar_despesa_wizard(request):
+    """
+    Controla o fluxo do wizard para adicionar diferentes tipos de despesa.
+    O estado do wizard é mantido na sessão.
+    Após salvar, redireciona para a tela de origem (painel financeiro ou de despesas).
+    """
+    STEP_SELECT_TYPE = 'select_type'
+    STEP_FILL_DETAILS = 'fill_details'
+
+    current_step = request.session.get('despesa_wizard_step', STEP_SELECT_TYPE)
+    despesa_type = request.session.get('despesa_type', None)
+    categoria = request.session.get('despesa_categoria', None)
+    next_url = request.session.get('despesa_wizard_next_url', reverse('gestao:painel_financeiro'))
+
+    if request.method == 'POST':
+        if 'reset_wizard' in request.POST:
+            request.session.pop('despesa_wizard_step', None)
+            request.session.pop('despesa_type', None)
+            request.session.pop('despesa_categoria', None)
+            request.session.pop('despesa_wizard_next_url', None)
+            return redirect('gestao:adicionar_despesa_wizard')
+
+        if current_step == STEP_SELECT_TYPE:
+            form_type = DespesaTipoForm(request.POST)
+            if form_type.is_valid():
+                despesa_type = form_type.cleaned_data['tipo_despesa']
+                categoria = form_type.cleaned_data['categoria']
+                request.session['despesa_type'] = despesa_type
+                request.session['despesa_categoria'] = categoria
+                request.session['despesa_wizard_step'] = STEP_FILL_DETAILS
+
+                # Guarda a URL de onde o usuário veio
+                if 'next' in request.GET:
+                    request.session['despesa_wizard_next_url'] = request.GET['next']
+                else:
+                    referer = request.META.get('HTTP_REFERER')
+                    # Verifica se o referer é um dos painéis esperados
+                    if referer and (reverse('gestao:painel_financeiro') in referer or reverse(
+                            'gestao:painel_despesas') in referer):
+                        request.session['despesa_wizard_next_url'] = referer
+                    else:
+                        request.session['despesa_wizard_next_url'] = reverse('gestao:painel_financeiro')
+
+                return redirect('gestao:adicionar_despesa_wizard')
+            else:
+                messages.error(request,
+                               'Por favor, selecione um tipo de despesa válido e categoria.')  # Mensagem mais específica
+
+        elif current_step == STEP_FILL_DETAILS and despesa_type:
+            form_detail = None
+            if despesa_type == 'pontual':
+                form_detail = DespesaPontualForm(request.POST)
+            elif despesa_type == 'recorrente_fixa':
+                form_detail = DespesaRecorrenteFixaForm(request.POST)
+            elif despesa_type == 'recorrente_variavel':
+                form_detail = DespesaRecorrenteVariavelForm(request.POST)
+
+            if form_detail and form_detail.is_valid():
+                # NOVO: Obtém o cliente selecionado do formulário de detalhes
+                cliente_selecionado = form_detail.cleaned_data.get('cliente')
+
+                # Se cliente for obrigatório no seu modelo e não foi fornecido
+                # você pode adicionar uma validação aqui antes do try
+                # if not cliente_selecionado:
+                #     messages.error(request, 'Cliente é um campo obrigatório para a despesa.')
+                #     return render(request, 'gestao/financeiro/adicionar_despesa_wizard.html', context)
+
+                try:
+                    with transaction.atomic():
+                        if despesa_type == 'pontual' or despesa_type == 'recorrente_variavel':
+                            LancamentoFinanceiro.objects.create(
+                                descricao=form_detail.cleaned_data['descricao'],
+                                valor=form_detail.cleaned_data['valor'],
+                                data_vencimento=form_detail.cleaned_data['data_vencimento'],
+                                tipo='DESPESA',
+                                categoria=categoria,
+                                cliente=cliente_selecionado,  # NOVO: Passa o cliente
+                                # usuario_criacao=request.user, # Descomentar se existir no seu modelo LancamentoFinanceiro
+                            )
+                        elif despesa_type == 'recorrente_fixa':
+                            valor_recorrente = form_detail.cleaned_data['valor_recorrente']
+                            dia_vencimento = form_detail.cleaned_data['dia_vencimento_recorrente']
+                            data_inicio_recorrencia = form_detail.cleaned_data['data_inicio_recorrencia']
+                            # Se data_fim_recorrencia não for fornecida, define um período longo (ex: 10 anos a partir de agora)
+                            data_fim_recorrencia = form_detail.cleaned_data['data_fim_recorrencia']
+                            if not data_fim_recorrencia:
+                                data_fim_recorrencia = date.today() + relativedelta(
+                                    years=10)  # Fallback para o fim da recorrência
+
+                            # Começa a iteração a partir do mês da data_inicio_recorrencia
+                            current_iteration_date = data_inicio_recorrencia.replace(day=1)
+
+                            while current_iteration_date <= data_fim_recorrencia:
+                                try:
+                                    data_vencimento_mensal = current_iteration_date.replace(day=dia_vencimento)
+                                except ValueError:
+                                    # Se o dia do vencimento for maior que os dias do mês (ex: 31 de fev), ajusta para o último dia do mês
+                                    last_day_of_month = (current_iteration_date + relativedelta(months=1)).replace(
+                                        day=1) - timedelta(days=1)
+                                    data_vencimento_mensal = last_day_of_month
+
+                                # Somente cria o lançamento se a data de vencimento estiver dentro do período
+                                if data_vencimento_mensal >= data_inicio_recorrencia and data_vencimento_mensal <= data_fim_recorrencia:
+                                    LancamentoFinanceiro.objects.create(
+                                        descricao=f"{form_detail.cleaned_data['descricao']} ({data_vencimento_mensal.strftime('%m/%Y')})",
+                                        valor=valor_recorrente,
+                                        data_vencimento=data_vencimento_mensal,
+                                        tipo='DESPESA',
+                                        categoria=categoria,
+                                        cliente=cliente_selecionado,  # NOVO: Passa o cliente
+                                        # usuario_criacao=request.user, # Descomentar se existir no seu modelo
+                                    )
+                                # Avança para o próximo mês
+                                current_iteration_date += relativedelta(months=1)
+
+                    messages.success(request, f'Despesa ({despesa_type}) salva com sucesso!')
+                    request.session.pop('despesa_wizard_step', None)
+                    request.session.pop('despesa_type', None)
+                    request.session.pop('despesa_categoria', None)
+                    final_redirect_url = request.session.pop('despesa_wizard_next_url',
+                                                             reverse('gestao:painel_financeiro'))
+                    return redirect(final_redirect_url)
+                except Exception as e:
+                    messages.error(request,
+                                   f'Erro ao salvar despesa: {e}. Verifique se um cliente válido foi selecionado ou se o campo cliente no modelo é opcional.')  # Mensagem mais detalhada
+                    # Permanece no mesmo passo para correção
+            else:
+                messages.error(request, 'Por favor, corrija os erros no formulário de detalhes.')
+                # Continua no mesmo passo para exibir os erros
+
+    # Lógica GET ou formulários inválidos (contexto)
+    context = {'titulo_pagina': "Adicionar Nova Despesa"}
+    if current_step == STEP_SELECT_TYPE:
+        context['form_type'] = DespesaTipoForm(initial={'tipo_despesa': despesa_type, 'categoria': categoria})
+        context['current_step'] = STEP_SELECT_TYPE
+    elif current_step == STEP_FILL_DETAILS:
+        if despesa_type == 'pontual':
+            context['form_detail'] = DespesaPontualForm(request.POST if request.method == 'POST' else None)
+        elif despesa_type == 'recorrente_fixa':
+            context['form_detail'] = DespesaRecorrenteFixaForm(request.POST if request.method == 'POST' else None)
+        elif despesa_type == 'recorrente_variavel':
+            context['form_detail'] = DespesaRecorrenteVariavelForm(request.POST if request.method == 'POST' else None)
+        context['despesa_type'] = despesa_type
+        # NOVO: Para exibir a categoria selecionada (se for o caso)
+        if categoria:
+            context['categoria_selecionada'] = dict(LancamentoFinanceiro.CATEGORIA_CHOICES).get(categoria, categoria)
+        context['current_step'] = STEP_FILL_DETAILS
+
+    return render(request, 'gestao/financeiro/adicionar_despesa_wizard.html', context)
+
+
+@require_POST
+@login_required
+@transaction.atomic  # Garante que a operação seja atômica
+def adicionar_lancamento_financeiro_ajax(request):
+    """
+    Salva um novo lançamento financeiro (receita ou despesa) via AJAX.
+    """
+    form = LancamentoFinanceiroForm(request.POST)
+
+    if form.is_valid():
+        lancamento = form.save(commit=False)
+        lancamento.usuario_criacao = request.user  # Assumindo que você tem um campo para o usuário que criou
+        lancamento.save()
+
+        messages.success(request, 'Lançamento financeiro salvo com sucesso!')
+        return JsonResponse({'status': 'success'})
+    else:
+        # Retorna os erros do formulário em formato JSON para o frontend
+        return JsonResponse({'status': 'error', 'errors': form.errors.get_json_data()}, status=400)
+
+
+@login_required
+def importacao_projudi_view(request):
+    """
+    Renderiza a página inicial de importação, que é o primeiro passo do wizard.
+    Seu único trabalho é carregar o template HTML.
+    """
+    context = {'titulo_pagina': "Importar Audiências do Projudi"}
+    return render(request, 'gestao/importacao/importar_projudi.html', context)
+
+
+@require_POST
+@login_required
+def analisar_dados_projudi_ajax(request):
+    """
+    Recebe o JSON do Projudi via AJAX, analisa os dados, compara com o banco,
+    e retorna um HTML de pré-visualização para o passo 2 do wizard.
+    """
+    try:
+        # Carrega os dados enviados pelo JavaScript
+        data = json.loads(request.body)
+        dados_analisados = []
+        nomes_no_json = set()  # Usado para controlar duplicatas dentro do mesmo arquivo JSON
+
+        # Itera sobre cada audiência encontrada no arquivo JSON
+        for audiencia_data in data:
+            analise = {
+                'partes': [],
+                'processo': {},
+                'audiencia': {}
+            }
+
+            # 1. Analisa o Processo
+            num_processo = audiencia_data.get('processoRecurso')
+            processo = Processo.objects.filter(numero_processo=num_processo).first()
+            analise['processo'] = {
+                'numero': num_processo,
+                'existe': True if processo else False
+            }
+
+            # 2. Analisa as Partes do processo
+            partes_raw = audiencia_data.get('partes', {})
+            for polo, nomes in partes_raw.items():
+                for nome in nomes:
+                    # Limpa o nome para remover "representado(a) por..." para uma busca mais precisa
+                    nome_limpo = nome.split('representado(a) por')[0].strip()
+
+                    parte_info = {'nome_original': nome, 'polo': polo}
+
+                    if nome_limpo in nomes_no_json:
+                        parte_info['status'] = 'DUPLICADO_JSON'
+                    else:
+                        cliente = Cliente.objects.filter(nome_completo__iexact=nome_limpo).first()
+                        parte_info['status'] = 'EXISTENTE' if cliente else 'NOVO'
+                        if cliente:
+                            parte_info['cliente_id'] = cliente.pk
+
+                        nomes_no_json.add(nome_limpo)
+
+                    analise['partes'].append(parte_info)
+
+            # 3. Coleta os dados da audiência
+            tipo_audiencia_projudi = audiencia_data.get('tipoAudiencia', '')
+            analise['audiencia'] = {
+                'data': audiencia_data.get('data'),
+                'hora': audiencia_data.get('hora'),
+                'tipo': tipo_audiencia_projudi,
+                'local': audiencia_data.get('localAudiencia'),
+                'situacao': audiencia_data.get('situacaoAudiencia'),
+                'modalidade': audiencia_data.get('modalidade'),
+            }
+
+            # 4. Sugere um "Tipo de Movimentação" com base em palavras-chave
+            tipo_audiencia_lower = tipo_audiencia_projudi.lower()
+            sugestao_id = None
+            if 'conciliação' in tipo_audiencia_lower:
+                tipo_sugerido = TipoMovimentacao.objects.filter(nome__icontains='Conciliação').first()
+                if tipo_sugerido: sugestao_id = tipo_sugerido.pk
+            elif 'instrução' in tipo_audiencia_lower:
+                tipo_sugerido = TipoMovimentacao.objects.filter(nome__icontains='Instrução').first()
+                if tipo_sugerido: sugestao_id = tipo_sugerido.pk
+
+            analise['audiencia']['sugestao_tipo_id'] = sugestao_id
+
+            dados_analisados.append(analise)
+
+        # 5. Busca os dados necessários para os menus de seleção no template
+        todos_clientes = Cliente.objects.all().order_by('nome_completo')
+        tipos_movimentacao_audiencia = TipoMovimentacao.objects.filter(nome__icontains='audiência').order_by('nome')
+
+        # 6. Renderiza o template parcial com os dados analisados
+        html_preview = render_to_string(
+            'gestao/partials/_importacao_projudi_preview.html',
+            {
+                'dados_analisados': dados_analisados,
+                'todos_clientes': todos_clientes,
+                'tipos_movimentacao_audiencia': tipos_movimentacao_audiencia,
+                'csrf_token': get_token(request),  # Passa o token CSRF para o template
+            }
+        )
+
+        return JsonResponse({'status': 'success', 'html_preview': html_preview})
+
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'O texto fornecido não é um JSON válido.'}, status=400)
+    except Exception as e:
+        # Retorna uma mensagem de erro detalhada se estiver em modo DEBUG
+        if settings.DEBUG:
+            return JsonResponse({'status': 'error', 'message': f'Erro interno no servidor: {str(e)}'}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Ocorreu um erro inesperado ao processar os dados.'},
+                            status=500)
+
+
+@require_POST
+@login_required
+@transaction.atomic
+def processar_importacao_projudi(request):
+    """
+    Recebe os dados selecionados do formulário de conciliação e cria os
+    registros de processo, clientes, partes e movimentações no banco de dados.
+    """
+    try:
+        # Pega a lista de índices de processos que foram marcados para importação
+        indices_a_importar = request.POST.getlist('importar_indice')
+
+        for i in indices_a_importar:
+            # --- 1. DADOS DO PROCESSO ---
+            num_processo = request.POST.get(f'processo_{i}_numero')
+            if not num_processo:
+                continue
+
+            processo_obj, created = Processo.objects.get_or_create(
+                numero_processo=num_processo,
+                defaults={'advogado_responsavel': request.user, 'status_processo': 'ATIVO'}
+            )
+
+            # --- 2. DADOS DA AUDIÊNCIA (MOVIMENTAÇÃO) ---
+            audiencia_titulo = request.POST.get(f'audiencia_{i}_titulo')
+            tipo_mov_pk = request.POST.get(f'audiencia_{i}_tipo_movimentacao')
+            data_audiencia_str = request.POST.get(f'audiencia_{i}_data')
+            hora_audiencia_str = request.POST.get(f'audiencia_{i}_hora')
+            detalhes_audiencia = request.POST.get(f'audiencia_{i}_detalhes')
+
+            data_audiencia = datetime.strptime(data_audiencia_str, '%d/%m/%Y').date() if data_audiencia_str else None
+            hora_audiencia = datetime.strptime(hora_audiencia_str, '%H:%M').time() if hora_audiencia_str else None
+
+            if tipo_mov_pk:
+                Movimentacao.objects.create(
+                    processo=processo_obj,
+                    titulo=audiencia_titulo,
+                    tipo_movimentacao_id=tipo_mov_pk,
+                    data_prazo_final=data_audiencia,
+                    hora_prazo=hora_audiencia,
+                    detalhes=detalhes_audiencia,
+                    responsavel=request.user,
+                    status='PENDENTE'
+                )
+
+            # --- 3. DADOS DAS PARTES ---
+            # Itera sobre as partes enviadas para este processo específico
+            for j in range(100):  # Um loop seguro para encontrar todas as partes
+                acao_parte = request.POST.get(f'processo_{i}_parte_{j}_acao')
+                if not acao_parte:
+                    break  # Para quando não encontrar mais partes para este processo
+
+                if acao_parte == 'ignorar':
+                    continue
+
+                cliente_obj = None
+                if acao_parte == 'criar_novo':
+                    nome_parte = request.POST.get(f'processo_{i}_parte_{j}_nome')
+                    if nome_parte:
+                        cliente_obj, _ = Cliente.objects.get_or_create(nome_completo=nome_parte)
+
+                elif acao_parte == 'vincular' or acao_parte == 'vincular_manual':
+                    cliente_id = request.POST.get(f'processo_{i}_parte_{j}_cliente_id')
+                    if cliente_id:
+                        cliente_obj = Cliente.objects.get(pk=cliente_id)
+
+                if cliente_obj:
+                    polo = request.POST.get(f'processo_{i}_parte_{j}_polo')
+                    tipo_participacao = 'AUTOR' if 'ativo' in polo.lower() or 'autor' in polo.lower() else 'REU'
+                    ParteProcesso.objects.get_or_create(
+                        processo=processo_obj,
+                        cliente=cliente_obj,
+                        defaults={'tipo_participacao': tipo_participacao}
+                    )
+
+        messages.success(request, 'Dados selecionados foram importados com sucesso!')
+        return JsonResponse({'status': 'success'})
+
+    except Exception as e:
+        if settings.DEBUG:
+            return JsonResponse({'status': 'error', 'message': f'Erro ao processar importação: {str(e)}'}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Ocorreu um erro inesperado ao salvar os dados.'},
+                            status=500)

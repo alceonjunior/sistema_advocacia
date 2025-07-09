@@ -1,0 +1,314 @@
+{% extends 'gestao/base.html' %}
+{% load static %}
+
+{% block title %}{{ titulo_pagina }}{% endblock %}
+
+{% block styles %}
+{{ block.super }}
+<style>
+    /* Estilos do Wizard */
+    .wizard-steps .step {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        background-color: #f8f9fa;
+        margin-bottom: 1rem;
+    }
+    .wizard-steps .step .step-icon {
+        font-size: 1.5rem;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background-color: #e9ecef;
+        color: #6c757d;
+        font-weight: bold;
+    }
+    .wizard-steps .step.active {
+        border-color: var(--bs-primary);
+    }
+    .wizard-steps .step.active .step-icon {
+        background-color: var(--bs-primary);
+        color: white;
+    }
+    .wizard-steps .step.completed .step-icon {
+        background-color: var(--bs-success);
+        color: white;
+    }
+    .step-content {
+        display: none;
+    }
+    .step-content.active {
+        display: block;
+        animation: fadeIn 0.5s;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Estilos da Área de Upload */
+    #drop-zone {
+        border: 2px dashed #dee2e6;
+        border-radius: 0.5rem;
+        padding: 4rem 2rem;
+        text-align: center;
+        color: #6c757d;
+        transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+    }
+    #drop-zone.dragover {
+        background-color: var(--bs-primary-bg-subtle);
+        border-color: var(--bs-primary);
+    }
+    #drop-zone .drop-zone-icon {
+        font-size: 3rem;
+        color: var(--bs-primary);
+    }
+    #drop-zone p {
+        margin-bottom: 0;
+    }
+    #drop-zone .btn-link {
+        text-decoration: underline;
+        cursor: pointer;
+    }
+    #json-input {
+        min-height: 250px;
+        font-family: monospace;
+        font-size: 0.9rem;
+    }
+    .preview-card {
+        border-left-width: 4px;
+    }
+    .status-new { border-left-color: var(--bs-success); }
+    .status-exists { border-left-color: var(--bs-info); }
+</style>
+{% endblock %}
+
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h2 d-flex align-items-center gap-2">
+        <i class="bi bi-cloud-upload-fill text-primary"></i> {{ titulo_pagina }}
+    </h1>
+</div>
+
+<div class="row">
+<div class="col-12">
+<div class="wizard-steps">
+
+    <div class="step active" id="step-1-header">
+        <div class="step-icon">1</div>
+        <div>
+            <h5 class="mb-0">Importar Dados</h5>
+            <p class="mb-0 text-muted small">Arraste, cole ou selecione o arquivo JSON do Projudi.</p>
+        </div>
+    </div>
+    <div class="step-content active card shadow-sm" id="step-1-content">
+        <div class="card-body p-4">
+            <form id="form-json-input">
+                {% csrf_token %} <div id="drop-zone">
+                    <div class="drop-zone-icon mb-3"><i class="bi bi-file-earmark-arrow-up"></i></div>
+                    <h5>Arraste e solte o arquivo aqui</h5>
+                    <p>ou</p>
+                    <button type="button" id="browse-btn" class="btn btn-link p-0">clique para selecionar</button>
+                    <p class="small mt-2">ou simplesmente cole o conteúdo na área (Ctrl+V)</p>
+                    <input type="file" id="file-input" accept=".json" style="display: none;">
+                </div>
+                <textarea id="json-input" class="form-control mt-3 d-none" placeholder="O conteúdo do arquivo aparecerá aqui..."></textarea>
+                <button type="submit" id="btn-analisar" class="btn btn-primary mt-3"><i class="bi bi-search me-1"></i> Analisar Dados</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="step" id="step-2-header">
+        <div class="step-icon">2</div>
+        <div>
+            <h5 class="mb-0">Revisão e Conciliação</h5>
+            <p class="mb-0 text-muted small">Verifique e confirme as ações a serem tomadas.</p>
+        </div>
+    </div>
+    <div class="step-content card shadow-sm" id="step-2-content">
+        <div class="card-body p-4" id="preview-container">
+            <div class="text-center p-5 text-muted">Aguardando análise dos dados...</div>
+        </div>
+    </div>
+
+    <div class="step" id="step-3-header">
+        <div class="step-icon">3</div>
+        <div>
+            <h5 class="mb-0">Conclusão</h5>
+            <p class="mb-0 text-muted small">Importação finalizada.</p>
+        </div>
+    </div>
+    <div class="step-content card shadow-sm" id="step-3-content">
+        <div class="card-body p-5 text-center">
+            <i class="bi bi-check-circle-fill fs-1 text-success"></i>
+            <h4 class="mt-3">Importação Concluída com Sucesso!</h4>
+            <p>Os processos, partes e audiências foram adicionados ou atualizados no sistema.</p>
+        </div>
+    </div>
+
+</div>
+</div>
+</div>
+
+{% endblock %}
+
+
+{% block javascript %}
+{{ block.super }}
+<script>
+$(document).ready(function() {
+    // --- VARIÁVEIS DE CONTROLE ---
+    const dropZone = $('#drop-zone');
+    const fileInput = $('#file-input');
+    const browseBtn = $('#browse-btn');
+    const jsonInput = $('#json-input');
+    const previewContainer = $('#preview-container');
+
+    // --- FUNÇÕES E EVENTOS DE UPLOAD ---
+    browseBtn.on('click', (e) => { e.preventDefault(); fileInput.click(); });
+    fileInput.on('change', function() { if (this.files.length) { handleFile(this.files[0]); } });
+    dropZone.on('dragover', (e) => { e.preventDefault(); e.stopPropagation(); dropZone.addClass('dragover'); });
+    dropZone.on('dragleave', () => dropZone.removeClass('dragover'));
+    dropZone.on('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.removeClass('dragover');
+        if (e.originalEvent.dataTransfer.files.length) {
+            handleFile(e.originalEvent.dataTransfer.files[0]);
+        }
+    });
+
+    $(document).on('paste', function(e) {
+        if ($(e.target).is('input, textarea')) return;
+        const pastedData = (e.originalEvent.clipboardData || window.clipboardData).getData('text');
+        jsonInput.val(pastedData).removeClass('d-none');
+        $('#btn-analisar').click();
+    });
+
+    function handleFile(file) {
+        if (file.type !== "application/json") { alert("Por favor, selecione um arquivo JSON válido."); return; }
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            jsonInput.val(e.target.result).removeClass('d-none');
+            $('#btn-analisar').click();
+        }
+        reader.readAsText(file);
+    }
+
+    // --- LÓGICA DO WIZARD E AJAX ---
+    function updateWizardStep(currentStep) {
+        $('.step').removeClass('active');
+        $('.step-content').removeClass('active');
+        for (let i = 1; i < currentStep; i++) {
+            $(`#step-${i}-header`).removeClass('active').addClass('completed');
+        }
+        $(`#step-${currentStep}-header`).addClass('active').removeClass('completed');
+        $(`#step-${currentStep}-content`).addClass('active');
+    }
+
+    $('#form-json-input').on('submit', function(e) {
+        e.preventDefault();
+        const jsonText = jsonInput.val();
+        if (!jsonText) {
+            alert('A área de texto está vazia. Por favor, importe ou cole o conteúdo JSON.');
+            return;
+        }
+
+        try {
+            const data = JSON.parse(jsonText);
+            const csrfToken = $(this).find('input[name="csrfmiddlewaretoken"]').val();
+
+            $.ajax({
+                url: "{% url 'gestao:analisar_dados_projudi_ajax' %}",
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                headers: {'X-CSRFToken': csrfToken},
+                beforeSend: function() {
+                    previewContainer.html('<div class="text-center p-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">Analisando dados no sistema...</p></div>');
+                    updateWizardStep(2);
+                },
+                success: function(response) {
+                    if (response.status === 'success') {
+                        previewContainer.html(response.html_preview);
+                        previewContainer.find('.select-vincular-cliente').each(function() {
+                            $(this).select2({
+                                theme: "bootstrap-5",
+                                width: '100%',
+                                placeholder: 'Busque o cliente correto...'
+                            });
+                        });
+                    } else {
+                        previewContainer.html(`<div class="alert alert-danger">${response.message}</div>`);
+                    }
+                },
+                error: function() {
+                    previewContainer.html(`<div class="alert alert-danger">Ocorreu um erro de comunicação com o servidor. Tente novamente.</div>`);
+                }
+            });
+        } catch (error) {
+            alert('O texto inserido não é um JSON válido. Por favor, verifique o conteúdo.');
+            console.error("Erro de parse JSON:", error);
+        }
+    });
+
+    // --- LÓGICA DE INTERATIVIDADE DO PREVIEW ---
+    previewContainer.on('change', '#selecionar-todos-switch', function() {
+        const isChecked = $(this).prop('checked');
+        previewContainer.find('.import-checkbox').prop('checked', isChecked);
+    });
+
+    previewContainer.on('change', '.import-checkbox', function() {
+        if (!$(this).prop('checked')) {
+            $('#selecionar-todos-switch').prop('checked', false);
+        }
+    });
+
+    previewContainer.on('change', '.select-acao-parte', function() {
+        const select = $(this);
+        const container = select.closest('.row').siblings('.vincular-manual-container');
+        if (select.val() === 'vincular_manual') {
+            container.slideDown();
+        } else {
+            container.slideUp();
+        }
+    });
+
+    // Lógica para o envio final do formulário de importação
+    previewContainer.on('submit', '#form-import', function(e) {
+        e.preventDefault();
+        const form = $(this);
+        const submitButton = form.find('button[type="submit"]');
+
+        $.ajax({
+            url: "{% url 'gestao:processar_importacao_projudi' %}",
+            type: 'POST',
+            data: form.serialize(),
+            beforeSend: function() {
+                submitButton.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Importando...');
+            },
+            success: function(response) {
+                if (response.status === 'success') {
+                    updateWizardStep(3);
+                } else {
+                    alert(response.message || 'Ocorreu um erro desconhecido ao importar.');
+                }
+            },
+            error: function() {
+                alert('Erro de comunicação ao salvar os dados. Tente novamente.');
+            },
+            complete: function() {
+                submitButton.prop('disabled', false).html('<i class="bi bi-check-all me-1"></i> Confirmar e Importar Selecionados');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

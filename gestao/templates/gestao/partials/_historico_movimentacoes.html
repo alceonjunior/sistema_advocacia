@@ -9,7 +9,7 @@
         margin-bottom: 1rem;
     }
     .movimentacao-card:hover {
-        box_shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.075);
+        box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.075);
     }
     .movimentacao-card .card-header {
         padding: 0.75rem 1.25rem;
@@ -60,7 +60,7 @@
     .prazo-urgente { background-color: var(--bs-warning-bg-subtle); color: var(--bs-warning-text-emphasis); }
     .prazo-ok { background-color: var(--bs-gray-200); color: var(--bs-gray-700); }
     .prazo-concluido { background-color: var(--bs-success-bg-subtle); color: var(--bs-success-text-emphasis); }
-    .status-atrasado { background-color: var(--bs-danger-bg-subtle); color: var(--bs-danger-text-emphasis); } /* Novo estilo para badge de atraso */
+    .status-atrasado { background-color: var(--bs-danger-bg-subtle); color: var(--bs-danger-text-emphasis); }
 </style>
 
 
@@ -68,8 +68,14 @@
 {% for mov in movimentacoes %}
     {% with tipo_lower=mov.tipo_movimentacao.nome|lower %}
     <div class="list-group-item px-0 py-2 border-0">
-        <div class="movimentacao-card">
-            <div class="card-header d-flex justify-content-between align-items-center bg-white border-bottom-0">
+        <div class="movimentacao-card"
+             style="cursor: pointer;"
+             data-bs-toggle="modal"
+             data-bs-target="#movimentacaoModal"
+             data-url-json="{% url 'gestao:get_movimentacao_json' mov.pk %}"
+             data-url-edit="{% url 'gestao:editar_movimentacao_ajax' mov.pk %}"
+             data-url-delete="{% url 'gestao:excluir_movimentacao' mov.pk %}">
+        <div class="card-header d-flex justify-content-between align-items-center bg-white border-bottom-0">
                 <h5 class="card-title mb-0">
                     <span class="icon-display fs-4">
                         {% if 'audiência' in tipo_lower %}
@@ -84,26 +90,19 @@
                     </span>
                     {{ mov.titulo }}
                 </h5>
-                <div class="btn-group" role="group" aria-label="Ações da Movimentação">
+                <div class="btn-group" role="group" aria-label="Ações da Movimentação" onclick="event.stopPropagation();">
                     {% if mov.status != 'CONCLUIDA' %}
-                        <form action="{% url 'concluir_movimentacao' pk=mov.pk %}" method="post" class="d-inline">
+                        <form action="{% url 'gestao:concluir_movimentacao' pk=mov.pk %}" method="post" class="d-inline">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-sm btn-success" title="Marcar como Concluída">
                                 <i class="bi bi-check2-circle me-1"></i> Concluir
                             </button>
                         </form>
                     {% endif %}
-                    <a href="{% url 'editar_movimentacao' pk=mov.pk %}" class="btn btn-sm btn-outline-secondary" title="Editar Movimentação">
-                        <i class="bi bi-pencil-fill"></i>
-                    </a>
-                    <form method="post" action="{% url 'excluir_movimentacao' pk=mov.pk %}" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir esta movimentação?');">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir Movimentação">
-                            <i class="bi bi-trash3-fill"></i>
-                        </button>
-                    </form>
+
+                    {# O botão de editar foi removido, pois o card inteiro agora é o gatilho #}
                 </div>
-            </div>
+                </div>
 
             <div class="metadata-bar">
                 <div class="metadata-item" title="Tipo de Movimentação">
@@ -169,9 +168,3 @@
     </div>
 {% endfor %}
 </div>
-
-
-
-
-
-

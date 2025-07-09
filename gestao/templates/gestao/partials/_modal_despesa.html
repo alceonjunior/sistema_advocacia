@@ -1,0 +1,68 @@
+<div class="modal fade" id="despesaModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <form id="formDespesa" method="post" action=""> {# Adicione a action correta aqui quando for implementada, se for o caso #}
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Nova Despesa</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Qual o tipo de despesa?</label>
+                        <select id="select-tipo-despesa" class="form-select">
+                            <option value="">Selecione...</option>
+                            <option value="pontual">Pontual (Conta única)</option>
+                            <option value="recorrente_fixa">Recorrente Fixa (Aluguel, Salário)</option>
+                            <option value="recorrente_variavel">Recorrente Variável (Luz, Água)</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="id_categoria_comum" class="form-label">{{ form_despesa.categoria_comum.label }}</label>
+                        {{ form_despesa.categoria_comum }}
+                    </div>
+
+                    <hr>
+
+                    {# SEÇÃO PONTUAL #}
+                    <div class="form-section" id="section-pontual">
+                        <h6>Detalhes da Despesa Pontual</h6>
+                        <div class="mb-3">{{ form_despesa.descricao_pontual.label_tag }}{{ form_despesa.descricao_pontual }}</div>
+                        <div class="row g-3">
+                            <div class="col-md-6">{{ form_despesa.valor_pontual.label_tag }}{{ form_despesa.valor_pontual }}</div>
+                            <div class="col-md-6">{{ form_despesa.data_vencimento_pontual.label_tag }}{{ form_despesa.data_vencimento_pontual }}</div>
+                        </div>
+                    </div>
+
+                    {# SEÇÃO RECORRENTE FIXA #}
+                    <div class="form-section" id="section-recorrente_fixa">
+                        <h6>Detalhes da Recorrência Fixa</h6>
+                        <div class="mb-3">{{ form_despesa.descricao_recorrente_fixa.label_tag }}{{ form_despesa.descricao_recorrente_fixa }}</div>
+                        <div class="row g-3">
+                            <div class="col-md-6">{{ form_despesa.valor_recorrente_fixa.label_tag }}{{ form_despesa.valor_recorrente_fixa }}</div>
+                            <div class="col-md-6">{{ form_despesa.dia_vencimento_recorrente_fixa.label_tag }}{{ form_despesa.dia_vencimento_recorrente_fixa }}</div>
+                            <div class="col-md-6">{{ form_despesa.data_inicio_recorrencia_fixa.label_tag }}{{ form_despesa.data_inicio_recorrencia_fixa }}</div>
+                            <div class="col-md-6">{{ form_despesa.data_fim_recorrencia_fixa.label_tag }}{{ form_despesa.data_fim_recorrencia_fixa }}</div>
+                        </div>
+                    </div>
+
+                     {# SEÇÃO RECORRENTE VARIÁVEL #}
+                     <div class="form-section" id="section-recorrente_variavel">
+                        <h6>Lançamento da Recorrência Variável (Mês Atual)</h6>
+                        <div class="mb-3">{{ form_despesa.descricao_recorrente_variavel.label_tag }}{{ form_despesa.descricao_recorrente_variavel }}</div>
+                        <div class="row g-3">
+                            <div class="col-md-6">{{ form_despesa.valor_recorrente_variavel.label_tag }}{{ form_despesa.valor_recorrente_variavel }}</div>
+                            <div class="col-md-6">{{ form_despesa.data_vencimento_recorrente_variavel.label_tag }}{{ form_despesa.data_vencimento_recorrente_variavel }}</div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Despesa</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

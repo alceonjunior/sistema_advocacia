@@ -3,7 +3,7 @@
 {% block content %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
-<form id="gerenciarPartesForm" method="post" action="{% url 'gerenciar_partes' processo_pk=processo.pk %}" novalidate>
+<form id="gerenciarPartesForm" method="post" action="{% url 'gestao:gerenciar_partes' processo_pk=processo.pk %}" novalidate>
     {% csrf_token %}
     {{ formset.management_form }}
 

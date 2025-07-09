@@ -13,7 +13,7 @@ from .models import (
     Processo, Cliente, Movimentacao, TipoAcao, LancamentoFinanceiro, Pagamento,
     Servico, TipoServico, ParteProcesso, Recurso, Incidente, UsuarioPerfil,
     AreaProcesso, TipoMovimentacao, ContratoHonorarios, CalculoJudicial,
-    ModeloDocumento, Documento
+    ModeloDocumento, Documento, EscritorioConfiguracao
 )
 # Importa o formulário customizado para ser usado no admin
 from .forms import ParteProcessoForm
@@ -249,3 +249,23 @@ class DocumentoAdmin(admin.ModelAdmin):
     list_filter = ('tipo_documento',)
     search_fields = ('titulo', 'processo__numero_processo')
     autocomplete_fields = ['processo']
+
+@admin.register(EscritorioConfiguracao)
+class EscritorioConfiguracaoAdmin(admin.ModelAdmin):
+    """
+    Interface para o modelo Singleton de configurações do escritório.
+    Impede a criação de novas instâncias.
+    """
+    fieldsets = (
+        ("Dados Principais", {'fields': ('nome_escritorio', 'cnpj', 'inscricao_municipal', 'oab_principal')}),
+        ("Endereço", {'fields': ('cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'estado')}),
+        ("Contato", {'fields': ('telefone_contato', 'email_contato')}),
+    )
+
+    def has_add_permission(self, request):
+        # Impede a adição de novas configurações se uma já existir
+        return not EscritorioConfiguracao.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        # Impede a exclusão da configuração
+        return False

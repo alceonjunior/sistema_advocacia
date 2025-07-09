@@ -35,6 +35,12 @@
                     <li class="nav-item"><a class="nav-link" href="{% url 'gestao:lista_clientes' %}"><i class="bi bi-people-fill me-1"></i>Clientes</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'gestao:lista_processos' %}"><i class="bi bi-folder-fill me-1"></i>Processos</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'gestao:lista_servicos' %}"><i class="bi bi-briefcase-fill me-1"></i>Serviços</a></li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'gestao:painel_financeiro' %}">
+                            <i class="bi bi-wallet2 me-1"></i>Financeiro
+                        </a>
+                    </li>
+
                     <li class="nav-item"><a class="nav-link" href="{% url 'gestao:lista_modelos' %}"><i class="bi bi-file-earmark-text-fill me-1"></i>Modelos</a></li>
                 </ul>
 
@@ -199,71 +205,63 @@
 
 {% block javascript %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+// Usando a sintaxe do jQuery, que já está carregado na sua página.
+$(function() {
 
     // --- SCRIPT DE DESTAQUE DO MENU ATIVO ---
     const currentPath = window.location.pathname;
-    const navLinks = document.querySelectorAll('#main-navbar .nav-link');
+    const navLinks = $('#main-navbar .nav-link');
     let hasActiveLink = false;
 
-    navLinks.forEach(link => {
-        const linkPath = link.getAttribute('href');
+    navLinks.each(function() {
+        const link = $(this);
+        const linkPath = link.attr('href');
 
-        // CORREÇÃO APLICADA AQUI
+        // Verifica se a URL atual começa com a URL do link (para destacar páginas filhas)
         if (linkPath && linkPath !== '{% url "gestao:home" %}' && currentPath.startsWith(linkPath)) {
-            // Remove a classe 'active' de todos para evitar duplicação
-            navLinks.forEach(l => {
-                l.classList.remove('active', 'fw-bold');
-                l.removeAttribute('aria-current');
-            });
-            link.classList.add('active', 'fw-bold');
-            link.setAttribute('aria-current', 'page');
+            navLinks.removeClass('active fw-bold').removeAttr('aria-current');
+            link.addClass('active fw-bold').attr('aria-current', 'page');
             hasActiveLink = true;
+            return false; // Interrompe o loop
         }
     });
 
-    // Se nenhum link foi ativado (estamos na home), ativa o Dashboard
-    // CORREÇÃO APLICADA AQUI (EM DUAS PARTES)
+    // Se nenhum link foi ativado, ativa o do Dashboard (para a página inicial)
     if (!hasActiveLink && (currentPath === '{% url "gestao:home" %}' || currentPath === '{% url "gestao:dashboard" %}')) {
-        const dashboardLink = document.querySelector('#main-navbar .nav-link[href="{% url "gestao:dashboard" %}"]');
-        if (dashboardLink) {
-            dashboardLink.classList.add('active', 'fw-bold');
-        }
+        $('#main-navbar .nav-link[href="{% url "gestao:dashboard" %}"]').addClass('active fw-bold');
     }
 
-    // --- CÓDIGO ORIGINAL (Função de Erros e Manipulador AJAX) ---
-    // Esta parte não precisa de alteração, mas está incluída para o bloco completo.
-    function renderFormErrors(formElement, errors) {
-        const errorDiv = formElement.querySelector('.alert-danger');
-        if (!errorDiv) return;
-        let errorHtml = '<ul class="mb-0 list-unstyled">';
-        for (const field in errors) {
-            errors[field].forEach(error => {
-                const messageText = (typeof error === 'object' && error.message) ? error.message : error;
-                errorHtml += `<li><small>${messageText}</small></li>`;
+    // --- INICIALIZAÇÃO CORRETA DO SELECT2 NOS MODAIS ---
+    const servicoModalEl = document.getElementById('adicionarServicoModal');
+    if (servicoModalEl) {
+        // Ouve o evento que o Bootstrap dispara QUANDO o modal termina de ser exibido
+        $(servicoModalEl).on('shown.bs.modal', function () {
+            // Só agora, com o modal visível, inicializamos o Select2
+            $('#adicionarServicoModal #id_cliente, #adicionarServicoModal #id_tipo_servico, #adicionarServicoModal #id_responsavel').select2({
+                theme: "bootstrap-5",
+                width: '100%',
+                language: "pt-BR",
+                // Esta linha é crucial para que a caixa de busca funcione dentro do modal
+                dropdownParent: $('#adicionarServicoModal')
             });
-        }
-        errorHtml += '</ul>';
-        errorDiv.innerHTML = errorHtml;
-        errorDiv.classList.remove('d-none');
+        });
     }
 
-    document.body.addEventListener('submit', function(event) {
-        if (!event.target.matches('form[data-ajax-form="true"]')) {
-            return;
-        }
+    // --- MANIPULADOR DE SUBMISSÃO AJAX PARA FORMULÁRIOS EM MODAIS ---
+    // Este código intercepta o envio de formulários que têm o atributo data-ajax-form="true"
+    $(document).on('submit', 'form[data-ajax-form="true"]', function(event) {
         event.preventDefault();
 
-        const form = event.target;
-        const formData = new FormData(form);
-        const submitButton = form.querySelector('button[type="submit"]');
-        const errorDiv = form.querySelector('.alert-danger');
-        const targetSelectId = form.dataset.targetSelect;
+        const form = $(this);
+        const formData = new FormData(this);
+        const submitButton = form.find('button[type="submit"]');
+        const errorDiv = form.find('.alert-danger');
+        const targetSelectId = form.data('target-select');
 
-        submitButton.disabled = true;
-        if (errorDiv) errorDiv.classList.add('d-none');
+        submitButton.prop('disabled', true);
+        if (errorDiv.length) errorDiv.addClass('d-none').html('');
 
-        fetch(form.action, {
+        fetch(form.attr('action'), {
             method: 'POST',
             body: formData,
             headers: { 'X-CSRFToken': formData.get('csrfmiddlewaretoken') }
@@ -279,34 +277,54 @@ document.addEventListener('DOMContentLoaded', function() {
                         selectEl.append(newOption).trigger('change');
                     }
                 }
-                const modalEl = form.closest('.modal');
-                if (modalEl) {
-                    bootstrap.Modal.getInstance(modalEl).hide();
-                }
-                form.reset();
 
-                if (item.pk && item.nome) {
-                     document.dispatchEvent(new CustomEvent('itemAdicionado', { detail: { tipo: 'cliente', dados: item } }));
+                const modalEl = form.closest('.modal');
+                if (modalEl.length) {
+                    bootstrap.Modal.getInstance(modalEl[0]).hide();
                 }
+                form[0].reset();
+
+                // Dispara um evento global para que outras partes da aplicação possam reagir
+                document.dispatchEvent(new CustomEvent('itemAdicionado', {
+                    detail: { tipo: data.cliente ? 'cliente' : 'tipo_servico', dados: item }
+                }));
             } else if (data.errors) {
-                renderFormErrors(form, data.errors);
+                // Função para renderizar os erros no formulário
+                let errorHtml = '<ul class="mb-0 list-unstyled">';
+                for (const field in data.errors) {
+                    data.errors[field].forEach(error => {
+                        const messageText = (typeof error === 'object' && error.message) ? error.message : error;
+                        errorHtml += `<li><small>${messageText}</small></li>`;
+                    });
+                }
+                errorHtml += '</ul>';
+                if(errorDiv.length) errorDiv.html(errorHtml).removeClass('d-none');
             }
         })
         .catch(error => {
             console.error('Erro de comunicação:', error);
-            if(errorDiv) {
-                errorDiv.innerHTML = 'Ocorreu um erro de comunicação. Tente novamente.';
-                errorDiv.classList.remove('d-none');
+            if(errorDiv.length) {
+                errorDiv.html('Ocorreu um erro de comunicação. Tente novamente.').removeClass('d-none');
             }
         })
         .finally(() => {
-            submitButton.disabled = false;
+            submitButton.prop('disabled', false);
         });
     });
+
+    // --- SCRIPT PARA ALERTAS DESAPARECEREM ---
+    // Adicionado o script para fechar alertas automaticamente após 5 segundos
+    setTimeout(function() {
+        $('.alert.alert-dismissible').each(function() {
+            var alert = new bootstrap.Alert(this);
+            alert.close();
+        });
+    }, 5000); // 5000ms = 5 segundos
 
 });
 </script>
 {% endblock %}
+
 
 
 </body>

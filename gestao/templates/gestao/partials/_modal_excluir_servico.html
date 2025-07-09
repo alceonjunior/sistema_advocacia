@@ -1,0 +1,26 @@
+<div class="modal fade" id="excluirServicoModal" tabindex="-1" aria-labelledby="excluirServicoModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title" id="excluirServicoModalLabel">
+          <i class="bi bi-exclamation-triangle-fill"></i> Confirmar Exclusão
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="excluirServicoForm" method="post" action="">
+          {% csrf_token %}
+          <div class="modal-body">
+              <p id="modal-confirm-text">Você tem certeza?</p>
+              <div id="modal-alert-contract" class="alert alert-warning mt-3 small" style="display: none;">
+                  <strong>Atenção:</strong> Este serviço possui um contrato de honorários associado. O contrato e todos os seus lançamentos financeiros também serão permanentemente excluídos.
+              </div>
+              <p class="text-danger mt-3"><strong>Esta ação não pode ser desfeita.</strong></p>
+          </div>
+          <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+              <button type="submit" class="btn btn-danger">Sim, Excluir</button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>

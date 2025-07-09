@@ -1,0 +1,129 @@
+{% extends 'gestao/base.html' %}
+{% load static %}
+
+{% block title %}{{ titulo_pagina }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h2 d-flex align-items-center gap-2">
+        <i class="bi bi bi-arrow-down-circle text-danger"></i> {{ titulo_pagina }}
+    </h1>
+    <div>
+        {% if current_step == 'fill_details' %}
+            <form method="post" action="{% url 'gestao:adicionar_despesa_wizard' %}" style="display:inline;">
+                {% csrf_token %}
+                <input type="hidden" name="reset_wizard" value="true">
+                {# NOVO: Garante que a next_url também seja passada no reset, se necessário #}
+                {% if request.GET.next %}<input type="hidden" name="next" value="{{ request.GET.next }}">{% endif %}
+                <button type="submit" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i> Voltar à seleção de tipo
+                </button>
+            </form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card shadow-sm p-4">
+    {% if current_step == 'select_type' %}
+        <h5 class="card-title mb-4">Passo 1 de 2: Selecione o Tipo de Despesa</h5>
+        <form method="post">
+            {% csrf_token %}
+            <div class="row g-3">
+                <div class="col-md-6">
+                    {{ form_type.tipo_despesa.label_tag }}
+                    {{ form_type.tipo_despesa }}
+                </div>
+                <div class="col-md-6">
+                    {{ form_type.categoria.label_tag }}
+                    {{ form_type.categoria }}
+                </div>
+            </div>
+            {% if form_type.errors %}<div class="alert alert-danger mt-3">{{ form_type.errors }}</div>{% endif %}
+            <div class="d-flex justify-content-end mt-4">
+                <button type="submit" class="btn btn-primary">Próximo <i class="bi bi-arrow-right ms-1"></i></button>
+            </div>
+        </form>
+    {% elif current_step == 'fill_details' %}
+        <h5 class="card-title mb-4">Passo 2 de 2: Detalhes da Despesa
+            {% if despesa_type == 'pontual' %}(Pontual){% endif %}
+            {% if despesa_type == 'recorrente_fixa' %}(Recorrente Fixa){% endif %}
+            {% if despesa_type == 'recorrente_variavel' %}(Recorrente Variável){% endif %}
+        </h5>
+        {% if categoria_selecionada %}<p class="text-muted small">Categoria selecionada: **{{ categoria_selecionada }}**</p>{% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+            {% if form_detail %}
+                {# SIMPLIFICADO: Itere sobre todos os campos do form_detail. #}
+                {# A ordem dos campos será a definida nos forms.py. #}
+                {# O campo 'cliente' será renderizado automaticamente no loop. #}
+                {% for field in form_detail %}
+                    <div class="mb-3">
+                        {% if field.field.widget.input_type == 'checkbox' %}
+                            <div class="form-check">
+                                {{ field }}
+                                <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            </div>
+                        {% else %}
+                            {{ field.label_tag }}
+                            {{ field }}
+                        {% endif %}
+                        {% if field.help_text %}<div class="form-text text-muted">{{ field.help_text }}</div>{% endif %}
+                        {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                {% endfor %}
+                {% if form_detail.non_field_errors %}<div class="alert alert-danger mt-3">{{ form_detail.non_field_errors }}</div>{% endif %}
+            {% else %}
+                <div class="alert alert-warning">Nenhum formulário de detalhes disponível para o tipo de despesa selecionado.</div>
+            {% endif %}
+
+            <div class="d-flex justify-content-between mt-4">
+                {# NOVO: Formulário separado para o botão Voltar, para não interferir na submissão principal #}
+                <form method="post" action="{% url 'gestao:adicionar_despesa_wizard' %}" style="display:inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="reset_wizard" value="true">
+                    {# NOVO: Garante que a next_url também seja passada no reset, se necessário #}
+                    {% if request.GET.next %}<input type="hidden" name="next" value="{{ request.GET.next }}">{% endif %}
+                    <button type="submit" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-1"></i> Voltar
+                    </button>
+                </form>
+                <button type="submit" class="btn btn-success">Salvar Despesa</button>
+            </div>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block javascript %}
+{{ block.super }}
+<script>
+$(document).ready(function() {
+    // Inicializa Select2 para campos do form_type, se existirem
+    $('#id_tipo_despesa, #id_categoria').select2({
+        theme: 'bootstrap-5',
+        width: '100%',
+        placeholder: 'Selecione...',
+        allowClear: true
+    });
+
+    // Inicializa Select2 para o campo cliente (se existir no form_detail)
+    // A classe 'select2-despesa-wizard' foi adicionada nos widgets do forms.py
+    $('.select2-despesa-wizard').select2({
+        theme: 'bootstrap-5',
+        width: '100%',
+        placeholder: 'Selecione ou busque um cliente (opcional)',
+        allowClear: true
+    });
+
+    // Se você tiver máscaras aplicadas via jQuery.mask,
+    // certifique-se de que o script que as aplica é executado depois
+    // que o formulário de detalhes é carregado.
+    // Como os formulários são renderizados no lado do servidor aqui,
+    // as máscaras devem ser aplicadas no carregamento da página.
+    // Exemplo (se você usar $.mask):
+    // $('input[name$="valor"]').mask('000.000.000.000.000,00', {reverse: true});
+    // $('input[name$="data_vencimento"]').mask('00/00/0000');
+});
+</script>
+{% endblock %}

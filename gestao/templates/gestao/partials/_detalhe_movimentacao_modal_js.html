@@ -1,0 +1,102 @@
+<script>
+$(document).ready(function () {
+
+    // ===================================================================================
+    //  LÓGICA PARA O CAMPO DE HORÁRIO (APLICA-SE A AMBOS OS MODAIS)
+    // ===================================================================================
+    function setupAudienciaFields(modalSelector) {
+        const modal = $(modalSelector);
+        // Seletores mais específicos para evitar conflitos
+        const tipoMovSelect = modal.find('[name="tipo_movimentacao"]');
+        const horaPrazoContainer = modal.find('[name="hora_prazo"]').parent(); // Pega o div da coluna
+        const dataPrazoLabel = modal.find('label[for="' + modal.find('[name="data_prazo_final"]').attr('id') + '"]');
+
+        if (!dataPrazoLabel.data('original-text')) {
+            dataPrazoLabel.data('original-text', dataPrazoLabel.text());
+        }
+
+        function toggleHoraField() {
+            // Verifica se há uma opção selecionada antes de ler o texto
+            const selectedOption = tipoMovSelect.find('option:selected');
+            const selectedOptionText = selectedOption.length ? selectedOption.text().toLowerCase() : "";
+
+            if (selectedOptionText.includes('audiência')) {
+                horaPrazoContainer.removeClass('d-none');
+                dataPrazoLabel.text('Data da Audiência');
+            } else {
+                horaPrazoContainer.addClass('d-none');
+                horaPrazoContainer.find('[name="hora_prazo"]').val('');
+                dataPrazoLabel.text(dataPrazoLabel.data('original-text'));
+            }
+        }
+
+        tipoMovSelect.on('change', toggleHoraField);
+        toggleHoraField(); // Garante o estado inicial correto
+    }
+
+    // Aplica a lógica de audiência aos dois modais
+    setupAudienciaFields('#adicionarMovimentacaoModal');
+    setupAudienciaFields('#movimentacaoModal');
+
+
+    // ===================================================================================
+    //  LÓGICA PARA O MODAL DE EDIÇÃO DE MOVIMENTAÇÃO (Vindo de qualquer página)
+    // ===================================================================================
+    const movimentacaoModalEl = $('#movimentacaoModal');
+    if (movimentacaoModalEl.length) {
+        const form = movimentacaoModalEl.find('#formEditarMovimentacao');
+        const formDelete = movimentacaoModalEl.find('#formExcluirMovimentacao');
+        const whatsAppButton = movimentacaoModalEl.find('#btn-comunicar-whatsapp');
+
+        movimentacaoModalEl.on('show.bs.modal', function (event) {
+            const triggerElement = $(event.relatedTarget);
+
+            form.attr('action', triggerElement.data('url-edit'));
+            formDelete.attr('action', triggerElement.data('url-delete'));
+            form[0].reset();
+            whatsAppButton.hide();
+
+            $.ajax({
+                url: triggerElement.data('url-json'),
+                type: 'GET',
+                success: function(data) {
+                    form.find('[name="titulo"]').val(data.titulo || '');
+                    form.find('[name="data_prazo_final"]').val(data.data_prazo_final || '');
+                    form.find('[name="hora_prazo"]').val(data.hora_prazo || '');
+                    form.find('[name="detalhes"]').val(data.detalhes || '');
+                    form.find('[name="link_referencia"]').val(data.link_referencia || '');
+                    form.find('[name="status"]').val(data.status || '');
+                    form.find('[name="responsavel"]').val(data.responsavel_id).trigger('change');
+                    // IMPORTANTE: Dispara o 'change' após setar o valor para a lógica da audiência funcionar
+                    form.find('[name="tipo_movimentacao"]').val(data.tipo_movimentacao_id).trigger('change');
+
+                    if (data.cliente_telefone) {
+                        let mensagem = `Olá, ${data.cliente_nome}. Sou ${data.remetente_nome}, do escritório de advocacia.\n\n`;
+                        mensagem += `Gostaria de informar sobre a seguinte movimentação no seu processo:\n\n`;
+                        mensagem += `*Título:* ${data.titulo}\n`;
+
+                        if (data.data_prazo_final) {
+                            const [ano, mes, dia] = data.data_prazo_final.split('-');
+                            mensagem += `*Data:* ${dia}/${mes}/${ano}\n`;
+                        }
+                        if (data.hora_prazo) { mensagem += `*Horário:* ${data.hora_prazo}\n`; }
+                        if (data.link_referencia) { mensagem += `*Link para acesso:* ${data.link_referencia}\n`; }
+
+                        const urlWhatsapp = `https://wa.me/55${data.cliente_telefone}?text=${encodeURIComponent(mensagem)}`;
+                        whatsAppButton.attr('href', urlWhatsapp).show();
+                    }
+                }
+            });
+        });
+
+        form.on('submit', function(e) {
+            e.preventDefault();
+            $.ajax({
+                url: form.attr('action'), type: 'POST', data: form.serialize(),
+                success: function(response) { window.location.reload(); },
+                error: function(xhr) { alert('Ocorreu um erro ao salvar.'); }
+            });
+        });
+    }
+});
+</script>

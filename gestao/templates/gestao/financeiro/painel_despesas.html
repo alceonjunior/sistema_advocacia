@@ -1,0 +1,163 @@
+{% extends 'gestao/base.html' %}
+{% load static humanize l10n %}
+
+{% block title %}{{ titulo_pagina }}{% endblock %}
+
+{% block styles %}
+{{ block.super }}
+<style>
+    .kpi-card .valor { font-size: 1.75rem; font-weight: 600; color: var(--bs-danger); }
+    .nav-pills .nav-link.active { background-color: var(--bs-primary); }
+    .nav-pills .nav-link { color: var(--bs-primary); }
+    .form-section { display: none; } /* Oculta seções do modal por padrão */
+</style>
+{% endblock %}
+
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h2 d-flex align-items-center gap-2"><i class="bi bi-wallet2 text-primary"></i> {{ titulo_pagina }}</h1>
+    <button type="button" class="btn btn-primary" onclick="window.location.href='{% url 'gestao:adicionar_despesa_wizard' %}?next={% url 'gestao:painel_despesas' %}'">
+        <i class="bi bi-plus-circle-fill me-1"></i> Adicionar Despesa
+    </button>
+</div>
+
+<div class="row mb-4">
+    <div class="col-lg-6 mb-3">
+        <div class="card shadow-sm kpi-card">
+            <div class="card-body text-center p-3">
+                <h6 class="card-subtitle text-muted mb-2">TOTAL VENCIDO</h6>
+                <div class="valor">R$ {{ total_vencido|floatformat:2|localize }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6 mb-3">
+        <div class="card shadow-sm kpi-card">
+            <div class="card-body text-center p-3">
+                <h6 class="card-subtitle text-muted mb-2">A PAGAR ESTE MÊS</h6>
+                <div class="valor">R$ {{ a_pagar_mes|floatformat:2|localize }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body p-3">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4"><label class="form-label small">Período</label><input type="month" name="periodo" class="form-control"></div>
+            <div class="col-md-4"><label class="form-label small">Categoria</label><select name="categoria" class="form-select"><option>Todas</option></select></div>
+            <div class="col-md-4 d-grid"><button type="submit" class="btn btn-outline-secondary"><i class="bi bi-search"></i> Filtrar</button></div>
+        </form>
+    </div>
+</div>
+
+<ul class="nav nav-pills nav-fill mb-3" id="despesasTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#lancamentos-pane">Lançamentos Pontuais</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#recorrencias-pane">Despesas Recorrentes</button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <div class="tab-pane fade show active" id="lancamentos-pane">
+        <div class="card shadow-sm"><div class="card-body"><p class="p-5 text-center text-muted">A tabela de despesas pontuais será exibida aqui.</p></div></div>
+    </div>
+    <div class="tab-pane fade" id="recorrencias-pane">
+        <div class="card shadow-sm"><div class="card-body"><p class="p-5 text-center text-muted">A lista de despesas recorrentes (salários, aluguel) será gerenciada aqui.</p></div></div>
+    </div>
+</div>
+
+{# Inclui o partial do modal de despesa, removendo a duplicação #}
+{% include 'gestao/partials/_modal_despesa.html' %}
+{% endblock %}
+
+
+{% block javascript %}
+{{ block.super }}
+<script>
+$(document).ready(function() {
+    // Lógica para o modal de despesas (pontual, recorrente, variável)
+    const despesaModal = $('#despesaModal');
+    const selectTipoDespesa = $('#select-tipo-despesa');
+    const formDespesa = $('#formDespesa'); // Referência ao formulário
+
+    // Função para resetar e desabilitar campos de uma seção
+    function resetAndDisableSection(sectionId) {
+        const section = $(sectionId);
+        section.find('input, select, textarea').val('').prop('disabled', true); // Reseta e desabilita
+        section.hide(); // Oculta a seção
+    }
+
+    // Função para habilitar campos de uma seção
+    function enableSection(sectionId) {
+        const section = $(sectionId);
+        section.find('input, select, textarea').prop('disabled', false); // Habilita
+        section.slideDown(); // Exibe a seção com efeito de slide
+    }
+
+    // Inicializa o modal de despesas ao ser aberto
+    despesaModal.on('show.bs.modal', function() {
+        selectTipoDespesa.val(''); // Reseta o select de tipo
+        // Reseta e desabilita todos os campos de todas as seções ao abrir o modal
+        resetAndDisableSection('#section-pontual');
+        resetAndDisableSection('#section-recorrente_fixa');
+        resetAndDisableSection('#section-recorrente_variavel');
+        formDespesa[0].reset(); // Garante que todos os campos do form sejam resetados (limpa os valores)
+    });
+
+    // Ao mudar o tipo de despesa no select
+    selectTipoDespesa.on('change', function() {
+        const tipoSelecionado = $(this).val();
+
+        // Oculta e desabilita todas as seções primeiro
+        resetAndDisableSection('#section-pontual');
+        resetAndDisableSection('#section-recorrente_fixa');
+        resetAndDisableSection('#section-recorrente_variavel');
+
+        // Exibe e habilita a seção relevante
+        if (tipoSelecionado) {
+            enableSection('#section-' + tipoSelecionado);
+        }
+    });
+
+    // Lógica para submissão AJAX do formulário de Despesa (Exemplo)
+    $('#formDespesa').on('submit', function(e) {
+        e.preventDefault();
+        const form = $(this);
+        const url = form.attr('action'); // Certifique-se que a action está definida no form do partial
+        const formData = form.serialize();
+
+        // Você precisará de uma view em views.py para lidar com essa submissão
+        // e um URL correspondente em urls.py
+        console.log("Formulário de Despesa submetido. Dados:", formData);
+        alert("Submissão do formulário de despesa via AJAX simulada. Você precisa implementar o backend!");
+
+        // Exemplo de como você faria a requisição AJAX real
+        /*
+        $.ajax({
+            type: 'POST',
+            url: url,
+            data: formData,
+            success: function(response) {
+                if (response.status === 'success') {
+                    const modalInstance = bootstrap.Modal.getInstance(despesaModal[0]);
+                    modalInstance.hide();
+                    alert('Despesa salva com sucesso!');
+                    window.location.reload();
+                } else if (response.status === 'error') {
+                    // Lógica para exibir erros do formulário de despesa
+                    console.error('Erros do formulário de despesa:', response.errors);
+                }
+            },
+            error: function(xhr) {
+                console.error("Erro na requisição AJAX da despesa:", xhr.responseText);
+            }
+        });
+        */
+    });
+
+});
+</script>
+{% endblock %}

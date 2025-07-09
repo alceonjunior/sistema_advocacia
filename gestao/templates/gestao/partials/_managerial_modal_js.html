@@ -1,0 +1,28 @@
+<script>
+$(document).ready(function() {
+    const managerialModal = $('#managerialModal');
+
+    managerialModal.on('show.bs.modal', function(event) {
+        const triggerCard = $(event.relatedTarget);
+        const filterType = triggerCard.data('filter'); // Pega o data-filter do card clicado
+        const modalTitle = managerialModal.find('#managerialModalLabel');
+
+        // Esconde todos os conteúdos
+        $('.filter-content').hide();
+
+        // Mostra o conteúdo correto e define o título
+        if (filterType === 'processos') {
+            modalTitle.text('Detalhes: Processos Ativos');
+            $('#content-processos').show();
+        } else if (filterType === 'servicos') {
+            modalTitle.text('Detalhes: Serviços em Andamento');
+            // =================== CORREÇÃO APLICADA AQUI ===================
+            $('#content-servicos').show();
+            // ============================================================
+        } else if (filterType === 'pendencias') {
+            modalTitle.text('Detalhes: Total de Pendências');
+            $('#content-pendencias').show();
+        }
+    });
+});
+</script>

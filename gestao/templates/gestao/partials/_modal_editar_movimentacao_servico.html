@@ -1,0 +1,58 @@
+<div class="modal fade" id="servicoMovimentacaoModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <form id="formEditarMovimentacaoServico" method="post" action="">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title d-flex align-items-center gap-2">
+                        <i class="bi bi-pencil-square text-primary"></i>
+                        Editar Atividade do Serviço
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="{{ form_movimentacao_servico.titulo.id_for_label }}">{{ form_movimentacao_servico.titulo.label }}</label>
+                        {{ form_movimentacao_servico.titulo }}
+                    </div>
+                    <div class="mb-3">
+                        <label for="{{ form_movimentacao_servico.detalhes.id_for_label }}">{{ form_movimentacao_servico.detalhes.label }}</label>
+                        {{ form_movimentacao_servico.detalhes }}
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="{{ form_movimentacao_servico.data_atividade.id_for_label }}">{{ form_movimentacao_servico.data_atividade.label }}</label>
+                            {{ form_movimentacao_servico.data_atividade }}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form_movimentacao_servico.prazo_final.id_for_label }}">{{ form_movimentacao_servico.prazo_final.label }}</label>
+                            {{ form_movimentacao_servico.prazo_final }}
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-6">
+                            <label for="{{ form_movimentacao_servico.responsavel.id_for_label }}">{{ form_movimentacao_servico.responsavel.label }}</label>
+                            {{ form_movimentacao_servico.responsavel }}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form_movimentacao_servico.status.id_for_label }}">{{ form_movimentacao_servico.status.label }}</label>
+                            {{ form_movimentacao_servico.status }}
+                        </div>
+                    </div>
+                    </div>
+                <div class="modal-footer justify-content-between">
+                    <form id="formExcluirMovimentacaoServico" method="post" action="" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Tem certeza que deseja excluir esta atividade?');">
+                            <i class="bi bi-trash-fill"></i> Excluir
+                        </button>
+                    </form>
+                    <div>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

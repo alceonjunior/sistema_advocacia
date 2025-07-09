@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', function() {
     gerenciarPartesModalEl.addEventListener('show.bs.modal', () => {
         modalBody.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div></div>';
 
-        fetch(`{% url 'gerenciar_partes' processo_pk=processo.pk %}`)
+        fetch(`{% url 'gestao:gerenciar_partes' processo_pk=processo.pk %}`)
         .then(res => res.text())
         .then(html => {
             modalBody.innerHTML = html;

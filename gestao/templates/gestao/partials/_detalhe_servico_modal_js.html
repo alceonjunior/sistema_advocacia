@@ -1,0 +1,46 @@
+<script>
+$(document).ready(function () {
+    const modalEl = $('#servicoMovimentacaoModal');
+
+    modalEl.on('show.bs.modal', function (event) {
+        const triggerElement = $(event.relatedTarget);
+        const form = $('#formEditarMovimentacaoServico');
+        const formDelete = $('#formExcluirMovimentacaoServico');
+
+        const jsonUrl = triggerElement.data('url-json');
+        const editUrl = triggerElement.data('url-edit');
+        const deleteUrl = triggerElement.data('url-delete');
+
+        form.attr('action', editUrl);
+        formDelete.attr('action', deleteUrl);
+        form[0].reset();
+        form.find('select').val(null).trigger('change');
+
+        $.ajax({
+            url: jsonUrl,
+            type: 'GET',
+            success: function(data) {
+                // Preenche os campos do formulário
+                form.find('[name="titulo"]').val(data.titulo);
+                form.find('[name="detalhes"]').val(data.detalhes);
+                form.find('[name="data_atividade"]').val(data.data_atividade);
+                form.find('[name="prazo_final"]').val(data.prazo_final);
+                form.find('[name="status"]').val(data.status);
+                form.find('[name="responsavel"]').val(data.responsavel_id).trigger('change');
+            }
+        });
+    });
+
+    $('#formEditarMovimentacaoServico').on('submit', function(e) {
+        e.preventDefault();
+        const form = $(this);
+        $.ajax({
+            url: form.attr('action'),
+            type: 'POST',
+            data: form.serialize(),
+            success: function(response) { window.location.reload(); },
+            error: function(xhr) { alert('Ocorreu um erro ao salvar a atividade.'); }
+        });
+    });
+});
+</script>

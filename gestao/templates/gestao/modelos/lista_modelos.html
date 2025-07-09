@@ -8,7 +8,7 @@
         <i class="bi bi-file-earmark-text-fill text-primary"></i>
         Modelos de Documentos
     </h1>
-    <a href="{% url 'adicionar_modelo' %}" class="btn btn-primary">
+    <a href="{% url 'gestao:adicionar_modelo' %}" class="btn btn-primary">
         <i class="bi bi-plus-circle"></i> Adicionar Novo Modelo
     </a>
 </div>
@@ -29,8 +29,8 @@
                     <td>{{ modelo.titulo }}</td>
                     <td>{{ modelo.descricao|default:"-"|truncatechars:80 }}</td>
                     <td class="text-end">
-                        <a href="{% url 'editar_modelo' pk=modelo.pk %}" class="btn btn-sm btn-warning">Editar</a>
-                        <form action="{% url 'excluir_modelo' pk=modelo.pk %}" method="post" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir o modelo \'{{ modelo.titulo|escapejs }}\'?');">
+                        <a href="{% url 'gestao:editar_modelo' pk=modelo.pk %}" class="btn btn-sm btn-warning">Editar</a>
+                        <form action="{% url 'gestao:excluir_modelo' pk=modelo.pk %}" method="post" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir o modelo \'{{ modelo.titulo|escapejs }}\'?');">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
                         </form>

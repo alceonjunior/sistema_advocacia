@@ -217,9 +217,9 @@ class ModeloDocumento(models.Model):
 
     titulo = models.CharField(max_length=255, verbose_name="Título do Modelo")
     descricao = models.TextField(blank=True, null=True, verbose_name="Descrição / Instruções de Uso")
-    cabecalho = RichTextUploadingField(verbose_name="Cabeçalho", blank=True, null=True)
-    conteudo = RichTextUploadingField(verbose_name="Corpo do Documento")
-    rodape = RichTextUploadingField(verbose_name="Rodapé", blank=True, null=True)
+    cabecalho = RichTextUploadingField(verbose_name="Cabeçalho", blank=True, null=True, config_name='advanced')
+    conteudo = RichTextUploadingField(verbose_name="Corpo do Documento", config_name='advanced')
+    rodape = RichTextUploadingField(verbose_name="Rodapé", blank=True, null=True, config_name='advanced')
     data_criacao = models.DateTimeField(auto_now_add=True)
     data_modificacao = models.DateTimeField(auto_now=True)
 
@@ -375,6 +375,9 @@ class Movimentacao(models.Model):
                                                       ('CONCLUIDA', 'Concluída')], default='PENDENTE')
     hora_prazo = models.TimeField("Horário", null=True, blank=True, help_text="Preencha apenas para audiências ou eventos com hora marcada.")
     data_criacao = models.DateTimeField(auto_now_add=True)
+
+    link_referencia = models.URLField("Link de Referência", max_length=500, blank=True, null=True, help_text="Cole aqui o link para o andamento no sistema do tribunal, se houver.")
+
     history = HistoricalRecords()
 
     def __str__(self): return self.titulo
@@ -420,6 +423,7 @@ class Servico(models.Model):
     responsavel = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
                                     related_name="servicos_responsaveis", verbose_name="Responsável pelo Serviço")
     descricao = models.CharField(max_length=255, verbose_name="Descrição Detalhada do Serviço")
+    codigo_servico_municipal = models.CharField(max_length=10, blank=True, null=True, verbose_name="Cód. do Serviço Municipal (LC 116/03)", help_text="Ex: 01.07, 14.01, etc.")
     data_inicio = models.DateField(default=date.today)
     prazo = models.DateField(null=True, blank=True, verbose_name="Prazo de Conclusão")
     concluido = models.BooleanField(default=False, verbose_name="Concluído")
@@ -497,6 +501,24 @@ class LancamentoFinanceiro(models.Model):
     valor = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Valor Devido")
     tipo = models.CharField(max_length=10, choices=TIPO_CHOICES, default='RECEITA')
     data_vencimento = models.DateField()
+
+    CATEGORIA_CHOICES = [
+        ('HONORARIOS', 'Honorários'),
+        ('TAXAS', 'Taxas Judiciais/Administrativas'),
+        ('CUSTAS', 'Custas Processuais'),
+        ('ALUGUEL', 'Aluguel'),
+        ('SALARIO', 'Salário'),
+        ('OUTROS', 'Outros'),
+        # Adicione mais categorias conforme necessário
+    ]
+    categoria = models.CharField(
+        max_length=50,
+        choices=CATEGORIA_CHOICES,
+        default='OUTROS',
+        blank=True,  # Permite que o campo seja vazio no banco de dados
+        null=True  # Permite que o campo seja NULL no banco de dados
+    )
+
     history = HistoricalRecords()
 
     @property
@@ -564,6 +586,8 @@ class EscritorioConfiguracao(models.Model):
     """
     nome_escritorio = models.CharField(max_length=255, verbose_name="Nome do Escritório")
     cnpj = models.CharField(max_length=18, blank=True, null=True, verbose_name="CNPJ")
+    inscricao_municipal = models.CharField(max_length=20, blank=True, null=True, verbose_name="Inscrição Municipal")
+
     oab_principal = models.CharField(max_length=20, blank=True, null=True, verbose_name="Inscrição OAB Principal")
 
     # Endereço
@@ -591,3 +615,34 @@ class EscritorioConfiguracao(models.Model):
     class Meta:
         verbose_name = "Configuração do Escritório"
         verbose_name_plural = "Configurações do Escritório"
+
+
+class NotaFiscalServico(models.Model):
+    """Armazena o resultado da emissão de uma NFS-e para um serviço."""
+    STATUS_CHOICES = [
+        ('PROCESSANDO', 'Em Processamento'),
+        ('ACEITO', 'Aceito'),
+        ('ERRO', 'Erro'),
+        ('CANCELADO', 'Cancelado'),
+    ]
+    servico = models.ForeignKey(Servico, on_delete=models.CASCADE, related_name="notas_fiscais")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PROCESSANDO')
+
+    # Dados retornados pela prefeitura
+    numero_nfse = models.CharField(max_length=15, blank=True, null=True, verbose_name="Número da NFS-e")
+    codigo_verificacao = models.CharField(max_length=50, blank=True, null=True, verbose_name="Código de Verificação")
+    data_emissao_nfse = models.DateTimeField(blank=True, null=True, verbose_name="Data de Emissão")
+
+    # Para auditoria
+    xml_enviado = models.TextField(blank=True, null=True)
+    xml_recebido = models.TextField(blank=True, null=True)
+    mensagem_retorno = models.TextField(blank=True, null=True)
+
+    data_criacao = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"NFS-e {self.numero_nfse or '(Aguardando)'} para {self.servico}"
+
+    class Meta:
+        verbose_name = "Nota Fiscal de Serviço"
+        verbose_name_plural = "Notas Fiscais de Serviço"

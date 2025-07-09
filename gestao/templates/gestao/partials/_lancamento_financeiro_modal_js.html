@@ -1,0 +1,35 @@
+<script>
+$(document).ready(function() {
+    // Lógica para o Modal de Lançamento
+    const lancamentoModal = $('#lancamentoModal');
+    if (lancamentoModal.length) {
+        const lancamentoModalLabel = $('#lancamentoModalLabel');
+        const tipoLancamentoInput = $('#id_tipo_lancamento');
+
+        lancamentoModal.on('show.bs.modal', function(event) {
+            const button = $(event.relatedTarget);
+            const tipo = button.data('tipo-lancamento');
+
+            if (tipo === 'RECEITA') {
+                lancamentoModalLabel.text('Adicionar Nova Receita');
+                tipoLancamentoInput.val('RECEITA');
+            } else {
+                lancamentoModalLabel.text('Adicionar Nova Despesa');
+                tipoLancamentoInput.val('DESPESA');
+            }
+        });
+
+        // Inicializa o Select2 para os campos do modal
+        // Usamos o evento 'shown.bs.modal' para garantir que o modal está visível
+        // antes de inicializar o Select2, que é uma prática mais robusta.
+        lancamentoModal.on('shown.bs.modal', function () {
+            $(this).find('.select2-modal').select2({
+                theme: 'bootstrap-5',
+                dropdownParent: $('#lancamentoModal'),
+                placeholder: 'Selecione ou busque...',
+                allowClear: true
+            });
+        });
+    }
+});
+</script>
