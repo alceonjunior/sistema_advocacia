@@ -84,6 +84,8 @@ class Cliente(models.Model):
                                                verbose_name="CPF do Representante")
 
     # --- Bloco 5: Dados de Controle ---
+    is_cliente = models.BooleanField(default=True, verbose_name="É um cliente?") # NOVO CAMPO ADICIONADO
+
     data_cadastro = models.DateField(auto_now_add=True, verbose_name="Data de Cadastro", editable=False, null=True,
                                      db_index=True)
     history = HistoricalRecords()
@@ -312,6 +314,12 @@ class ParteProcesso(models.Model):
     processo = models.ForeignKey(Processo, on_delete=models.CASCADE, related_name="partes")
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name="participacoes")
     tipo_participacao = models.CharField("Tipo de Participação", max_length=20, choices=TIPO_CHOICES)
+
+    is_cliente_do_processo = models.BooleanField(
+        default=False,
+        verbose_name="É o cliente que representamos neste processo?",
+        help_text="Marque esta opção se esta parte for o cliente do escritório neste processo específico."
+    )
 
     # --- ADICIONE ESTE CAMPO ---
     # ForeignKey('self') cria um relacionamento com o próprio modelo.

@@ -107,21 +107,26 @@ class ParteProcessoForm(forms.ModelForm):
 
     class Meta:
         model = ParteProcesso
-        fields = ['cliente', 'tipo_participacao', 'representado_por']
+        fields = ['cliente', 'tipo_participacao', 'is_cliente_do_processo', 'representado_por']
         widgets = {
             'cliente': forms.Select(attrs={'class': 'form-select'}),
             'tipo_participacao': forms.Select(attrs={'class': 'form-select'}),
             'representado_por': forms.Select(attrs={'class': 'form-select'}),
+            'is_cliente_do_processo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # Esta parte do código filtra o campo 'representado_por' e está correta.
         if self.instance and self.instance.pk and self.instance.processo:
             processo_atual = self.instance.processo
+            # Exclui a própria parte da lista de possíveis representantes
             partes_elegiveis = ParteProcesso.objects.filter(processo=processo_atual).exclude(pk=self.instance.pk)
             self.fields['representado_por'].queryset = partes_elegiveis
         else:
+            # Se for um formulário novo (sem instância), não há ninguém para representar ainda.
             self.fields['representado_por'].queryset = ParteProcesso.objects.none()
 
 
