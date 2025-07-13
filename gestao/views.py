@@ -9,7 +9,7 @@ import datetime
 import itertools
 import json
 import unicodedata
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, time, timedelta
 from decimal import Decimal
 from operator import attrgetter, itemgetter
 
@@ -24,11 +24,12 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import (Q, Case, CharField, DateField, DecimalField, F,
-                              OuterRef, Subquery, Sum, Value, When)
+                              OuterRef, Subquery, Sum, Value, When, Func)
 from django.http import (Http404, HttpResponse, HttpResponseBadRequest,
-                         JsonResponse)
+                         JsonResponse, HttpResponseForbidden)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template import Context, Template
+from django.template.defaultfilters import truncatechars
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -37,6 +38,9 @@ from django.db.models import Sum, Count, Q
 from django.utils import timezone
 from datetime import timedelta
 from dateutil.relativedelta import relativedelta
+from django.contrib.admin.views.decorators import staff_member_required
+from unidecode import unidecode
+
 # Local Application
 from . import models
 from .calculators import CalculadoraMonetaria
@@ -57,6 +61,7 @@ from .models import (AreaProcesso, CalculoJudicial, Cliente, Documento,
                      ModeloDocumento, Movimentacao, MovimentacaoServico,
                      Pagamento, Processo, Recurso, Servico, TipoAcao,
                      TipoServico, UsuarioPerfil, ContratoHonorarios, ParteProcesso)
+
 from .services import ServicoIndices
 from .utils import data_por_extenso, valor_por_extenso
 from .nfse_service import NFSEService # Adicione este import no topo
@@ -104,182 +109,111 @@ PERMISSOES_MAPEADAS = {
 @login_required
 def dashboard(request):
     """
-    Dashboard Analítico e de Gestão.
-    Versão com lógica de agrupamento de pendências de serviço.
+    Carrega a estrutura principal do Dashboard e os dados do "Foco do Dia".
+    A lógica do "Foco do Dia" foi corrigida para incluir todas as pendências.
+    A agenda futura é carregada via AJAX pela view 'update_agenda_partial'.
     """
-    # --- 1. CONFIGURAÇÕES INICIAIS ---
-    hoje = timezone.now().date()
-    # CORREÇÃO: Usamos timedelta diretamente, pois foi importado acima
-    proximos_30_dias = hoje + timedelta(days=30)
-    status_aberto = ['PENDENTE', 'EM_ANDAMENTO']
     usuario = request.user
+    hoje = timezone.now().date()
+    status_aberto = ['PENDENTE', 'EM_ANDAMENTO']
 
-    # --- 2. QUERIES PRINCIPAIS ---
-    processos_ativos_qs = Processo.objects.filter(
-        advogado_responsavel=usuario, status_processo='ATIVO'
-    ).select_related('tipo_acao')
+    # --- Consultas para KPIs e Pulso do Escritório ---
+    processos_ativos_qs = Processo.objects.filter(advogado_responsavel=usuario, status_processo='ATIVO')
+    servicos_ativos_qs = Servico.objects.filter(responsavel=usuario, concluido=False)
+    ultimas_movimentacoes = Movimentacao.objects.filter(
+        processo__advogado_responsavel=usuario
+    ).order_by('-data_criacao').select_related('processo')[:5]
 
-    servicos_ativos_qs = Servico.objects.filter(
-        responsavel=usuario, concluido=False
-    ).select_related('cliente', 'tipo_servico')
+    # --- LÓGICA CORRIGIDA E AMPLIADA PARA O "FOCO DO DIA" ---
+    agenda_completa_foco = []
 
-    movimentacoes_qs = Movimentacao.objects.filter(
-        responsavel=usuario, status__in=status_aberto
-    ).select_related('processo__tipo_acao', 'tipo_movimentacao')
-
-    tarefas_servico_qs = MovimentacaoServico.objects.filter(
-        responsavel=usuario, status__in=status_aberto
-    ).select_related('servico__cliente', 'servico__tipo_servico')
-
-    servicos_com_prazo_qs = Servico.objects.filter(
-        responsavel=usuario, concluido=False, prazo__isnull=False
-    ).select_related('cliente', 'tipo_servico')
-
-    ultimas_movimentacoes = Movimentacao.objects.filter(processo__advogado_responsavel=usuario).order_by(
-        '-data_criacao').select_related('processo')[:5]
-
-    def remove_accents(input_str):
-        if not input_str: return ""
-        nfkd_form = unicodedata.normalize('NFKD', input_str)
-        return "".join([c for c in nfkd_form if not unicodedata.combining(c)])
-
-    # --- 3. MONTAGEM DA LISTA PLANA (PARA O 'FOCO DO DIA') E LISTAS SEPARADAS ---
-    agenda_completa = []
-    lista_de_pendencias = []
-    agenda_audiencias = []
-
-    for m in movimentacoes_qs:
-        if not m.tipo_movimentacao: continue
-        is_audiencia = 'audiencia' in m.titulo.lower() or 'audiencia' in remove_accents(
-            m.tipo_movimentacao.nome.lower())
-
-        item_data = {
-            'pk': m.pk, 'data': m.data_prazo_final, 'hora': m.hora_prazo, 'titulo': m.titulo,
-            'numero_processo': m.processo.numero_processo, 'nome_parte': m.processo.get_polo_ativo_display(),
-            'url': f"{reverse('gestao:detalhe_processo', args=[m.processo.pk])}#movimentacoes-pane",
-            'objeto_str': str(m.processo), 'cliente': m.processo.get_polo_ativo_display(),
-            'data_criacao': m.data_criacao, 'link_referencia': m.link_referencia,
-            'status': m.status # JÁ EXISTE NO CÓDIGO FORNECIDO
-
-        }
-        if is_audiencia:
-            item_data['tipo'] = 'audiencia'
-            agenda_audiencias.append(item_data)
-        else:
-            item_data['tipo'] = 'prazo_processo'
-            lista_de_pendencias.append(item_data)
-
-    for ts in tarefas_servico_qs:
-        lista_de_pendencias.append({
-            'pk': ts.pk, 'tipo': 'tarefa_servico', 'data': ts.prazo_final, 'hora': None, 'titulo': ts.titulo,
-            'url': reverse('gestao:detalhe_servico', args=[ts.servico.pk]), 'objeto_str': str(ts.servico),
-            'cliente': ts.servico.cliente.nome_completo, 'data_criacao': ts.data_criacao,
-            'status': ts.status # JÁ EXISTE NO CÓDIGO FORNECIDO
-
+    # 1. Busca movimentações de PROCESSOS (prazos e audiências) vencidas ou para hoje
+    movs_processo = Movimentacao.objects.filter(
+        responsavel=usuario, status__in=status_aberto, data_prazo_final__isnull=False, data_prazo_final__lte=hoje
+    ).select_related('processo')
+    for mov in movs_processo:
+        agenda_completa_foco.append({
+            'pk': mov.pk,
+            'tipo': 'processo',  # Usado pelo partial para construir a URL de conclusão
+            'data': mov.data_prazo_final,
+            'hora': mov.hora_prazo,
+            'titulo': mov.titulo,
+            'objeto_str': f"Proc: {mov.processo.numero_processo}",
         })
 
-    for s in servicos_com_prazo_qs:
-        current_status = 'EM_ANDAMENTO'  # Status padrão
-        if s.concluido:
-            current_status = 'CONCLUIDO'
-        elif s.prazo and s.prazo < hoje:
-            current_status = 'VENCIDO'  # Se não concluído e prazo passado
-
-        lista_de_pendencias.append({
-            'pk': s.pk,
-            'tipo': 'prazo_servico',
-            'data': s.prazo,
+    # 2. Busca movimentações de SERVIÇOS (tarefas) vencidas ou para hoje
+    movs_servico = MovimentacaoServico.objects.filter(
+        responsavel=usuario, status__in=status_aberto, prazo_final__isnull=False, prazo_final__lte=hoje
+    ).select_related('servico__cliente')
+    for tarefa in movs_servico:
+        agenda_completa_foco.append({
+            'pk': tarefa.pk,
+            'tipo': 'servico_task',  # Tipo específico para tarefas de serviço
+            'data': tarefa.prazo_final,
             'hora': None,
-            'titulo': f"Prazo Final: {s.descricao}",
-            'url': f"{s.get_absolute_url()}#andamentos-pane",
-            'objeto_str': str(s),
-            'cliente': s.cliente.nome_completo,
-            'data_criacao': s.data_inicio,
-            'status': current_status  # Adicione esta linha
+            'titulo': tarefa.titulo,
+            'objeto_str': f"Serviço: {tarefa.servico.descricao}",
         })
 
-    agenda_completa = agenda_audiencias + lista_de_pendencias
+    # 3. Busca SERVIÇOS cujo prazo final está vencido ou é hoje
+    servicos_com_prazo = Servico.objects.filter(
+        responsavel=usuario, concluido=False, prazo__isnull=False, prazo__lte=hoje
+    ).select_related('cliente')
+    for servico in servicos_com_prazo:
+        # Evita duplicidade se já houver uma tarefa para hoje/vencida do mesmo serviço
+        if not any(d['tipo'] == 'servico_task' and d['objeto_str'] == f"Serviço: {servico.descricao}" for d in
+                   agenda_completa_foco):
+            agenda_completa_foco.append({
+                'pk': servico.pk,
+                'tipo': 'servico_main',  # Tipo para o prazo principal do serviço
+                'data': servico.prazo,
+                'hora': None,
+                'titulo': f"Prazo final do serviço",
+                'objeto_str': f"{servico.descricao}",
+            })
 
-    # --- 4. MONTAGEM DA LISTA HIERÁRQUICA (PARA O MODAL DE PENDÊNCIAS) ---
-    pendencias_agrupadas = []
+    # Ordena a lista de foco por data
+    agenda_completa_foco = sorted(agenda_completa_foco, key=lambda x: x['data'])
 
-    for item in lista_de_pendencias:
-        if item['tipo'] == 'prazo_processo':
-            pendencias_agrupadas.append({'tipo_grupo': 'processo', 'item': item})
+    # Filtra para as seções "Vencidas" e "Para Hoje"
+    itens_vencidos = [item for item in agenda_completa_foco if item['data'] < hoje]
+    itens_para_hoje = [item for item in agenda_completa_foco if item['data'] == hoje]
 
-    servicos_processados = set()
-    for item in lista_de_pendencias:
-        if item['tipo'] in ['prazo_servico', 'tarefa_servico']:
-            servico_pk_str = item['url'].split('/')[-2]
-            if not servico_pk_str.isdigit(): continue
-            servico_pk = int(servico_pk_str)
+    # A lista de tarefas pendentes para a Visão Geral da Agenda é carregada separadamente
+    tarefas_pendentes_futuras = MovimentacaoServico.objects.filter(
+        responsavel=usuario, status__in=status_aberto, prazo_final__gt=hoje
+    ).select_related('servico')
 
-            if servico_pk not in servicos_processados:
-                try:
-                    servico_obj = Servico.objects.get(pk=servico_pk)
-
-                    servico_dict = None
-                    if servico_obj.prazo:
-                        servico_dict = {
-                            'pk': servico_obj.pk, 'titulo': f"Prazo Final: {servico_obj.descricao}",
-                            'data': servico_obj.prazo,
-                            'objeto_str': f"Serviço - {servico_obj.cliente.nome_completo}",
-                            'url': servico_obj.get_absolute_url()
-                        }
-
-                    atividades = [p for p in lista_de_pendencias if
-                                  p['tipo'] == 'tarefa_servico' and str(servico_pk) in p['url']]
-
-                    pendencias_agrupadas.append({
-                        'tipo_grupo': 'servico',
-                        'servico': servico_dict,
-                        'atividades': sorted(atividades, key=lambda x: x['data'] if x['data'] else hoje)
-                    })
-                    servicos_processados.add(servico_pk)
-                except Servico.DoesNotExist:
-                    continue
-
-    # --- 5. PROCESSAMENTO FINAL E CONTEXTO ---
-    itens_para_hoje = sorted([item for item in agenda_completa if item.get('data') == hoje],
-                             key=lambda x: (x.get('hora') is not None, x.get('hora')), reverse=True)
-    itens_vencidos = sorted([item for item in agenda_completa if item.get('data') and item['data'] < hoje],
-                            key=itemgetter('data'))
-    proximas_audiencias = sorted([item for item in agenda_audiencias if item.get('data') and item['data'] > hoje],
-                                 key=itemgetter('data'))
-    proximos_prazos = sorted(
-        [item for item in lista_de_pendencias if item.get('data') and hoje < item['data'] <= proximos_30_dias],
-        key=itemgetter('data'))
-    tarefas_pendentes = sorted([item for item in lista_de_pendencias if not item.get('data')],
-                               key=itemgetter('data_criacao'), reverse=True)
-
-    processos_ativos_count = processos_ativos_qs.count()
-    servicos_ativos_count = servicos_ativos_qs.count()
-    total_pendencias = len(lista_de_pendencias)
-
+    # Contexto final para o template
     context = {
-        'processos_ativos_count': processos_ativos_count,
-        'servicos_ativos_count': servicos_ativos_count,
-        'total_pendencias': total_pendencias,
-        'itens_para_hoje': itens_para_hoje,
+        'processos_ativos_count': processos_ativos_qs.count(),
+        'servicos_ativos_count': servicos_ativos_qs.count(),
+        'total_pendencias': len(itens_vencidos) + len(itens_para_hoje),
         'itens_vencidos': itens_vencidos,
-        'proximas_audiencias': proximas_audiencias,
-        'proximos_prazos': proximos_prazos,
-        'tarefas_pendentes': tarefas_pendentes,
+        'itens_para_hoje': itens_para_hoje,
+        'tarefas_pendentes': tarefas_pendentes_futuras,  # Passa tarefas futuras para a terceira coluna
         'ultimas_movimentacoes': ultimas_movimentacoes,
         'hoje': hoje,
-        'lista_processos_ativos': processos_ativos_qs,
-        'lista_servicos_ativos': servicos_ativos_qs,
-        'lista_total_pendencias': pendencias_agrupadas,
-        'form_movimentacao': MovimentacaoForm(),
+
+        # Formulários para os modais (essencial)
+        'form_movimentacao': MovimentacaoForm(initial={'responsavel': usuario}),
         'form_edit_servico': ServicoEditForm(),
+
         'form_movimentacao_servico': MovimentacaoServicoForm(),
-        'form_servico': ServicoForm(),
+        'form_servico': ServicoForm(initial={'responsavel': usuario}),
         'form_contrato': ContratoHonorariosForm(),
         'form_tipo_servico': TipoServicoForm(),
         'form_cliente': ClienteForm(),
-    }
-    return render(request, 'gestao/dashboard.html', context)
 
+        'lista_processos_ativos': processos_ativos_qs,
+        'lista_servicos_ativos': servicos_ativos_qs,
+        'lista_total_pendencias': itens_vencidos + itens_para_hoje,  # Simplificado para pendências de foco
+        'form_edit': ServicoEditForm(),
+        # A variável deve ser 'form_edit' para corresponder ao _modal_editar_servico.html
+
+    }
+
+    return render(request, 'gestao/dashboard.html', context)
 
 # ==============================================================================
 # SEÇÃO: VIEWS DE LISTAGEM E DETALHES
@@ -1007,12 +941,66 @@ def imprimir_recibo(request, pagamento_pk):
 
 @login_required
 def lista_clientes(request):
-    """Exibe a lista de clientes com filtros, ordenação e estatísticas."""
-    base_queryset = Cliente.objects.annotate(
+    """Exibe a lista de CLIENTES ATIVOS com filtros, ordenação e estatísticas."""
+    # AJUSTE: Adicionamos a contagem de TODOS os processos/serviços vinculados
+
+    status_baixados = ['ARQUIVADO', 'EXTINTO', 'ENCERRADO']
+
+    base_queryset = Cliente.objects.filter(is_cliente=True).annotate(
+        # Contagem para a lógica do botão de exclusão (qualquer vínculo)
+        processos_vinculados_count=Count('participacoes', distinct=True),
+        servicos_vinculados_count=Count('servicos', distinct=True),
+        # Contagem de casos ativos (para exibição)
         processos_ativos_count=Count('participacoes__processo',
                                      filter=Q(participacoes__processo__status_processo='ATIVO'), distinct=True),
-        servicos_ativos_count=Count('servicos', filter=Q(servicos__concluido=False), distinct=True)
+        servicos_ativos_count=Count('servicos', filter=Q(servicos__concluido=False), distinct=True),
+        # AJUSTE: Nova contagem de casos arquivados/concluídos (para exibição)
+        processos_arquivados_count=Count('participacoes__processo',
+                                         filter=Q(participacoes__processo__status_processo__in=status_baixados),
+                                         distinct=True),
+        servicos_concluidos_count=Count('servicos', filter=Q(servicos__concluido=True), distinct=True)
     )
+    # O resto da view permanece igual...
+    cliente_filter = ClienteFilter(request.GET, queryset=base_queryset)
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return render(request, 'gestao/partials/_lista_clientes_partial.html', {'filter': cliente_filter})
+
+    stats = {
+        'total': cliente_filter.qs.count(),
+        'com_processos_ativos': cliente_filter.qs.filter(processos_ativos_count__gt=0).count(),
+        'com_servicos_ativos': cliente_filter.qs.filter(servicos_ativos_count__gt=0).count(),
+        'total_ativos': cliente_filter.qs.filter(Q(processos_ativos_count__gt=0) | Q(servicos_ativos_count__gt=0)).distinct().count(),
+    }
+    stats_labels = {'total': 'TOTAL DE CLIENTES', 'total_ativos': 'CLIENTES ATIVOS (TOTAL)'}
+    context = {
+        'filter': cliente_filter,
+        'stats': stats,
+        'stats_labels': stats_labels,
+        'form': ClienteForm(),
+        'titulo_pagina': 'Painel de Clientes'
+    }
+    return render(request, 'gestao/lista_clientes.html', context)
+
+
+@login_required
+def lista_pessoas(request):
+    """Exibe a lista de TODAS AS PESSOAS CADASTRADAS (clientes e não-clientes)."""
+    # AJUSTE: Adicionamos a contagem de TODOS os processos/serviços vinculados
+    status_baixados = ['ARQUIVADO', 'EXTINTO', 'ENCERRADO']
+
+    base_queryset = Cliente.objects.annotate(
+        processos_vinculados_count=Count('participacoes', distinct=True),
+        servicos_vinculados_count=Count('servicos', distinct=True),
+        processos_ativos_count=Count('participacoes__processo',
+                                     filter=Q(participacoes__processo__status_processo='ATIVO'), distinct=True),
+        servicos_ativos_count=Count('servicos', filter=Q(servicos__concluido=False), distinct=True),
+        processos_arquivados_count=Count('participacoes__processo',
+                                         filter=Q(participacoes__processo__status_processo__in=status_baixados),
+                                         distinct=True),
+        servicos_concluidos_count=Count('servicos', filter=Q(servicos__concluido=True), distinct=True)
+    )
+    # O resto da view permanece igual...
     cliente_filter = ClienteFilter(request.GET, queryset=base_queryset)
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -1025,10 +1013,13 @@ def lista_clientes(request):
         'total_ativos': cliente_filter.qs.filter(
             Q(processos_ativos_count__gt=0) | Q(servicos_ativos_count__gt=0)).distinct().count(),
     }
+    stats_labels = {'total': 'TOTAL DE PESSOAS', 'total_ativos': 'PESSOAS ATIVAS (TOTAL)'}
     context = {
         'filter': cliente_filter,
         'stats': stats,
-        'form': ClienteForm()
+        'stats_labels': stats_labels,
+        'form': ClienteForm(),
+        'titulo_pagina': 'Painel de Pessoas'
     }
     return render(request, 'gestao/lista_clientes.html', context)
 
@@ -1069,7 +1060,7 @@ def adicionar_cliente_page(request):
 
     context = {
         'form': form,
-        'titulo_pagina': 'Cadastrar Novo Cliente'
+        'titulo_pagina': 'Cadastrar Nova Pessoa'
     }
     return render(request, 'gestao/adicionar_cliente.html', context)
 
@@ -1842,18 +1833,24 @@ def editar_movimentacao_ajax(request, pk):
         # Retorna os erros do formulário em formato JSON para o frontend
         return JsonResponse({'status': 'error', 'errors': form.errors.get_json_data()}, status=400)
 
+
 @login_required
 def get_servico_json(request, pk):
     """
     Retorna os dados de um serviço específico em formato JSON para ser
     usado pelo modal de edição.
+
+    VERSÃO CORRIGIDA: As chaves do dicionário agora correspondem
+    aos nomes dos campos do formulário (ex: 'responsavel' em vez de 'responsavel_id').
     """
     try:
         servico = get_object_or_404(Servico, pk=pk)
         data = {
             'pk': servico.pk,
-            'responsavel_id': servico.responsavel_id,
+            # --- CORREÇÃO APLICADA AQUI ---
+            'responsavel': servico.responsavel_id,  # Chave 'responsavel' para corresponder ao formulário
             'descricao': servico.descricao,
+            'codigo_servico_municipal': servico.codigo_servico_municipal,  # Adicionado para completar o modal
             'data_inicio': servico.data_inicio.strftime('%Y-%m-%d') if servico.data_inicio else '',
             'recorrente': servico.recorrente,
             'prazo': servico.prazo.strftime('%Y-%m-%d') if servico.prazo else '',
@@ -1864,6 +1861,7 @@ def get_servico_json(request, pk):
         return JsonResponse(data)
     except Http404:
         return JsonResponse({'error': 'Serviço não encontrado'}, status=404)
+
 
 @require_POST
 @login_required
@@ -2407,3 +2405,218 @@ def processar_importacao_projudi(request):
             return JsonResponse({'status': 'error', 'message': f'Erro ao processar importação: {str(e)}'}, status=500)
         return JsonResponse({'status': 'error', 'message': 'Ocorreu um erro inesperado ao salvar os dados.'},
                             status=500)
+
+
+@login_required
+@staff_member_required  # Garante que apenas usuários da equipe possam acessar
+def excluir_clientes_em_massa(request):
+    """
+    Exclui todos os clientes (ou pessoas) que não possuem nenhum processo
+    ou serviço vinculado. Ação restrita a superusuários.
+    """
+    # Dupla verificação de segurança: apenas superusuários podem executar a ação.
+    if not request.user.is_superuser:
+        return HttpResponseForbidden("Você não tem permissão para executar esta ação.")
+
+    if request.method == 'POST':
+        # Filtra todos os Clientes que não têm participações em processos E não têm serviços.
+        cadastros_para_excluir = Cliente.objects.annotate(
+            num_processos=Count('participacoes'),
+            num_servicos=Count('servicos')
+        ).filter(
+            num_processos=0,
+            num_servicos=0
+        )
+
+        # Obtém a contagem de quantos serão excluídos ANTES de deletar.
+        count = cadastros_para_excluir.count()
+
+        if count > 0:
+            cadastros_para_excluir.delete()
+            return JsonResponse({
+                'status': 'success',
+                'message': f'{count} cadastros sem vínculos foram excluídos com sucesso.'
+            })
+        else:
+            return JsonResponse({
+                'status': 'info',
+                'message': 'Nenhum cadastro sem vínculos foi encontrado para exclusão.'
+            })
+
+    # Redireciona se a requisição não for POST
+    return redirect('gestao:lista_clientes')
+
+
+@login_required
+def global_search(request):
+    """
+    Realiza uma busca geral e sem acentos em múltiplos modelos
+    e retorna os resultados em formato JSON para ser consumido por AJAX.
+    """
+    query = request.GET.get('q', '')
+    results = []
+
+    if len(query) > 2:  # A busca só é acionada com 3 ou mais caracteres
+        unaccented_query = unidecode(query)
+
+        # Busca em Processos
+        processos = Processo.objects.filter(
+            Q(numero_processo__icontains=query) |
+            Q(descricao_caso__icontains=query)
+        )[:5]
+        for processo in processos:
+            results.append({
+                'text': f"{processo.descricao_caso|truncatechars:40}",
+                'subtext': f"Proc. {processo.numero_processo}",
+                'type': 'Processo',
+                'icon': 'bi-folder-fill',
+                'url': processo.get_absolute_url()
+            })
+
+        # Busca em Clientes e Pessoas (com anotação para busca sem acento)
+        clientes = Cliente.objects.annotate(
+            nome_unaccent=Func(F('nome_completo'), function='unaccent')
+        ).filter(
+            Q(nome_unaccent__icontains=unaccented_query) |
+            Q(cpf_cnpj__icontains=query)
+        )[:5]
+        for cliente in clientes:
+            # Distingue entre 'Cliente' e 'Pessoa' para o tipo
+            tipo_cadastro = "Cliente" if cliente.is_cliente else "Pessoa"
+            results.append({
+                'text': cliente.nome_completo,
+                'subtext': cliente.cpf_cnpj or "Documento não informado",
+                'type': tipo_cadastro,
+                'icon': 'bi-person-fill',
+                'url': cliente.get_absolute_url()
+            })
+
+        # Busca em Serviços
+        servicos = Servico.objects.filter(descricao__icontains=query)[:5]
+        for servico in servicos:
+            results.append({
+                'text': servico.descricao,
+                'subtext': f"Cliente: {servico.cliente.nome_completo}",
+                'type': 'Serviço',
+                'icon': 'bi-briefcase-fill',
+                'url': servico.get_absolute_url()
+            })
+
+    return JsonResponse(results, safe=False)
+
+
+def remove_accents(input_str):
+    if not input_str: return ""
+    nfkd_form = unicodedata.normalize('NFKD', input_str)
+    return "".join([c for c in nfkd_form if not unicodedata.combining(c)])
+
+
+@login_required
+def update_agenda_partial(request):
+    """
+    Processa requisições AJAX para atualizar e paginar as listas da agenda.
+    """
+    try:
+        # --- 1. COLETA DE PARÂMETROS ---
+        list_type = request.GET.get('list_type', 'audiencias')  # 'audiencias' ou 'prazos'
+        page_number = request.GET.get('page', 1)
+        per_page = int(request.GET.get('per_page', 5))
+        if per_page not in [5, 10]:
+            per_page = 5
+
+        # --- 2. LÓGICA DE FILTRAGEM E PREPARAÇÃO DA LISTA ---
+        hoje = timezone.now().date()
+        proximos_30_dias = hoje + timedelta(days=30)
+        usuario = request.user
+
+        base_query = Movimentacao.objects.filter(
+            responsavel=usuario,
+            status__in=['PENDENTE', 'EM_ANDAMENTO'],
+            data_prazo_final__gt=hoje,
+            data_prazo_final__lte=proximos_30_dias
+        ).select_related('processo', 'tipo_movimentacao').prefetch_related('processo__partes__cliente').order_by(
+            'data_prazo_final', 'hora_prazo')
+
+        lista_final = []
+        partial_template = ''
+
+        # Filtra os itens com base no tipo de lista solicitado
+        all_items = []
+        for mov in base_query:
+            is_audiencia = 'audiencia' in remove_accents(mov.titulo.lower()) or \
+                           (mov.tipo_movimentacao and 'audiencia' in remove_accents(mov.tipo_movimentacao.nome.lower()))
+
+            if (list_type == 'audiencias' and is_audiencia) or (list_type == 'prazos' and not is_audiencia):
+                all_items.append(mov)
+
+        # Prepara o dicionário de contexto para cada item
+        for mov in all_items:
+            item_data = {
+                'pk': mov.pk, 'data': mov.data_prazo_final, 'hora': mov.hora_prazo, 'titulo': mov.titulo,
+                'status': mov.get_status_display(), 'hoje': hoje, 'link_referencia': mov.link_referencia
+            }
+            if list_type == 'audiencias':
+                item_data.update({'numero_processo': mov.processo.numero_processo,
+                                  'nome_parte': mov.processo.get_cliente_principal_display()})
+                partial_template = 'gestao/partials/_item_agenda_audiencia_lista.html'
+            else:  # Prazos
+                item_data.update({
+                                     'objeto_str': f"Proc: {mov.processo.numero_processo} - {mov.processo.get_cliente_principal_display()}",
+                                     'url': mov.processo.get_absolute_url()})
+                partial_template = 'gestao/partials/_item_pendencia.html'
+
+            lista_final.append(item_data)
+
+        # --- 3. PAGINAÇÃO ---
+        paginator = Paginator(lista_final, per_page)
+        page_obj = paginator.get_page(page_number)
+
+        # --- 4. RENDERIZAÇÃO DO HTML PARCIAL ---
+        html_content = render_to_string(
+            'gestao/partials/_agenda_list_with_pagination.html',
+            {
+                'page_obj': page_obj,
+                'list_type': list_type,
+                'per_page': per_page,
+                'partial_template': partial_template
+            },
+            request=request
+        )
+
+        return JsonResponse({'success': True, 'html': html_content})
+
+    except Exception as e:
+        # Em caso de erro, retorna uma mensagem para debug
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@require_POST
+@login_required
+def concluir_item_agenda_ajax(request, tipo, pk):
+    """
+    Marca um item da agenda (Movimentacao ou MovimentacaoServico) como 'CONCLUIDA'
+    e retorna uma resposta JSON.
+    """
+    try:
+        if tipo == 'processo':
+            item = get_object_or_404(Movimentacao, pk=pk, responsavel=request.user)
+        elif tipo == 'servico_task':
+            item = get_object_or_404(MovimentacaoServico, pk=pk, responsavel=request.user)
+        else:
+            return JsonResponse({'success': False, 'error': 'Tipo de item inválido'}, status=400)
+
+        item.status = 'CONCLUIDA'
+        item.save()
+
+        return JsonResponse({'success': True})
+
+    except Http404:
+        return JsonResponse({'success': False, 'error': 'Item não encontrado ou você não tem permissão'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+
+
+
+

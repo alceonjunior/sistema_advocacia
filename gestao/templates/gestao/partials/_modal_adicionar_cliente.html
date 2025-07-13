@@ -11,7 +11,7 @@
                 <div class="modal-header bg-light">
                     <h1 class="modal-title fs-5" id="addClienteModalLabel">
                         <i class="bi bi-person-plus-fill me-2 text-primary"></i>
-                        Cadastro Rápido de Cliente
+                        Cadastro Rápido de Parte
                     </h1>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
@@ -53,13 +53,25 @@
                             {{ form.telefone_principal }}
                         </div>
                     </div>
+
+                    {# AJUSTE: Adicionado o campo 'is_cliente' no final do corpo do modal #}
+                    <hr class="my-4">
+                    <div class="d-flex justify-content-center">
+                        <div class="form-check form-switch form-check-lg" title="Marque se este cadastro representa um cliente ativo que contrata os serviços do escritório.">
+                            {{ form.is_cliente }}
+                            <label class="form-check-label" for="{{ form.is_cliente.id_for_label }}">
+                                Cadastrar como cliente ativo?
+                            </label>
+                        </div>
+                    </div>
+
                 </div>
 
                 <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-check-circle me-1"></i>
-                        Salvar Cliente
+                        Salvar
                     </button>
                 </div>
             </form>

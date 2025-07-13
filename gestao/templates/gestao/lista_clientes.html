@@ -1,11 +1,29 @@
 {% extends 'gestao/base.html' %}
+
+{% comment %}
+================================================================================
+TELA DE LISTAGEM DE CLIENTES / PESSOAS
+================================================================================
+Este template é o coração da visualização de contatos, sendo reutilizável
+tanto para a listagem de "Clientes Ativos" (/clientes) quanto para a de
+"Todas as Pessoas Cadastradas" (/pessoas).
+
+A lógica é controlada por variáveis de contexto passadas pela view:
+- `titulo_pagina`: Define o título principal (H1) da página.
+- `stats`: Dicionário com os números para os cards de estatísticas.
+- `stats_labels`: Dicionário com os rótulos para os cards de estatísticas.
+- `filter`: Objeto do django-filter para a filtragem.
+- `form`: Formulário para o modal de adição rápida.
+================================================================================
+{% endcomment %}
+
 {% load static %}
 
-{% block title %}Painel de Clientes{% endblock %}
+{% block title %}{{ titulo_pagina|default:"Painel de Clientes" }}{% endblock %}
 
 {% block styles %}
 <style>
-    /* Estilo para o efeito de carregamento da lista */
+    /* Estilo para o efeito de "loading" que é ativado via JavaScript */
     #client-list-container.loading {
         opacity: 0.5;
         position: relative;
@@ -33,7 +51,7 @@
         100% { transform: rotate(360deg); }
     }
 
-    /* Garante o scroll no modal de cliente */
+    /* Garante o scroll no modal de adição rápida */
     #addClienteModal .modal-body {
         max-height: 70vh;
         overflow-y: auto;
@@ -44,19 +62,26 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h2 d-flex align-items-center gap-2">
-        <i class="bi bi-people-fill text-primary"></i> Painel de Clientes
+        <i class="bi bi-people-fill text-primary"></i>
+        {{ titulo_pagina|default:"Painel de Clientes" }}
     </h1>
-    <a href="{% url 'gestao:adicionar_cliente_page' %}" class="btn btn-primary">
-        <i class="bi bi-plus-circle-fill me-1"></i> Adicionar Novo Cliente
-    </a>
-
+    <div class="btn-group">
+        <a href="{% url 'gestao:adicionar_cliente_page' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle-fill me-1"></i> Adicionar Novo
+        </a>
+        {% if request.user.is_superuser %}
+            <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#confirmBulkDeleteModal">
+                <i class="bi bi-trash3"></i> Excluir sem Vínculos
+            </button>
+        {% endif %}
+    </div>
 </div>
 
 <div class="row mb-4">
     <div class="col-6 col-lg-3 mb-3">
         <div class="card text-center h-100">
             <div class="card-body">
-                <h6 class="text-muted small">TOTAL DE CLIENTES</h6>
+                <h6 class="text-muted small">{{ stats_labels.total|default:"TOTAL DE CLIENTES" }}</h6>
                 <div class="fs-2 fw-bold">{{ stats.total }}</div>
             </div>
         </div>
@@ -80,7 +105,7 @@
     <div class="col-6 col-lg-3 mb-3">
         <div class="card text-center h-100">
             <div class="card-body">
-                <h6 class="text-muted small">CLIENTES ATIVOS (TOTAL)</h6>
+                <h6 class="text-muted small">{{ stats_labels.total_ativos|default:"CLIENTES ATIVOS (TOTAL)" }}</h6>
                 <div class="fs-2 fw-bold text-success">{{ stats.total_ativos }}</div>
             </div>
         </div>
@@ -120,7 +145,44 @@
 </div>
 
 {% include 'gestao/partials/_modal_adicionar_cliente.html' with form=form %}
-
+<div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="confirmDeleteModalLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i> Confirmação de Exclusão</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Você tem certeza que deseja excluir permanentemente o cadastro de:</p>
+                <p class="text-center fw-bold fs-5" id="deleteModalClientName"></p>
+                <p class="text-danger small mt-3"><i class="bi bi-shield-fill-exclamation"></i> Esta ação não pode ser desfeita.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Sim, Excluir</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="confirmBulkDeleteModal" tabindex="-1" aria-labelledby="confirmBulkDeleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="confirmBulkDeleteModalLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i> Exclusão em Massa</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Você está prestes a excluir **TODOS** os cadastros que **não possuem nenhum processo ou serviço vinculado**.</p>
+                <p class="fw-bold">Esta ação é irreversível.</p>
+                <p>Deseja continuar?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="confirmBulkDeleteBtn">Sim, Excluir em Massa</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block javascript %}
@@ -130,95 +192,125 @@ document.addEventListener('DOMContentLoaded', function () {
     const filterForm = document.getElementById('filter-form');
     const clientListContainer = document.getElementById('client-list-container');
     let debounceTimer;
-    let tooltipList = []; // Para gerenciar os tooltips dinamicamente
+    let tooltipList = [];
 
-    // Função para inicializar ou atualizar os tooltips
     function initializeTooltips() {
         tooltipList.forEach(t => t.dispose());
-        const tooltipTriggerList = [].slice.call(clientListContainer.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
         tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl);
         });
     }
 
-    // Função para atualizar a lista de clientes via AJAX
     function updateClientList() {
         clientListContainer.classList.add('loading');
         const params = new URLSearchParams(new FormData(filterForm));
-        const url = `{% url 'gestao:lista_clientes' %}?${params.toString()}`;
+        const isPessoasPage = document.title.includes('Pessoas');
+        const baseUrl = isPessoasPage ? "{% url 'gestao:lista_pessoas' %}" : "{% url 'gestao:lista_clientes' %}";
+        const url = `${baseUrl}?${params.toString()}`;
         history.pushState(null, '', url);
 
         fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(response => response.text())
             .then(html => {
                 clientListContainer.innerHTML = html;
-                initializeTooltips(); // Re-inicializa os tooltips no novo conteúdo
+                initializeTooltips();
             })
             .finally(() => {
                 clientListContainer.classList.remove('loading');
             });
     }
 
-    // Adiciona os "ouvintes" aos campos do formulário de filtro
     if (filterForm) {
         filterForm.querySelectorAll('input, select').forEach(input => {
-            const eventType = input.tagName.toLowerCase() === 'select' ? 'change' : 'input';
-            input.addEventListener(eventType, function() {
+            input.addEventListener(input.tagName.toLowerCase() === 'select' ? 'change' : 'input', function() {
                 clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(updateClientList, 400); // Debounce para evitar muitas requisições
+                debounceTimer = setTimeout(updateClientList, 400);
             });
         });
     }
 
-    // Atualiza a lista quando um novo cliente é salvo pelo modal
-    document.addEventListener('clienteSalvo', function(e) {
-        updateClientList();
-    });
+    document.addEventListener('clienteSalvo', updateClientList);
 
-    // Lógica para EXCLUSÃO de cliente via AJAX com DELEGAÇÃO DE EVENTO
+    const confirmDeleteModal = document.getElementById('confirmDeleteModal');
+    if (confirmDeleteModal) {
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        let deleteUrl = '';
+
+        confirmDeleteModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            deleteUrl = button.dataset.url;
+            document.getElementById('deleteModalClientName').textContent = button.dataset.nome;
+        });
+
+        confirmDeleteBtn.addEventListener('click', function() {
+            fetch(deleteUrl, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': '{{ csrf_token }}', 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // AJUSTE FINAL: Após a exclusão, recarregamos a página para atualizar os stats.
+                if (data.status === 'success') {
+                    // Opcional: mostrar uma mensagem de sucesso antes de recarregar.
+                    // alert(data.message || 'Cadastro excluído com sucesso!');
+                    location.reload(); // Recarrega a página para atualizar tudo.
+                } else {
+                    alert(`Erro ao excluir: ${data.message}`);
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                bootstrap.Modal.getInstance(confirmDeleteModal).hide();
+            });
+        });
+    }
+
+    const confirmBulkDeleteModal = document.getElementById('confirmBulkDeleteModal');
+    if (confirmBulkDeleteModal) {
+        const confirmBulkDeleteBtn = document.getElementById('confirmBulkDeleteBtn');
+        confirmBulkDeleteBtn.addEventListener('click', function() {
+            const url = "{% url 'gestao:excluir_clientes_em_massa' %}";
+            confirmBulkDeleteBtn.disabled = true;
+            confirmBulkDeleteBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Excluindo...';
+
+            fetch(url, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': '{{ csrf_token }}', 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                if (data.status === 'success') {
+                    location.reload(); // Recarrega a página para atualizar os stats.
+                }
+            })
+            .catch(error => console.error('Erro na exclusão em massa:', error))
+            .finally(() => {
+                confirmBulkDeleteBtn.disabled = false;
+                confirmBulkDeleteBtn.innerHTML = 'Sim, Excluir em Massa';
+                bootstrap.Modal.getInstance(confirmBulkDeleteModal).hide();
+            });
+        });
+    }
+
     clientListContainer.addEventListener('click', function(e) {
-        const deleteButton = e.target.closest('.btn-excluir-cliente');
-
-        if (deleteButton) {
+        const copyEl = e.target.closest('.copy-to-clipboard');
+        if (copyEl && copyEl.dataset.copyValue) {
             e.preventDefault();
-
-            const url = deleteButton.dataset.url;
-            const nomeCliente = deleteButton.dataset.nome;
-            const csrfToken = '{{ csrf_token }}';
-            const clientCard = deleteButton.closest('.client-card');
-
-            // === MENSAGEM DE CONFIRMAÇÃO APRIMORADA ===
-            const confirmacao = confirm(`Você está prestes a excluir o cliente: ${nomeCliente}\n\nEsta ação é permanente e não poderá ser desfeita.\nDeseja continuar?`);
-
-            if (confirmacao) {
-                fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': csrfToken,
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        if (clientCard) {
-                            clientCard.style.transition = 'opacity 0.5s';
-                            clientCard.style.opacity = '0';
-                            setTimeout(() => clientCard.remove(), 500); // Remove o card após a animação
-                        }
-                    } else {
-                        alert(`Erro ao excluir: ${data.message}`);
-                    }
-                })
-                .catch(error => {
-                    console.error('Erro:', error);
-                    alert('Ocorreu um erro de comunicação ao tentar excluir o cliente.');
-                });
-            }
+            navigator.clipboard.writeText(copyEl.dataset.copyValue).then(() => {
+                const originalTitle = copyEl.getAttribute('title');
+                const tooltip = bootstrap.Tooltip.getInstance(copyEl);
+                copyEl.setAttribute('data-bs-original-title', 'Copiado!');
+                if (tooltip) tooltip.show();
+                setTimeout(() => {
+                    copyEl.setAttribute('data-bs-original-title', originalTitle);
+                    if (tooltip) tooltip.hide();
+                }, 1500);
+            });
         }
     });
 
-    // Inicializa os tooltips no carregamento inicial da página
     initializeTooltips();
 });
 </script>

@@ -12,7 +12,13 @@
                 {% for parte in processo.partes.all %}
                     {% if parte.tipo_participacao == 'AUTOR' %}
                         <li class="mb-2">
-                            <strong>{{ parte.cliente.nome_completo }}</strong>
+                            <strong>
+                                {# AJUSTE: Adiciona um ícone se for o cliente do processo #}
+                                {% if parte.is_cliente_do_processo %}
+                                    <i class="bi bi-star-fill text-warning me-1" title="Cliente representado pelo escritório neste processo"></i>
+                                {% endif %}
+                                {{ parte.cliente.nome_completo }}
+                            </strong>
                             {% if parte.representado_por %}
                                 <br><small class="text-muted ps-2">↳ Representado(a) por: {{ parte.representado_por.cliente.nome_completo }}</small>
                             {% endif %}
@@ -29,7 +35,13 @@
                {% for parte in processo.partes.all %}
                     {% if parte.tipo_participacao == 'REU' %}
                         <li class="mb-2">
-                            <strong>{{ parte.cliente.nome_completo }}</strong>
+                            <strong>
+                                {# AJUSTE: Adiciona um ícone se for o cliente do processo #}
+                                {% if parte.is_cliente_do_processo %}
+                                    <i class="bi bi-star-fill text-warning me-1" title="Cliente representado pelo escritório neste processo"></i>
+                                {% endif %}
+                                {{ parte.cliente.nome_completo }}
+                            </strong>
                             {% if parte.representado_por %}
                                 <br><small class="text-muted ps-2">↳ Representado(a) por: {{ parte.representado_por.cliente.nome_completo }}</small>
                             {% endif %}

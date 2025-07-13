@@ -85,6 +85,28 @@
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
     }
+
+    /* Estilos para a tela de resumo */
+    .summary-section h6 {
+        font-weight: bold;
+        color: var(--bs-primary);
+        border-bottom: 2px solid #e9ecef;
+        padding-bottom: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    .summary-item {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 0.5rem;
+        font-size: 0.95rem;
+    }
+    .summary-item .label {
+        color: #6c757d;
+    }
+    .summary-item .value {
+        font-weight: 500;
+        text-align: right;
+    }
 </style>
 {% endblock %}
 
@@ -127,6 +149,10 @@
                 <div class="step-counter">3</div>
                 <div class="step-name">Qualificação</div>
             </div>
+            <div class="stepper-item" data-step="4">
+                <div class="step-counter"><i class="bi bi-check-lg"></i></div>
+                <div class="step-name">Revisão</div>
+            </div>
         </div>
 
         {% if form.non_field_errors %}
@@ -165,7 +191,7 @@
         </div>
 
         <div class="step-pane" data-step="2">
-            <h4 class="mb-4 border-bottom pb-2">Endereço do Cliente</h4>
+            <h4 class="mb-4 border-bottom pb-2">Endereço da Parte</h4>
             <div class="row g-3">
                 <div class="col-12">
                     <label for="{{ form.cep.id_for_label }}" class="form-label">{{ form.cep.label }}</label>
@@ -203,13 +229,53 @@
                 </div>
             </div>
         </div>
+
+        <div class="step-pane" data-step="4">
+            <div class="text-center mb-4">
+                <h4 class="mb-1">Revisão dos Dados</h4>
+                <p class="text-muted">Confira as informações antes de finalizar o cadastro.</p>
+            </div>
+            <div class="row g-5">
+                <div class="col-lg-6">
+                    <div class="summary-section">
+                        <h6>Dados Pessoais</h6>
+                        <div class="summary-item"><span class="label">Nome/Razão Social:</span><span class="value" id="summary-nome"></span></div>
+                        <div class="summary-item"><span class="label">Tipo:</span><span class="value" id="summary-tipo-pessoa"></span></div>
+                        <div class="summary-item"><span class="label">CPF/CNPJ:</span><span class="value" id="summary-cpf-cnpj"></span></div>
+                        <div class="summary-item"><span class="label">E-mail:</span><span class="value" id="summary-email"></span></div>
+                        <div class="summary-item"><span class="label">Telefone:</span><span class="value" id="summary-telefone"></span></div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="summary-section">
+                        <h6>Endereço</h6>
+                        <div class="summary-item"><span class="label">Logradouro:</span><span class="value" id="summary-logradouro"></span></div>
+                        <div class="summary-item"><span class="label">Cidade/UF:</span><span class="value" id="summary-cidade-uf"></span></div>
+                        <div class="summary-item"><span class="label">CEP:</span><span class="value" id="summary-cep"></span></div>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="my-4">
+
+            <div class="d-flex justify-content-center align-items-center bg-light-subtle p-4 rounded">
+                <div class="form-check form-switch form-check-lg">
+                    {{ form.is_cliente }}
+                    <label class="form-check-label" for="{{ form.is_cliente.id_for_label }}">
+                        Cadastrar como um cliente?
+                    </label>
+                    <div class="text-danger small mt-1">{{ form.is_cliente.errors }}</div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <div class="card-footer p-3 bg-light d-flex">
         <button type="button" class="btn btn-secondary" id="prev-btn" style="display: none;"><i class="bi bi-arrow-left"></i> Voltar</button>
         <div class="me-auto"></div>
         <button type="button" class="btn btn-primary" id="next-btn">Próximo <i class="bi bi-arrow-right"></i></button>
-        <button type="submit" class="btn btn-success" id="save-btn" style="display: none;"><i class="bi bi-check-circle-fill me-2"></i> Salvar Cliente</button>
+        <button type="submit" class="btn btn-success" id="save-btn" style="display: none;"><i class="bi bi-check-circle-fill me-2"></i> Salvar Cadastro</button>
     </div>
 </form>
 </div>
@@ -221,7 +287,7 @@
 <script>
 $(function() {
     // =======================================================
-    //     NOVA LÓGICA DO WIZARD
+    //     LÓGICA DO WIZARD
     // =======================================================
     const stepperItems = $('.stepper-item');
     const stepPanes = $('.step-pane');
@@ -229,7 +295,27 @@ $(function() {
     const prevBtn = $('#prev-btn');
     const saveBtn = $('#save-btn');
     let currentStep = 1;
-    const totalSteps = stepperItems.length;
+    const totalSteps = 4;
+
+    // AJUSTE: Nova função para preencher o resumo
+    function populateSummary() {
+        // Dados Pessoais
+        $('#summary-nome').text($('#id_nome_completo').val() || 'Não informado');
+        $('#summary-tipo-pessoa').text($('#id_tipo_pessoa option:selected').text() || 'Não informado');
+        $('#summary-cpf-cnpj').text($('#id_cpf_cnpj').val() || 'Não informado');
+        $('#summary-email').text($('#id_email').val() || 'Não informado');
+        $('#summary-telefone').text($('#id_telefone_principal').val() || 'Não informado');
+
+        // Endereço
+        const logradouro = $('#id_logradouro').val();
+        const numero = $('#id_numero').val();
+        $('#summary-logradouro').text(`${logradouro}, ${numero}` || 'Não informado');
+
+        const cidade = $('#id_cidade').val();
+        const estado = $('#id_estado').val();
+        $('#summary-cidade-uf').text(`${cidade} - ${estado}` || 'Não informado');
+        $('#summary-cep').text($('#id_cep').val() || 'Não informado');
+    }
 
     function updateWizardState() {
         stepperItems.each(function(index) {
@@ -243,6 +329,11 @@ $(function() {
         prevBtn.toggle(currentStep > 1);
         nextBtn.toggle(currentStep < totalSteps);
         saveBtn.toggle(currentStep === totalSteps);
+
+        // Chama a função de resumo quando chegamos ao último passo
+        if (currentStep === totalSteps) {
+            populateSummary();
+        }
     }
 
     nextBtn.on('click', () => { if (currentStep < totalSteps) { currentStep++; updateWizardState(); } });
@@ -292,7 +383,6 @@ $(function() {
     }
     $('#btn-buscar-cep').on('click', buscarCep);
     $('#id_cep').on('blur', buscarCep);
-
 
     // Inicializa o estado do wizard ao carregar a página
     updateWizardState();

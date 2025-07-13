@@ -14,14 +14,33 @@
 
         <div class="card-body d-flex flex-column pt-2">
             <div class="mb-3">
-                <div class="d-flex align-items-center gap-2 text-success" title="Polo Ativo">
-                    <i class="bi bi-people-fill"></i>
-                    <span class="small">{{ processo.get_polo_ativo_display|truncatechars:35 }}</span>
-                </div>
-                <div class="d-flex align-items-center gap-2 text-danger mt-1" title="Polo Passivo">
-                    <i class="bi bi-people-fill"></i>
-                    <span class="small">{{ processo.get_polo_passivo_display|truncatechars:35 }}</span>
-                </div>
+                {% for parte in processo.partes.all %}
+                    {% if parte.tipo_participacao == 'AUTOR' %}
+                        <div class="d-flex align-items-center gap-2 text-success small mb-1" title="Polo Ativo">
+                            <i class="bi bi-arrow-up-right-circle-fill"></i>
+                            <span>
+                                {% if parte.is_cliente_do_processo %}
+                                    <i class="bi bi-star-fill text-warning me-1" title="Cliente representado pelo escritório"></i>
+                                {% endif %}
+                                {{ parte.cliente.nome_completo|truncatechars:35 }}
+                            </span>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+
+                {% for parte in processo.partes.all %}
+                    {% if parte.tipo_participacao == 'REU' %}
+                        <div class="d-flex align-items-center gap-2 text-danger small" title="Polo Passivo">
+                            <i class="bi bi-arrow-down-left-circle-fill"></i>
+                            <span>
+                                {% if parte.is_cliente_do_processo %}
+                                    <i class="bi bi-star-fill text-warning me-1" title="Cliente representado pelo escritório"></i>
+                                {% endif %}
+                                {{ parte.cliente.nome_completo|truncatechars:35 }}
+                            </span>
+                        </div>
+                    {% endif %}
+                {% endfor %}
             </div>
 
             <div class="mb-3 small text-muted">
@@ -47,7 +66,6 @@
 
                     <span class="badge bg-info-subtle text-info-emphasis rounded-pill px-2 py-1 small d-flex align-items-center" title="Valor da Causa">
                         <i class="bi bi-currency-dollar me-1"></i>
-                        {# O filtro 'intcomma' adiciona os pontos de milhar. Ex: 10000.50 -> 10.000,50 #}
                         R$ {{ processo.valor_causa|default:"0,00"|intcomma }}
                     </span>
                 </div>

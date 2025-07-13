@@ -1,0 +1,70 @@
+{% comment %}
+  Componente FINAL e CORRIGIDO para a seção "Foco do Dia".
+  - Garante que o clique em tarefas de serviço abra o modal correto com os dados.
+  - Mantém o layout compacto e alinhado.
+{% endcomment %}
+
+<div class="list-group-item px-3 py-3" id="agenda-item-{{ item.tipo }}-{{ item.pk }}">
+    <div class="d-flex w-100 align-items-center">
+
+        {# Coluna do Ícone #}
+        <div class="pe-3 fs-5 text-muted">
+            {% if item.tipo == 'processo' %}
+                <i class="bi bi-folder-fill" title="Processo"></i>
+            {% elif item.tipo == 'servico_task' %}
+                <i class="bi bi-list-check" title="Tarefa de Serviço"></i>
+            {% elif item.tipo == 'servico_main' %}
+                 <i class="bi bi-briefcase-fill" title="Prazo de Serviço"></i>
+            {% endif %}
+        </div>
+
+        {# Conteúdo Principal (clicável para abrir o modal) #}
+        {# A LÓGICA CORRIGIDA ESTÁ AQUI, nos data-attributes #}
+        <div class="flex-grow-1" style="min-width: 0; cursor: pointer;"
+             data-bs-toggle="modal"
+             {% if item.tipo == 'processo' %}
+                data-bs-target="#movimentacaoModal"
+                data-url-json="{% url 'gestao:get_movimentacao_json' item.pk %}"
+             {% elif item.tipo == 'servico_task' %}
+                data-bs-target="#servicoMovimentacaoModal"
+                data-url-json="{% url 'gestao:get_movimentacao_servico_json' item.pk %}"
+             {% elif item.tipo == 'servico_main' %}
+                data-bs-target="#servicoModal"
+                data-url-json="{% url 'gestao:get_servico_json' item.pk %}"
+             {% endif %}>
+
+            <div class="row g-2 align-items-center">
+                <div class="col-sm-7">
+                    <h6 class="mb-0 text-truncate" title="{{ item.titulo }}">{{ item.titulo }}</h6>
+                </div>
+                <div class="col-sm-5 text-sm-end">
+                     {% if item.data < hoje %}
+                        <span class="badge text-bg-danger fw-normal text-nowrap">Venceu: {{ item.data|date:"d/m/Y" }}</span>
+                     {% else %}
+                        <span class="badge text-bg-warning fw-normal text-nowrap">Hoje</span>
+                     {% endif %}
+                </div>
+            </div>
+
+            <p class="mb-0 text-muted small mt-1 text-truncate">{{ item.objeto_str }}</p>
+
+        </div>
+
+        {# Coluna de Ações (Hora e Botão Concluir) #}
+        <div class="ps-3 d-flex align-items-center" style="width: 110px; flex-shrink: 0;">
+             {% if item.hora %}
+                <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill me-auto">{{ item.hora|time:"H:i" }}</span>
+            {% endif %}
+
+            {% if item.tipo == 'processo' or item.tipo == 'servico_task' %}
+                <button type="button" class="btn btn-sm btn-outline-success rounded-circle btn-concluir-rapido ms-auto"
+                        style="width: 2.2rem; height: 2.2rem;"
+                        data-bs-toggle="tooltip"
+                        title="Marcar como concluída"
+                        data-url="{% url 'gestao:concluir_item_agenda_ajax' item.tipo item.pk %}">
+                    <i class="bi bi-check-lg"></i>
+                </button>
+            {% endif %}
+        </div>
+    </div>
+</div>

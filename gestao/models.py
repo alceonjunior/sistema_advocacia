@@ -1,4 +1,5 @@
 # gestao/models.py
+import re
 
 # --- Imports Necessários ---
 # Importações padrão do Django para criar modelos e gerenciar URLs.
@@ -125,6 +126,13 @@ class Cliente(models.Model):
                 if self.cpf_representante_legal: rep_str += f", portador(a) do CPF nº {self.cpf_representante_legal}"
                 partes.append(rep_str)
             return ", ".join(filter(None, partes))
+
+    @property
+    def telefone_principal_digits(self):
+        """Retorna apenas os dígitos do telefone principal, para uso em links como o do WhatsApp."""
+        if not self.telefone_principal:
+            return ""
+        return re.sub(r'\D', '', str(self.telefone_principal))
 
     class Meta:
         ordering = ['nome_completo']
@@ -304,6 +312,27 @@ class Processo(models.Model):
 
     def get_polo_passivo_display(self): return ", ".join(
         [p.cliente.nome_completo for p in self.partes.filter(tipo_participacao='REU')]) or "N/A"
+
+    # --- MÉTODO ADICIONADO ---
+    def get_cliente_principal_display(self):
+        """
+        Retorna o nome do cliente que o escritório representa no processo.
+        1. Prioriza a parte marcada com 'is_cliente_do_processo'.
+        2. Se não houver, retorna o primeiro autor do polo ativo.
+        3. Se não houver, retorna uma mensagem padrão.
+        """
+        # Tenta encontrar a parte explicitamente marcada como cliente
+        cliente_principal = self.partes.filter(is_cliente_do_processo=True).first()
+        if cliente_principal:
+            return cliente_principal.cliente.nome_completo
+
+        # Se não encontrar, usa o primeiro autor como fallback (plano B)
+        polo_ativo = self.partes.filter(tipo_participacao='AUTOR').first()
+        if polo_ativo:
+            return polo_ativo.cliente.nome_completo
+
+        # Se não houver nenhum dos dois
+        return "Cliente não definido"
 
 
 # --- Modelos Relacionados ao Processo (Tabelas Auxiliares) ---

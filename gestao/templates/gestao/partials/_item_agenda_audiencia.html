@@ -1,0 +1,62 @@
+{% comment %}
+  Componente para exibir um card de audiência na lista do dashboard.
+  Recebe um objeto 'item' (dicionário) da view com os seguintes atributos:
+  - pk, id, numero_processo, tipo_audiencia, data, hora, status,
+  - autor, reu, local, advogado_responsavel, observacoes
+{% endcomment %}
+
+{# URLs dinâmicas para o modal, usando o PK do item (movimentação) #}
+{% url 'gestao:get_movimentacao_json' item.pk as url_json %}
+{% url 'gestao:editar_movimentacao_ajax' item.pk as url_edit %}
+{% url 'gestao:excluir_movimentacao' item.pk as url_delete %}
+
+{# O card inteiro se torna um botão para abrir o modal de movimentação #}
+<div class="card shadow-sm mb-3 list-group-item-action" style="cursor: pointer;"
+     data-bs-toggle="modal"
+     data-bs-target="#movimentacaoModal"
+     data-url-json="{{ url_json }}"
+     data-url-edit="{{ url_edit }}"
+     data-url-delete="{{ url_delete }}">
+
+  <div class="card-header bg-white d-flex justify-content-between align-items-center fw-bold">
+    <div>
+      <i class="bi bi-journal-text me-2"></i>
+      Processo: <span class="text-primary">{{ item.numero_processo }}</span>
+    </div>
+    <span class="badge bg-success rounded-pill">{{ item.status }}</span>
+  </div>
+
+  <div class="card-body">
+    <h5 class="card-title">{{ item.tipo_audiencia }}</h5>
+    <h6 class="card-subtitle mb-2 text-muted">
+      <i class="bi bi-calendar-event me-1"></i> {{ item.data|date:"d/m/Y" }} às {{ item.hora|time:"H:i" }}
+    </h6>
+    <hr>
+    <p class="card-text small">
+      <strong><i class="bi bi-people-fill me-2"></i>Partes:</strong>
+      <span>{{ item.autor }}</span> vs. <span>{{ item.reu }}</span>
+    </p>
+    <p class="card-text small">
+      <strong><i class="bi bi-geo-alt-fill me-2"></i>Local:</strong>
+      {# Verifica se o local é um link clicável para sala virtual #}
+      {% if item.local|slice:":4" == "http" %}
+        <a href="{{ item.local }}" target="_blank" onclick="event.stopPropagation();">
+            Acessar sala virtual <i class="bi bi-box-arrow-up-right"></i>
+        </a>
+      {% else %}
+        {{ item.local }}
+      {% endif %}
+    </p>
+    <p class="card-text small">
+      <strong><i class="bi bi-person-badge-fill me-2"></i>Adv. Responsável:</strong>
+      {{ item.advogado_responsavel }}
+    </p>
+
+    {% if item.observacoes %}
+      <div class="alert alert-light mt-3 p-2 small" role="alert">
+        <strong><i class="bi bi-chat-left-text me-2"></i>Obs:</strong>
+        <span style="white-space: pre-wrap;">{{ item.observacoes|truncatewords:20 }}</span>
+      </div>
+    {% endif %}
+  </div>
+</div>

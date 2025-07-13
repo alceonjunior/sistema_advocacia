@@ -4,6 +4,7 @@
 # apps foram movidas para o local correto.
 from django.urls import path
 from . import views
+from .views import lista_clientes, lista_pessoas
 
 # O app_name é essencial para que o Django possa diferenciar as URLs
 # deste aplicativo de outros. Ex: {% url 'gestao:detalhe_cliente' cliente.pk %}
@@ -22,7 +23,10 @@ urlpatterns = [
     # URLs para gerenciar clientes, incluindo listagem, adição, detalhes, exclusão
     # e operações AJAX para formulários modais.
     # ==============================================================================
-    path('clientes/', views.lista_clientes, name='lista_clientes'), # Lista de todos os clientes
+    path('clientes/', lista_clientes, name='lista_clientes'),
+    path('pessoas/', lista_pessoas, name='lista_pessoas'),
+    path('clientes/excluir-massa/', views.excluir_clientes_em_massa, name='excluir_clientes_em_massa'),
+
     path('clientes/adicionar/', views.adicionar_cliente_page, name='adicionar_cliente_page'), # Página para adicionar um novo cliente
     path('clientes/<int:pk>/', views.detalhe_cliente, name='detalhe_cliente'), # Detalhes de um cliente específico
     path('clientes/<int:pk>/excluir/', views.excluir_cliente, name='excluir_cliente'), # Excluir um cliente
@@ -149,5 +153,9 @@ urlpatterns = [
     path('importacao/projudi/analisar/', views.analisar_dados_projudi_ajax, name='analisar_dados_projudi_ajax'),
 
     path('importacao/projudi/processar/', views.processar_importacao_projudi, name='processar_importacao_projudi'),
+
+    path('ajax/global-search/', views.global_search, name='global_search'),
+    path('dashboard/update-agenda/', views.update_agenda_partial, name='update_agenda_partial'),
+    path('agenda/concluir/<str:tipo>/<int:pk>/', views.concluir_item_agenda_ajax, name='concluir_item_agenda_ajax'),
 
 ]

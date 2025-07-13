@@ -1,0 +1,43 @@
+{% comment %}
+  Partial para exibir um item de audiência no formato de lista compacta,
+  conforme o layout original do dashboard.
+
+  Recebe um objeto 'aud' (dicionário) da view.
+{% endcomment %}
+
+<div class="list-group-item list-group-item-action px-0 py-3" style="cursor: pointer;"
+     data-bs-toggle="modal"
+     data-bs-target="#movimentacaoModal"
+     data-url-json="{% url 'gestao:get_movimentacao_json' aud.pk %}"
+     data-url-edit="{% url 'gestao:editar_movimentacao_ajax' aud.pk %}"
+     data-url-delete="{% url 'gestao:excluir_movimentacao' aud.pk %}">
+
+    <table class="table table-borderless table-sm mb-0">
+        <tbody>
+            <tr>
+                <td class="p-0" style="width: 100%;">
+                    <div class="d-flex align-items-center">
+                        <h6 class="mb-0 text-truncate" title="{{ aud.titulo }}">{{ aud.titulo }}</h6>
+
+                        {# Adiciona o badge de link se a URL existir #}
+                        {% if aud.link_referencia %}
+                            <a href="{{ aud.link_referencia }}" target="_blank" class="badge bg-info text-decoration-none ms-2" onclick="event.stopPropagation();">
+                                Link
+                            </a>
+                        {% endif %}
+                    </div>
+                </td>
+                <td class="p-0 text-end">
+                    <span class="fw-bold text-nowrap">{{ aud.data|date:"d/m" }}</span>
+                </td>
+            </tr>
+            <tr>
+                <td class="p-0 pt-1" colspan="2">
+                    <small class="text-muted d-block">Proc. {{ aud.numero_processo|default:"N/A" }}</small>
+                    {# Exibe o nome da parte principal (autor) #}
+                    <small class="text-muted d-block">{{ aud.nome_parte }}</small>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>

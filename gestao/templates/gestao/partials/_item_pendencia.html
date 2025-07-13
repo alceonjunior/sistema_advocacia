@@ -1,0 +1,63 @@
+{% comment %}
+Componente para exibir um item de pendência na lista do dashboard.
+Recebe um objeto 'item' que pode ser uma audiência, prazo ou serviço.
+O objeto 'item' deve ter os seguintes atributos:
+- `pk`: A chave primária do objeto original.
+- `tipo`: String ('audiencia', 'prazo_processo', 'servico').
+- `titulo`: O título a ser exibido.
+- `data`: A data de vencimento.
+- `hora`: A hora do evento (opcional).
+- `objeto_str`: Uma representação em string do objeto pai (processo ou serviço).
+- `status`: O status atual da pendência.
+================================================================================
+{% endcomment %}
+
+{% if item.tipo == 'audiencia' or item.tipo == 'prazo_processo' %}
+
+    {# VERSÃO CORRIGIDA: Geramos cada URL com a tag {% url %} e a salvamos em uma variável usando "as" #}
+    {% url 'gestao:get_movimentacao_json' item.pk as url_json %}
+    {% url 'gestao:editar_movimentacao_ajax' item.pk as url_edit %}
+    {% url 'gestao:excluir_movimentacao' item.pk as url_delete %}
+
+    <div class="list-group-item list-group-item-action" style="cursor: pointer;"
+         data-bs-toggle="modal"
+         data-bs-target="#movimentacaoModal"
+         data-url-json="{{ url_json }}"
+         data-url-edit="{{ url_edit }}"
+         data-url-delete="{{ url_delete }}">
+
+        <div class="d-flex w-100 justify-content-between">
+            <span class="fw-bold {% if item.data < hoje %}text-danger{% endif %}">{{ item.titulo }}</span>
+            {% if item.hora %}
+                <small class="badge bg-primary rounded-pill">{{ item.hora|time:"H:i" }}</small>
+            {% else %}
+                <small class="text-muted">{{ item.data|date:"d/m/Y" }}</small>
+            {% endif %}
+        </div>
+        <p class="mb-1 text-muted">{{ item.objeto_str }}</p>
+        <small class="badge bg-secondary">{{ item.status }}</small>
+    </div>
+
+{% elif item.tipo == 'servico' %}
+
+    {# Assumindo que você tenha URLs e um modal separado para serviços. Adapte se necessário. #}
+    {% url 'gestao:get_servico_json' item.pk as url_json_servico %}
+    {% url 'gestao:editar_servico_ajax' item.pk as url_edit_servico %}
+    {% url 'gestao:excluir_servico' item.pk as url_delete_servico %}
+
+    <div class="list-group-item list-group-item-action" style="cursor: pointer;"
+         data-bs-toggle="modal"
+         data-bs-target="#servicoModal"
+         data-url-json="{{ url_json_servico }}"
+         data-url-edit="{{ url_edit_servico }}"
+         data-url-delete="{{ url_delete_servico }}">
+
+        <div class="d-flex w-100 justify-content-between">
+            <span class="fw-bold {% if item.data < hoje %}text-danger{% endif %}">{{ item.titulo }}</span>
+            <small class="text-muted">{{ item.data|date:"d/m/Y" }}</small>
+        </div>
+        <p class="mb-1 text-muted">{{ item.objeto_str }}</p>
+        <small class="badge bg-success">{{ item.status }}</small>
+    </div>
+
+{% endif %}

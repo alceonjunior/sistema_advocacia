@@ -1,0 +1,48 @@
+{% comment %}
+Partial reutilizável para renderizar uma lista paginada de itens da agenda.
+Recebe:
+- page_obj: O objeto de página do Paginator.
+- list_type: 'audiencias' ou 'prazos' para o target do AJAX.
+- per_page: Número de itens por página.
+- partial_template: O caminho do template para renderizar cada item (ex: _item_pendencia.html).
+{% endcomment %}
+
+<div class="list-group list-group-flush">
+    {% for item in page_obj %}
+        {% include partial_template with aud=item item=item %}
+    {% empty %}
+        <div class="list-group-item text-muted small px-0">
+            Nenhum item encontrado.
+        </div>
+    {% endfor %}
+</div>
+
+{% if page_obj.paginator.num_pages > 1 %}
+<div class="card-footer bg-light p-2 mt-auto">
+    <nav aria-label="Paginação de {{ list_type }}">
+        <ul class="pagination pagination-sm justify-content-center mb-0">
+            <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+                <a class="page-link" href="#" data-page="1">&laquo;</a>
+            </li>
+            <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+                <a class="page-link" href="#" data-page="{{ page_obj.previous_page_number }}">&lsaquo;</a>
+            </li>
+
+            {% for i in page_obj.paginator.page_range %}
+                {% if page_obj.number == i %}
+                    <li class="page-item active" aria-current="page"><span class="page-link">{{ i }}</span></li>
+                {% elif i > page_obj.number|add:'-3' and i < page_obj.number|add:'3' %}
+                    <li class="page-item"><a class="page-link" href="#" data-page="{{ i }}">{{ i }}</a></li>
+                {% endif %}
+            {% endfor %}
+
+            <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+                <a class="page-link" href="#" data-page="{{ page_obj.next_page_number }}">&rsaquo;</a>
+            </li>
+            <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+                <a class="page-link" href="#" data-page="{{ page_obj.paginator.num_pages }}">&raquo;</a>
+            </li>
+        </ul>
+    </nav>
+</div>
+{% endif %}

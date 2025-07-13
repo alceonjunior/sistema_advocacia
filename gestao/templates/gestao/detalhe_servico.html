@@ -91,7 +91,7 @@
             {% csrf_token %}
             <div class="modal-header"><h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Adicionar Novo Andamento</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
-                <div class="alert alert-danger d-none p-2 small"></div>
+                <div class="alert alert-danger d-none p-2 small form-errors"></div>
                 <div class="mb-3">{{ form_movimentacao.titulo.label_tag }} {{ form_movimentacao.titulo }}</div>
                 <div class="mb-3">{{ form_movimentacao.detalhes.label_tag }} {{ form_movimentacao.detalhes }}</div>
                 <div class="row g-3"><div class="col-md-6">{{ form_movimentacao.data_atividade.label_tag }} {{ form_movimentacao.data_atividade }}</div><div class="col-md-6">{{ form_movimentacao.status.label_tag }} {{ form_movimentacao.status }}</div></div>
@@ -114,8 +114,8 @@
 </div>
 
 {% include 'gestao/partials/_modal_pagamento.html' %}
-
 {% include 'gestao/partials/_modal_editar_movimentacao_servico.html' %}
+{% include 'gestao/partials/_modal_emitir_nfse.html' %}
 
 {% endblock %}
 
@@ -139,7 +139,7 @@ $(function() {
     $('#btn-add-andamento').on('click', () => addAndamentoModal.show());
     $('#btn-concluir-servico').on('click', () => concluirServicoModal.show());
 
-    // --- LÓGICA DE ATUALIZAÇÃO AUTOMÁTICA DOS COMPONENTES ---
+    // --- LÓGICA DE ATUALIZAÇÃO AUTOMÁTICA DOS COMPONENTES FINANCEIROS ---
     const updateUrl = "{% url 'gestao:atualizar_componentes_financeiros_servico' pk=servico.pk %}";
     const resumoContainer = $('#servico-resumo-financeiro-container');
     const tabelaContainer = $('#servico-tabela-financeira-container');
@@ -176,9 +176,13 @@ $(function() {
     }
 });
 </script>
-{% include 'gestao/partials/_detalhe_financeiro_js.html' %}
-{% include 'gestao/partials/_detalhe_servico_modal_js.html' %}
-{% include 'gestao/partials/_modal_emitir_nfse.html' %}
 
+{% comment %}
+================================================================================
+SUBSTITUIÇÃO DOS SCRIPTS ANTIGOS PELO NOVO SCRIPT MODULAR
+================================================================================
+{% endcomment %}
+{% include 'gestao/partials/_modal_loader_js.html' %}
+{% include 'gestao/partials/_detalhe_financeiro_js.html' %}
 
 {% endblock %}

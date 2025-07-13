@@ -1,34 +1,71 @@
 {% comment %}
-Este é o template final e corrigido para uma única linha do formulário de partes.
-Ele usa a classe 'parte-form' e inclui todos os 3 campos necessários.
+Este é o template integral para uma única linha do formulário de partes,
+usado no modal "Gerenciar Partes". Ele inclui todos os campos necessários
+e aplica um layout limpo para melhor usabilidade.
 {% endcomment %}
+
 <div class="parte-form mb-3 p-3 border rounded bg-light-subtle position-relative">
-    {# Campo oculto com o ID da instância, crucial para a edição. #}
+
+    {# Campo oculto que armazena o ID da instância. Essencial para o Django saber qual registro editar. #}
     {% if form_parte.instance.pk %}
         {{ form_parte.id }}
     {% endif %}
 
-    {# Botão 'x' para remover o formulário da tela (tratado via JS) #}
+    {# Botão 'x' no canto superior direito para remover o formulário (a lógica de remoção é tratada via JavaScript). #}
     <button type="button" class="btn-close btn-sm position-absolute top-0 end-0 m-2 remove-form-btn" aria-label="Remover"></button>
 
-    {# Renderiza os campos do formulário com 3 colunas #}
+    {# Grade (grid) para organizar os campos do formulário em colunas. #}
     <div class="row g-2 align-items-end">
-        <div class="col-md-4">
+
+        {# Coluna para o seletor de Cliente #}
+        <div class="col-md-5">
             {{ form_parte.cliente.label_tag }}
             {{ form_parte.cliente }}
+            {% if form_parte.cliente.errors %}
+                <div class="invalid-feedback d-block">
+                    {{ form_parte.cliente.errors|first }}
+                </div>
+            {% endif %}
         </div>
+
+        {# Coluna para o seletor de Tipo de Participação (Polo Ativo/Passivo) #}
         <div class="col-md-4">
             {{ form_parte.tipo_participacao.label_tag }}
             {{ form_parte.tipo_participacao }}
+             {% if form_parte.tipo_participacao.errors %}
+                <div class="invalid-feedback d-block">
+                    {{ form_parte.tipo_participacao.errors|first }}
+                </div>
+            {% endif %}
         </div>
-        <div class="col-md-4">
-            {{ form_parte.representado_por.label_tag }}
-            {{ form_parte.representado_por }}
+
+        {# Coluna para o novo campo "É o cliente?", estilizado como um interruptor (switch) #}
+        <div class="col-md-3 d-flex align-items-center justify-content-center pb-2">
+            <div class="form-check form-switch" title="Marque esta opção se esta parte for o cliente principal que o escritório representa neste processo.">
+                {{ form_parte.is_cliente_do_processo }}
+                <label class="form-check-label" for="{{ form_parte.is_cliente_do_processo.id_for_label }}">
+                    É o cliente?
+                </label>
+            </div>
         </div>
     </div>
 
-    {# O campo DELETE do formset, que fica oculto. #}
+    {# Linha separada para o campo "Representado por", para não poluir a primeira linha #}
+    <div class="row g-2 mt-2">
+        <div class="col-12">
+            {{ form_parte.representado_por.label_tag }}
+            {{ form_parte.representado_por }}
+            {% if form_parte.representado_por.errors %}
+                <div class="invalid-feedback d-block">
+                    {{ form_parte.representado_por.errors|first }}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Campo DELETE do formset, que fica oculto, mas é essencial para o Django saber qual linha remover do banco de dados. #}
     <div hidden>
         {{ form_parte.DELETE }}
     </div>
+
 </div>

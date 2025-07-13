@@ -1,34 +1,44 @@
+# gestao/filters.py
+
 import django_filters
-from django.db import models
-from django.db.models import Q
 from django import forms
 from django.contrib.auth import get_user_model
+from django.db.models import Q, F, Func
 
-from .models import Processo, TipoServico, Cliente, Servico, AreaProcesso
+# Importa a função unidecode para tratar o valor digitado pelo usuário
+from unidecode import unidecode
+
+from .models import Processo, Servico, Cliente, AreaProcesso
 
 User = get_user_model()
 
 
+# ==============================================================================
+# FILTRO PARA PROCESSOS
+# ==============================================================================
 class ProcessoFilter(django_filters.FilterSet):
-    # Campo para busca em vários campos do modelo
+    """Filtro para a tela de listagem de processos."""
+
+    # Busca geral que agora também ignora acentos no nome das partes.
     busca_geral = django_filters.CharFilter(
-        method='filtro_busca_geral',
+        method='filtro_busca_geral_unaccent',
         label='Buscar por Nº, Assunto ou Parte'
     )
 
-    # ==========================================================
-    # ↓↓↓ O FILTRO DE ORDENAÇÃO É DEFINIDO AQUI... ↓↓↓
-    # ==========================================================
+    # Filtro por área do direito, que cascateia para o tipo de ação.
+    tipo_acao__area = django_filters.ModelChoiceFilter(
+        queryset=AreaProcesso.objects.all(),
+        label="Área do Direito"
+    )
+
     ordering = django_filters.OrderingFilter(
-        # Tupla de campos pelos quais se pode ordenar
         fields=(
-            ('data_distribuicao', 'data_distribuicao'),  # Adiciona opção para ordenar por data
-            ('valor_causa', 'valor_causa'),  # Adiciona opção para ordenar por valor
+            ('data_distribuicao', 'data_distribuicao'),
+            ('valor_causa', 'valor_causa'),
         ),
-        # Labels amigáveis para as opções no formulário
         field_labels={
             'data_distribuicao': 'Data (Mais Antiga)',
-            '-data_distribuicao': 'Data (Mais Recente)',  # O '-' indica ordem decrescente
+            '-data_distribuicao': 'Data (Mais Recente)',
             'valor_causa': 'Valor da Causa (Menor)',
             '-valor_causa': 'Valor da Causa (Maior)',
         },
@@ -37,101 +47,83 @@ class ProcessoFilter(django_filters.FilterSet):
 
     class Meta:
         model = Processo
-        # ==========================================================
-        # ↓↓↓ ...MAS O CAMPO 'ordering' NÃO DEVE SER LISTADO AQUI. ↓↓↓
-        # ==========================================================
-        # A lista 'fields' é apenas para filtros que correspondem diretamente
-        # a campos no modelo 'Processo'.
+        # Campos que o django-filter pode mapear diretamente, sem lógica customizada.
         fields = ['status_processo', 'tipo_acao__area', 'advogado_responsavel']
 
-    # O método __init__ para o filtro padrão continua o mesmo
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Define 'ATIVO' como o status padrão ao carregar a página pela primeira vez.
         if 'status_processo' not in self.data:
             self.form.initial['status_processo'] = 'ATIVO'
             self.queryset = self.queryset.filter(status_processo='ATIVO')
 
-    # A função de busca geral também continua a mesma
-    def filtro_busca_geral(self, queryset, name, value):
-        return queryset.filter(
+    def filtro_busca_geral_unaccent(self, queryset, name, value):
+        """
+        Método de busca que ignora acentos no nome da parte.
+        """
+        if not value:
+            return queryset
+
+        unaccented_value = unidecode(value)
+
+        # Anota o queryset para criar uma coluna virtual com o nome da parte sem acento.
+        queryset_anotado = queryset.annotate(
+            nome_parte_unaccent=Func(F('partes__cliente__nome_completo'), function='unaccent')
+        )
+
+        return queryset_anotado.filter(
             Q(numero_processo__icontains=value) |
             Q(descricao_caso__icontains=value) |
-            Q(partes__cliente__nome_completo__icontains=value)
+            Q(nome_parte_unaccent__icontains=unaccented_value)
         ).distinct()
 
 
+# ==============================================================================
+# FILTRO PARA SERVIÇOS
+# ==============================================================================
 class ServicoFilter(django_filters.FilterSet):
-    """
-    Filtro aprimorado para a lista de serviços, com múltiplos campos de busca.
-    """
-    # Campo de busca geral que procura em vários campos do modelo
+    """Filtro aprimorado para a lista de serviços."""
+
     busca_geral = django_filters.CharFilter(
-        method='filter_busca_geral',
+        method='filtro_busca_geral_unaccent',
         label='Buscar por Descrição, Cliente ou Tipo',
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Digite aqui...'})
     )
 
-    # Filtro por Cliente, usando um dropdown com busca (Select2)
-    cliente = django_filters.ModelChoiceFilter(
-        queryset=Cliente.objects.all(),
-        label='Cliente',
-        widget=forms.Select(attrs={'class': 'form-select select2'})
-    )
-
-    # Filtro pelo usuário responsável pelo serviço
-    responsavel = django_filters.ModelChoiceFilter(
-        queryset=User.objects.filter(is_active=True).order_by('first_name', 'last_name'),
-        label='Responsável',
-        widget=forms.Select(attrs={'class': 'form-select select2'})
-    )
-
-    # Filtro para data de início (a partir de)
     data_inicio_depois_de = django_filters.DateFilter(
-        field_name='data_inicio',
-        lookup_expr='gte',
-        label='Iniciado Após',
+        field_name='data_inicio', lookup_expr='gte', label='Iniciado Após',
         widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
     )
 
-    # Filtro para data de início (até)
     data_inicio_antes_de = django_filters.DateFilter(
-        field_name='data_inicio',
-        lookup_expr='lte',
-        label='Iniciado Antes de',
+        field_name='data_inicio', lookup_expr='lte', label='Iniciado Antes de',
         widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
     )
 
-    # Filtro de status melhorado
     status = django_filters.ChoiceFilter(
-        label='Status',
-        choices=(('em_andamento', 'Em Andamento'), ('concluido', 'Concluído')),
-        method='filter_status',
-        widget=forms.Select(attrs={'class': 'form-select'}),
-        empty_label="Todos"
+        label='Status', choices=(('em_andamento', 'Em Andamento'), ('concluido', 'Concluído')),
+        method='filter_status', widget=forms.Select(attrs={'class': 'form-select'}), empty_label="Todos"
     )
 
     class Meta:
         model = Servico
-        # Definimos os campos aqui, mas a maior parte da lógica está customizada acima
-        # O tipo_servico será pego daqui, pois não precisa de lógica customizada
-        fields = ['busca_geral', 'cliente', 'responsavel', 'tipo_servico', 'status', 'data_inicio_depois_de', 'data_inicio_antes_de']
+        fields = ['busca_geral', 'cliente', 'responsavel', 'tipo_servico', 'status']
 
-    def filter_busca_geral(self, queryset, name, value):
-        """
-        Método customizado para a busca geral. Procura o valor em múltiplos campos.
-        """
+    def filtro_busca_geral_unaccent(self, queryset, name, value):
         if not value:
             return queryset
-        return queryset.filter(
+
+        unaccented_value = unidecode(value)
+        queryset_anotado = queryset.annotate(
+            nome_cliente_unaccent=Func(F('cliente__nome_completo'), function='unaccent')
+        )
+        return queryset_anotado.filter(
             Q(descricao__icontains=value) |
-            Q(cliente__nome_completo__icontains=value) |
+            Q(nome_cliente_unaccent__icontains=unaccented_value) |
             Q(tipo_servico__nome__icontains=value)
         )
 
     def filter_status(self, queryset, name, value):
-        """
-        Método customizado para filtrar por status (concluído ou em andamento).
-        """
         if value == 'em_andamento':
             return queryset.filter(concluido=False)
         if value == 'concluido':
@@ -139,24 +131,32 @@ class ServicoFilter(django_filters.FilterSet):
         return queryset
 
 
-
+# ==============================================================================
+# FILTRO PARA CLIENTES E PESSOAS (CORRIGIDO E APERFEIÇOADO)
+# ==============================================================================
 class ClienteFilter(django_filters.FilterSet):
     """
-    Filtro avançado para a listagem de clientes, com busca, filtros
-    de status e tipo, e ordenação dinâmica.
+    Filtro avançado e reutilizável para as listagens de Clientes e Pessoas.
     """
     busca_geral = django_filters.CharFilter(
-        method='filter_busca_geral',
-        label='Buscar por Nome ou CPF/CNPJ',
+        method='filtro_geral_unaccent',
+        label="Buscar (Nome, CPF/CNPJ, E-mail)",
         widget=forms.TextInput(
             attrs={'class': 'form-control', 'placeholder': 'Digite para buscar...'})
     )
+
     tipo_pessoa = django_filters.ChoiceFilter(
         choices=Cliente.TIPO_PESSOA_CHOICES,
-        label='Tipo de Pessoa',
-        empty_label='Qualquer Tipo',
+        label='Tipo de Pessoa', empty_label='Qualquer Tipo',
         widget=forms.Select(attrs={'class': 'form-select'})
     )
+
+    estado = django_filters.ChoiceFilter(
+        choices=Cliente.ESTADOS_BRASILEIROS_CHOICES,
+        field_name='estado', label='Estado (UF)', empty_label='Todos os Estados',
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
     STATUS_CHOICES = [
         ('ativos', 'Com Casos Ativos (Processo ou Serviço)'),
         ('processos_ativos', 'Com Processos Ativos'),
@@ -164,12 +164,11 @@ class ClienteFilter(django_filters.FilterSet):
         ('inativos', 'Sem Casos Ativos'),
     ]
     status_casos = django_filters.ChoiceFilter(
-        choices=STATUS_CHOICES,
-        method='filter_by_status',
-        label='Status do Cliente',
-        empty_label='Qualquer Status',
+        choices=STATUS_CHOICES, method='filter_by_status',
+        label='Status dos Casos', empty_label='Qualquer Status',
         widget=forms.Select(attrs={'class': 'form-select'})
     )
+
     ORDERING_CHOICES = [
         ('nome_completo', 'Nome (A-Z)'),
         ('-nome_completo', 'Nome (Z-A)'),
@@ -179,27 +178,32 @@ class ClienteFilter(django_filters.FilterSet):
         ('-servicos_ativos_count', 'Mais Serviços'),
     ]
     ordering = django_filters.ChoiceFilter(
-        label='Ordenar por',
-        choices=ORDERING_CHOICES,
-        method='filter_ordering',
-        empty_label='Padrão',
+        label='Ordenar por', choices=ORDERING_CHOICES,
+        method='filter_ordering', empty_label='Padrão',
         widget=forms.Select(attrs={'class': 'form-select'})
     )
 
     class Meta:
         model = Cliente
-        fields = ['busca_geral', 'tipo_pessoa', 'status_casos', 'ordering']
+        fields = ['busca_geral', 'tipo_pessoa', 'estado', 'status_casos', 'ordering']
 
-    def filter_busca_geral(self, queryset, name, value):
-        if value:
-            return queryset.filter(
-                Q(nome_completo__icontains=value) | Q(cpf_cnpj__icontains=value)
-            )
-        return queryset
+    def filtro_geral_unaccent(self, queryset, name, value):
+        if not value:
+            return queryset
+
+        unaccented_value = unidecode(value)
+        queryset_anotado = queryset.annotate(
+            nome_completo_unaccent=Func(F('nome_completo'), function='unaccent')
+        )
+        return queryset_anotado.filter(
+            Q(nome_completo_unaccent__icontains=unaccented_value) |
+            Q(cpf_cnpj__icontains=value) |
+            Q(email__icontains=value)
+        ).distinct()
 
     def filter_by_status(self, queryset, name, value):
         if value == 'ativos':
-            return queryset.filter(Q(processos_ativos_count__gt=0) | Q(servicos_ativos_count__gt=0))
+            return queryset.filter(Q(processos_ativos_count__gt=0) | Q(servicos_ativos_count__gt=0)).distinct()
         if value == 'processos_ativos':
             return queryset.filter(processos_ativos_count__gt=0)
         if value == 'servicos_ativos':
@@ -209,4 +213,5 @@ class ClienteFilter(django_filters.FilterSet):
         return queryset
 
     def filter_ordering(self, queryset, name, value):
-        return queryset.order_by(value)
+        expression = value[0] if isinstance(value, list) else value
+        return queryset.order_by(expression)

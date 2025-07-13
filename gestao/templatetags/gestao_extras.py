@@ -1,28 +1,45 @@
-# gestao/templatetags/gestao_extras.py
-
 from django import template
+import re
 
 register = template.Library()
 
-@register.filter(name='get_field_column_width')
-def get_field_column_width(field_name):
-    """
-    Este filtro customizado retorna a largura da coluna Bootstrap (de 1 a 12)
-    para um campo de formulário com base em seu nome. Isso permite criar layouts
-    dinâmicos e organizados no template sem lógica complexa de 'if/else'.
-    """
-    # Mapeia nomes de campos específicos para larguras de coluna.
-    # Útil para campos que devem ocupar a linha inteira (12) ou ter tamanhos específicos.
-    width_map = {
-        'nome_completo': 12,
-        'email': 12,
-        'profissao': 12,
-        'logradouro': 8,
-        'complemento': 8,
-        'representante_legal': 7,
-        'cpf_representante_legal': 5,
-    }
-    # Se o nome do campo estiver no mapa, retorna a largura definida.
-    # Caso contrário, retorna um valor padrão de 6 (meia largura).
-    return width_map.get(field_name, 6)
 
+@register.filter(name='get_item')
+def get_item(dictionary, key):
+    return dictionary.get(key)
+
+
+# --- FILTROS ADICIONADOS ---
+
+@register.filter(name='mask_cpf_cnpj')
+def mask_cpf_cnpj(value):
+    """Aplica máscara de CPF (###.###.###-##) ou CNPJ (##.###.###/####-##)."""
+    if not value:
+        return ""
+
+    # Remove todos os caracteres que não são dígitos
+    value = re.sub(r'\D', '', str(value))
+
+    if len(value) == 11:
+        return f"{value[:3]}.{value[3:6]}.{value[6:9]}-{value[9:]}"
+    elif len(value) == 14:
+        return f"{value[:2]}.{value[2:5]}.{value[5:8]}/{value[8:12]}-{value[12:]}"
+    else:
+        return value  # Retorna o valor original se não for CPF ou CNPJ
+
+
+@register.filter(name='mask_phone')
+def mask_phone(value):
+    """Aplica máscara de telefone (##) ####-#### ou (##) #####-####."""
+    if not value:
+        return ""
+
+    # Remove todos os caracteres que não são dígitos
+    value = re.sub(r'\D', '', str(value))
+
+    if len(value) == 11:
+        return f"({value[:2]}) {value[2:7]}-{value[7:]}"
+    elif len(value) == 10:
+        return f"({value[:2]}) {value[2:6]}-{value[6:]}"
+    else:
+        return value  # Retorna o valor original se não for um telefone reconhecido

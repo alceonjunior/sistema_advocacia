@@ -240,6 +240,9 @@
         <div class="parte-card-info">
             <strong data-name></strong>
         </div>
+        <div class="form-check form-switch" title="Marcar como cliente principal deste processo">
+            <input class="form-check-input cliente-switch" type="checkbox" role="switch">
+        </div>
         <button type="button" class="btn-close remove-parte-btn" aria-label="Remover"></button>
     </div>
 </div>
@@ -412,10 +415,26 @@ $(function() {
         newCard.find('[data-name]').text(clienteNome);
         newCard.addClass(tipoPolo === 'AUTOR' ? 'polo-ativo' : 'polo-passivo');
         const container = (tipoPolo === 'AUTOR' ? poloAtivoContainer : poloPassivoContainer);
+
+        const clienteSwitch = newCard.find('.cliente-switch');
+        clienteSwitch.on('change', function() {
+            const formIndex = $(this).closest('.parte-card').data('form-index');
+            const targetCheckbox = $(`#id_partes-${formIndex}-is_cliente_do_processo`);
+            targetCheckbox.prop('checked', $(this).prop('checked'));
+        });
+
         container.append(newCard);
         updateEmptyState(container);
         totalFormsInput.val(formIndex + 1);
     }
+
+    $(document).on('click', '.parte-card', function(e) {
+        if (!$(e.target).is('.btn-close, .cliente-switch')) {
+             $(this).find('.cliente-switch').prop('checked', function(i, val) {
+                return !val;
+            }).trigger('change');
+        }
+    });
 
     function removeParte(cardElement) {
         const card = $(cardElement);

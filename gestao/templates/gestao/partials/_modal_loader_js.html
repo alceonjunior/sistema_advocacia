@@ -1,0 +1,85 @@
+{% comment %}
+================================================================================
+SCRIPT UNIVERSAL PARA CARREGAMENTO DE DADOS EM MODAIS
+================================================================================
+Este script pode ser incluído em qualquer página que utilize modais
+preenchidos por AJAX. Ele escuta a abertura de qualquer modal e, se o elemento
+que o acionou tiver o atributo 'data-url-json', ele busca os dados e
+preenche o formulário do modal.
+================================================================================
+{% endcomment %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Escuta o evento 'show.bs.modal' no corpo do documento.
+    // Isso garante que ele funcione para QUALQUER modal que seja aberto.
+    document.body.addEventListener('show.bs.modal', function(event) {
+        const modalElement = event.target; // O modal que está sendo aberto
+        const triggerElement = event.relatedTarget; // O botão/link que acionou o modal
+
+        // Se o modal não foi acionado por um elemento com o data-attribute correto, não faz nada.
+        if (!triggerElement || !triggerElement.dataset.urlJson) {
+            return;
+        }
+
+        const url = triggerElement.dataset.urlJson;
+        const form = modalElement.querySelector('form');
+
+        if (!form) {
+            console.warn(`Modal #${modalElement.id} não contém um formulário para preencher.`);
+            return;
+        }
+
+        // Limpa o formulário e define a URL de 'action' para edição/salvamento
+        form.reset();
+        if (triggerElement.dataset.urlEdit) {
+            form.action = triggerElement.dataset.urlEdit;
+        }
+
+        // Se houver um formulário de exclusão dentro do modal, atualiza sua action também
+        const formDelete = modalElement.querySelector('form[id^="formExcluir"]');
+        if (formDelete && triggerElement.dataset.urlDelete) {
+            formDelete.action = triggerElement.dataset.urlDelete;
+        }
+
+        // Limpa mensagens de erro antigas
+        const errorDiv = form.querySelector('.form-errors');
+        if(errorDiv) errorDiv.innerHTML = '';
+
+        // Mostra um feedback de carregamento (opcional, mas bom para UX)
+        const submitButton = form.querySelector('button[type="submit"]');
+        if(submitButton) submitButton.disabled = true;
+
+        // Busca os dados via AJAX para preencher o formulário
+        fetch(url)
+            .then(response => {
+                if (!response.ok) throw new Error('Falha ao buscar dados do servidor.');
+                return response.json();
+            })
+            .then(data => {
+                // Preenche cada campo do formulário com os dados recebidos do JSON
+                for (const key in data) {
+                    const field = form.querySelector(`[name="${key}"]`);
+                    if (field) {
+                        if (field.type === 'checkbox' || field.type === 'radio') {
+                            field.checked = data[key];
+                        } else {
+                            field.value = data[key];
+                        }
+                        // Se for um campo Select2, dispara um evento para ele se atualizar
+                        if (typeof $ !== 'undefined' && $(field).hasClass('select2-hidden-accessible')) {
+                             $(field).trigger('change');
+                        }
+                    }
+                }
+            })
+            .catch(err => {
+                console.error(`Erro ao carregar dados para o modal #${modalElement.id}:`, err);
+                if(errorDiv) errorDiv.innerHTML = '<div class="alert alert-danger">Não foi possível carregar os dados. Tente novamente.</div>';
+            })
+            .finally(() => {
+                // Reabilita o botão de submit após o carregamento
+                if(submitButton) submitButton.disabled = false;
+            });
+    });
+});
+</script>

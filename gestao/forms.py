@@ -113,7 +113,6 @@ class ParteProcessoForm(forms.ModelForm):
             'tipo_participacao': forms.Select(attrs={'class': 'form-select'}),
             'representado_por': forms.Select(attrs={'class': 'form-select'}),
             'is_cliente_do_processo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-
         }
 
     def __init__(self, *args, **kwargs):
@@ -154,7 +153,7 @@ class ClienteForm(forms.ModelForm):
             'nome_completo', 'tipo_pessoa', 'cpf_cnpj', 'email', 'telefone_principal',
             'data_nascimento', 'nacionalidade', 'estado_civil', 'profissao',
             'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'estado',
-            'representante_legal', 'cpf_representante_legal'
+            'representante_legal', 'cpf_representante_legal', 'is_cliente'
         ]
 
         # Widgets para estilização com Bootstrap
@@ -181,6 +180,7 @@ class ClienteForm(forms.ModelForm):
             # Bloco 4
             'representante_legal': forms.TextInput(attrs={'class': 'form-control'}),
             'cpf_representante_legal': forms.TextInput(attrs={'class': 'form-control'}),
+            'is_cliente': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
 
@@ -509,7 +509,9 @@ class ClienteModalForm(forms.ModelForm):
             'tipo_pessoa',
             'cpf_cnpj',
             'email',
-            'telefone_principal'
+            'telefone_principal',
+            'is_cliente'  # <-- CAMPO ADICIONADO AQUI
+
         ]
         # Widgets para manter a estilização do Bootstrap
         widgets = {
@@ -518,6 +520,7 @@ class ClienteModalForm(forms.ModelForm):
             'cpf_cnpj': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'telefone_principal': forms.TextInput(attrs={'class': 'form-control'}),
+            'is_cliente': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
 class EscritorioConfiguracaoForm(forms.ModelForm):

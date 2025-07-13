@@ -1,6 +1,17 @@
 {% extends 'gestao/base.html' %}
 {% load static humanize %}
 
+{% comment %}
+================================================================================
+DASHBOARD - VERSÃO FINAL, INTEGRAL E CORRIGIDA
+================================================================================
+Este template serve como a página inicial do sistema, oferecendo uma visão
+analítica e um ponto de acesso rápido às funcionalidades mais importantes.
+Inclui todas as correções de funcionalidade para os modais e totalizadores,
+além dos refinamentos de design e da paginação AJAX.
+================================================================================
+{% endcomment %}
+
 {% block title %}Dashboard Analítico{% endblock %}
 
 {% block styles %}
@@ -16,7 +27,14 @@
         border-radius: 0.75rem;
         flex-shrink: 0;
     }
-    /* Efeito de hover para itens de lista clicáveis */
+    .kpi-card {
+        cursor: pointer;
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    }
+    .kpi-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
+    }
     .list-group-item-action {
         transition: all 0.2s ease-in-out;
     }
@@ -34,6 +52,38 @@
         margin-bottom: 1.5rem;
         border: 0;
         border-top: 1px solid #e9ecef;
+    }
+    .pagination-sm .page-link {
+        font-size: 0.8rem;
+        padding: 0.2rem 0.5rem;
+    }
+    .agenda-card-body {
+        min-height: 300px; /* Para evitar que o card "pule" durante o carregamento AJAX */
+    }
+    /* Estilos aprimorados para a seção "Foco do Dia" */
+    .foco-card .card-header {
+        border-bottom: 2px solid;
+    }
+    .foco-card.vencidas .card-header {
+        background-color: #fff6f6;
+        border-color: var(--bs-danger-border-subtle);
+        color: var(--bs-danger-text-emphasis);
+    }
+    .foco-card.hoje .card-header {
+        background-color: #fff9e1;
+        border-color: var(--bs-warning-border-subtle);
+        color: var(--bs-warning-text-emphasis);
+    }
+    /* Estilo para a transição de remoção do item da agenda */
+    .agenda-item-removing {
+        transition: opacity 0.5s ease, transform 0.5s ease, max-height 0.5s ease;
+        opacity: 0;
+        transform: translateX(50px);
+        max-height: 0;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        overflow: hidden;
+        border: none !important;
     }
 </style>
 {% endblock %}
@@ -60,7 +110,7 @@
 
 <div class="row mb-4">
     <div class="col-lg-4 col-md-6 mb-3">
-        <div class="card shadow-sm h-100 kpi-card" data-bs-toggle="modal" data-bs-target="#managerialModal" data-filter="processos" style="cursor: pointer;">
+        <div class="card shadow-sm h-100 kpi-card" data-bs-toggle="modal" data-bs-target="#managerialModal" data-filter="processos">
             <div class="card-body d-flex align-items-center gap-3">
                 <div class="icon-circle bg-primary-subtle text-primary"><i class="bi bi-folder-fill fs-4"></i></div>
                 <div>
@@ -71,7 +121,7 @@
         </div>
     </div>
     <div class="col-lg-4 col-md-6 mb-3">
-        <div class="card shadow-sm h-100 kpi-card" data-bs-toggle="modal" data-bs-target="#managerialModal" data-filter="servicos" style="cursor: pointer;">
+        <div class="card shadow-sm h-100 kpi-card" data-bs-toggle="modal" data-bs-target="#managerialModal" data-filter="servicos">
             <div class="card-body d-flex align-items-center gap-3">
                 <div class="icon-circle bg-success-subtle text-success"><i class="bi bi-briefcase-fill fs-4"></i></div>
                 <div>
@@ -82,7 +132,7 @@
         </div>
     </div>
     <div class="col-lg-4 col-md-12 mb-3">
-        <div class="card shadow-sm h-100 kpi-card" data-bs-toggle="modal" data-bs-target="#managerialModal" data-filter="pendencias" style="cursor: pointer;">
+        <div class="card shadow-sm h-100 kpi-card" data-bs-toggle="modal" data-bs-target="#managerialModal" data-filter="pendencias">
             <div class="card-body d-flex align-items-center gap-3">
                 <div class="icon-circle bg-warning-subtle text-warning"><i class="bi bi-list-check fs-4"></i></div>
                 <div>
@@ -101,56 +151,11 @@
     <h2 class="h4 mb-3"><i class="bi bi-bullseye text-danger me-2"></i>Foco do Dia</h2>
     <div class="row g-4">
         <div class="col-lg-6">
-            <div class="card h-100 shadow-sm">
-                <div class="card-header bg-danger-subtle d-flex align-items-center">
-                    <i class="bi bi-clock-history me-2"></i><strong>Pendências Vencidas</strong>
-                </div>
+            <div class="card h-100 shadow-sm foco-card vencidas">
+                <div class="card-header d-flex align-items-center"><i class="bi bi-clock-history me-2 fs-5"></i><strong class="fs-6">Pendências Vencidas</strong></div>
                 <div class="list-group list-group-flush">
                     {% for item in itens_vencidos %}
-                        {% if item.tipo == 'audiencia' or item.tipo == 'prazo_processo' %}
-                            <div class="list-group-item list-group-item-action" style="cursor: pointer;"
-                                 data-bs-toggle="modal" data-bs-target="#movimentacaoModal"
-                                 data-url-json="{% url 'gestao:get_movimentacao_json' item.pk %}"
-                                 data-url-edit="{% url 'gestao:editar_movimentacao_ajax' item.pk %}"
-                                 data-url-delete="{% url 'gestao:excluir_movimentacao' item.pk %}">
-                                <div class="d-flex w-100 justify-content-between">
-                                    <span class="fw-bold text-danger">{{ item.titulo }}</span>
-                                    <small>Venceu em: {{ item.data|date:"d/m/Y" }}</small>
-                                </div>
-                                <small class="d-block text-muted">{{ item.objeto_str }}</small>
-                            </div>
-                        {% elif item.tipo == 'tarefa_servico' %}
-                            <div class="list-group-item list-group-item-action" style="cursor: pointer;"
-                                 data-bs-toggle="modal" data-bs-target="#servicoMovimentacaoModal"
-                                 data-url-json="{% url 'gestao:get_movimentacao_servico_json' item.pk %}"
-                                 data-url-edit="{% url 'gestao:editar_movimentacao_servico_ajax' item.pk %}"
-                                 data-url-delete="{% url 'gestao:excluir_movimentacao_servico' item.pk %}">
-                                <div class="d-flex w-100 justify-content-between">
-                                    <span class="fw-bold text-danger">{{ item.titulo }}</span>
-                                    <small>Venceu em: {{ item.data|date:"d/m/Y" }}</small>
-                                </div>
-                                <small class="d-block text-muted">{{ item.objeto_str }}</small>
-                            </div>
-                        {% elif item.tipo == 'prazo_servico' %}
-                            <div class="list-group-item list-group-item-action" style="cursor: pointer;"
-                                 data-bs-toggle="modal" data-bs-target="#servicoModal"
-                                 data-url-json="{% url 'gestao:get_servico_json' item.pk %}"
-                                 data-url-edit="{% url 'gestao:editar_servico_ajax' item.pk %}">
-                                <div class="d-flex w-100 justify-content-between">
-                                    <span class="fw-bold text-danger">{{ item.titulo }}</span>
-                                    <small>Venceu em: {{ item.data|date:"d/m/Y" }}</small>
-                                </div>
-                                <small class="d-block text-muted">{{ item.objeto_str }}</small>
-                            </div>
-                        {% else %}
-                             <a href="{{ item.url }}" class="list-group-item list-group-item-action">
-                                <div class="d-flex w-100 justify-content-between">
-                                    <span class="fw-bold text-danger">{{ item.titulo }}</span>
-                                    <small>Venceu em: {{ item.data|date:"d/m/Y" }}</small>
-                                </div>
-                                <small class="d-block text-muted">{{ item.objeto_str }}</small>
-                            </a>
-                        {% endif %}
+                        {% include 'gestao/partials/_item_foco_dia.html' with item=item %}
                     {% empty %}
                         <div class="list-group-item text-muted p-4 text-center">
                             <i class="bi bi-patch-check-fill text-success fs-2"></i>
@@ -161,54 +166,11 @@
             </div>
         </div>
         <div class="col-lg-6">
-            <div class="card h-100 shadow-sm">
-                <div class="card-header bg-warning-subtle d-flex align-items-center">
-                    <i class="bi bi-calendar-check me-2"></i><strong>Para Hoje ({{ hoje|date:"d/m" }})</strong>
-                </div>
+            <div class="card h-100 shadow-sm foco-card hoje">
+                <div class="card-header d-flex align-items-center"><i class="bi bi-calendar-check me-2 fs-5"></i><strong class="fs-6">Para Hoje ({{ hoje|date:"d/m" }})</strong></div>
                 <div class="list-group list-group-flush">
                     {% for item in itens_para_hoje %}
-                        {% if item.tipo == 'audiencia' or item.tipo == 'prazo_processo' %}
-                             <div class="list-group-item list-group-item-action" style="cursor: pointer;"
-                                 data-bs-toggle="modal" data-bs-target="#movimentacaoModal"
-                                 data-url-json="{% url 'gestao:get_movimentacao_json' item.pk %}"
-                                 data-url-edit="{% url 'gestao:editar_movimentacao_ajax' item.pk %}"
-                                 data-url-delete="{% url 'gestao:excluir_movimentacao' item.pk %}">
-                                <div class="d-flex w-100 justify-content-between">
-                                    <span class="fw-bold">{{ item.titulo }}</span>
-                                    {% if item.hora %}<small class="badge bg-primary rounded-pill">{{ item.hora|time:"H:i" }}</small>{% endif %}
-                                </div>
-                                <small class="d-block text-muted">{{ item.objeto_str }}</small>
-                            </div>
-                        {% elif item.tipo == 'tarefa_servico' %}
-                            <div class="list-group-item list-group-item-action" style="cursor: pointer;"
-                                 data-bs-toggle="modal" data-bs-target="#servicoMovimentacaoModal"
-                                 data-url-json="{% url 'gestao:get_movimentacao_servico_json' item.pk %}"
-                                 data-url-edit="{% url 'gestao:editar_movimentacao_servico_ajax' item.pk %}"
-                                 data-url-delete="{% url 'gestao:excluir_movimentacao_servico' item.pk %}">
-                                <div class="d-flex w-100 justify-content-between">
-                                    <span class="fw-bold">{{ item.titulo }}</span>
-                                </div>
-                                <small class="d-block text-muted">{{ item.objeto_str }}</small>
-                            </div>
-                        {% elif item.tipo == 'prazo_servico' %}
-                            <div class="list-group-item list-group-item-action" style="cursor: pointer;"
-                                 data-bs-toggle="modal" data-bs-target="#servicoModal"
-                                 data-url-json="{% url 'gestao:get_servico_json' item.pk %}"
-                                 data-url-edit="{% url 'gestao:editar_servico_ajax' item.pk %}">
-                                <div class="d-flex w-100 justify-content-between">
-                                    <span class="fw-bold">{{ item.titulo }}</span>
-                                </div>
-                                <small class="d-block text-muted">{{ item.objeto_str }}</small>
-                            </div>
-                        {% else %}
-                            <a href="{{ item.url }}" class="list-group-item list-group-item-action">
-                                <div class="d-flex w-100 justify-content-between">
-                                    <span class="fw-bold">{{ item.titulo }}</span>
-                                    {% if item.hora %}<small class="badge bg-primary rounded-pill">{{ item.hora|time:"H:i" }}</small>{% endif %}
-                                </div>
-                                <small class="d-block text-muted">{{ item.objeto_str }}</small>
-                            </a>
-                        {% endif %}
+                        {% include 'gestao/partials/_item_foco_dia.html' with item=item %}
                     {% empty %}
                         <div class="list-group-item text-muted p-4 text-center">
                             <i class="bi bi-cup-hot-fill text-info fs-2"></i>
@@ -224,146 +186,55 @@
 <hr class="section-divider">
 
 <div>
-    <h2 class="h4 mb-3"><i class="bi bi-calendar3 text-primary me-2"></i>Visão Geral da Agenda</h2>
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h2 class="h4 mb-0"><i class="bi bi-calendar3 text-primary me-2"></i>Visão Geral da Agenda</h2>
+        <div class="d-flex align-items-center gap-2">
+            <label for="per_page_select" class="form-label mb-0 small text-muted">Itens/pág:</label>
+            <select id="per_page_select" class="form-select form-select-sm" style="width: auto;">
+                <option value="5">5</option>
+                <option value="10">10</option>
+            </select>
+        </div>
+    </div>
+
     <div class="row g-4">
         <div class="col-lg-4">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body">
-                    <h5 class="card-subtitle mb-2"><i class="bi bi-calendar2-week-fill me-2"></i>Próximas Audiências</h5>
-                    <div class="list-group list-group-flush">
-                        {% for aud in proximas_audiencias|slice:":5" %}
-                            <div class="list-group-item list-group-item-action px-0 py-3" style="cursor: pointer;"
-                                 data-bs-toggle="modal" data-bs-target="#movimentacaoModal"
-                                 data-url-json="{% url 'gestao:get_movimentacao_json' aud.pk %}"
-                                 data-url-edit="{% url 'gestao:editar_movimentacao_ajax' aud.pk %}"
-                                 data-url-delete="{% url 'gestao:excluir_movimentacao' aud.pk %}">
-                                <table class="table table-borderless table-sm mb-0">
-                                    <tbody>
-                                        <tr>
-                                            <td class="p-0" style="width: 100%;">
-                                                <div class="d-flex align-items-center">
-                                                    <h6 class="mb-0 text-truncate" title="{{ aud.titulo }}">{{ aud.titulo }}</h6>
-                                                    {% if aud.link_referencia %}
-                                                        <a href="{{ aud.link_referencia }}" target="_blank" class="badge bg-info text-decoration-none ms-2" onclick="event.stopPropagation();">Link</a>
-                                                    {% endif %}
-                                                </div>
-                                            </td>
-                                            <td class="p-0 text-end"><span class="fw-bold text-nowrap">{{ aud.data|date:"d/m" }}</span></td>
-                                        </tr>
-                                        <tr>
-                                            <td class="p-0 pt-1" colspan="2">
-                                                <small class="text-muted d-block">Proc. {{ aud.numero_processo|default:"N/A" }}</small>
-                                                <small class="text-muted d-block">{{ aud.nome_parte }}</small>
-                                            </td>
-                                        </tr>
+            <div class="card h-100 shadow-sm d-flex flex-column">
+                <div class="card-header bg-white">
+                    <h5 class="card-subtitle mb-0"><i class="bi bi-calendar2-week-fill me-2"></i>Próximas Audiências</h5>
+                </div>
+                <div class="card-body p-0 d-flex flex-column flex-grow-1 agenda-card-body" id="audiencias-container" data-list-type="audiencias">
+                    <div class="d-flex justify-content-center align-items-center h-100">
+                        <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                                        {# A linha que continha o link foi removida daqui #}
-                                    </tbody>
-                                </table>
-                            </div>
-                        {% empty %}
-                            <div class="list-group-item text-muted small px-0">Nenhuma audiência futura marcada.</div>
-                        {% endfor %}
+        <div class="col-lg-4">
+            <div class="card h-100 shadow-sm d-flex flex-column">
+                <div class="card-header bg-white">
+                    <h5 class="card-subtitle mb-0"><i class="bi bi-calendar-x me-2"></i>Prazos Futuros</h5>
+                </div>
+                <div class="card-body p-0 d-flex flex-column flex-grow-1 agenda-card-body" id="prazos-container" data-list-type="prazos">
+                    <div class="d-flex justify-content-center align-items-center h-100">
+                        <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
                     </div>
                 </div>
             </div>
         </div>
+
         <div class="col-lg-4">
             <div class="card h-100 shadow-sm">
-                <div class="card-body">
-                    <h5 class="card-subtitle mb-2"><i class="bi bi-calendar-x me-2"></i>Prazos Futuros</h5>
-                    <div class="list-group list-group-flush">
-                        {% for prazo in proximos_prazos|slice:":5" %}
-                            {% if prazo.tipo == 'prazo_processo' %}
-                                <div class="list-group-item list-group-item-action px-0" style="cursor: pointer;"
-                                     data-bs-toggle="modal" data-bs-target="#movimentacaoModal"
-                                     data-url-json="{% url 'gestao:get_movimentacao_json' prazo.pk %}"
-                                     data-url-edit="{% url 'gestao:editar_movimentacao_ajax' prazo.pk %}"
-                                     data-url-delete="{% url 'gestao:excluir_movimentacao' prazo.pk %}">
-                                    <div class="d-flex w-100 justify-content-between">
-                                        <h6 class="mb-1">{{ prazo.titulo }}</h6>
-                                        <small>{{ prazo.data|date:"d/m" }}</small>
-                                    </div>
-                                    <p class="mb-1 small text-muted">{{ prazo.objeto_str }}</p>
-                                </div>
-                            {% elif prazo.tipo == 'prazo_servico' %}
-                                <div class="list-group-item list-group-item-action px-0" style="cursor: pointer;"
-                                     data-bs-toggle="modal" data-bs-target="#servicoModal"
-                                     data-url-json="{% url 'gestao:get_servico_json' prazo.pk %}"
-                                     data-url-edit="{% url 'gestao:editar_servico_ajax' prazo.pk %}">
-                                    <div class="d-flex w-100 justify-content-between">
-                                        <h6 class="mb-1">{{ prazo.titulo }}</h6>
-                                        <small>{{ prazo.data|date:"d/m" }}</small>
-                                    </div>
-                                    <p class="mb-1 small text-muted">{{ prazo.objeto_str }}</p>
-                                </div>
-                            {% else %}
-                                <a href="{{ prazo.url }}" class="list-group-item list-group-item-action px-0">
-                                    <div class="d-flex w-100 justify-content-between">
-                                        <h6 class="mb-1">{{ prazo.titulo }}</h6>
-                                        <small>{{ prazo.data|date:"d/m" }}</small>
-                                    </div>
-                                    <p class="mb-1 small text-muted">{{ prazo.objeto_str }}</p>
-                                </a>
-                            {% endif %}
-                        {% empty %}
-                            <div class="list-group-item text-muted small px-0">Nenhum prazo futuro nos próximos 30 dias.</div>
-                        {% endfor %}
-                    </div>
+                <div class="card-header bg-white">
+                    <h5 class="card-subtitle mb-0"><i class="bi bi-list-task me-2"></i>Tarefas de Serviços</h5>
                 </div>
-            </div>
-        </div>
-        <div class="col-lg-4">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body">
-                    <h5 class="card-subtitle mb-2"><i class="bi bi-list-task me-2"></i>Tarefas Gerais Pendentes</h5>
+                <div class="card-body p-0">
                     <div class="list-group list-group-flush">
                         {% for tarefa in tarefas_pendentes|slice:":5" %}
-                             {% if tarefa.tipo == 'tarefa_servico' %}
-                                <div class="list-group-item list-group-item-action px-0" style="cursor: pointer;"
-                                     data-bs-toggle="modal" data-bs-target="#servicoMovimentacaoModal"
-                                     data-url-json="{% url 'gestao:get_movimentacao_servico_json' tarefa.pk %}"
-                                     data-url-edit="{% url 'gestao:editar_movimentacao_servico_ajax' tarefa.pk %}"
-                                     data-url-delete="{% url 'gestao:excluir_movimentacao_servico' tarefa.pk %}">
-
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <h6 class="mb-1">{{ tarefa.titulo }}</h6>
-
-                                        {% if tarefa.status == 'PENDENTE' %}
-                                            <span class="badge bg-warning-subtle text-warning-emphasis rounded-pill">Pendente</span>
-                                        {% elif tarefa.status == 'EM_ANDAMENTO' %}
-                                            <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill">Em Andamento</span>
-                                        {% else %}
-                                            {# Adicionado para exibir qualquer outro status que possa surgir #}
-                                            <span class="badge bg-secondary-subtle text-secondary-emphasis rounded-pill">{{ tarefa.status|default:"N/A" }}</span>
-                                        {% endif %}
-                                        </div>
-                                    <p class="mb-1 small text-muted">{{ tarefa.objeto_str }}</p>
-                                </div>
-                            {% else %}
-                                {# Este é o bloco ELSE que precisa ser ajustado #}
-                                <a href="{{ tarefa.url }}" class="list-group-item list-group-item-action px-0">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <h6 class="mb-1">{{ tarefa.titulo }}</h6>
-                                        {# Adicionar a lógica de badge de status aqui também #}
-                                        {% if tarefa.status == 'PENDENTE' %}
-                                            <span class="badge bg-warning-subtle text-warning-emphasis rounded-pill">Pendente</span>
-                                        {% elif tarefa.status == 'EM_ANDAMENTO' %}
-                                            <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill">Em Andamento</span>
-                                        {% elif tarefa.status == 'CONCLUIDA' %} {# Para movimentações de processo que foram concluídas #}
-                                            <span class="badge bg-success-subtle text-success-emphasis rounded-pill">Concluída</span>
-                                        {% elif tarefa.status == 'VENCIDO' %} {# Para prazos de serviço vencidos #}
-                                            <span class="badge bg-danger-subtle text-danger-emphasis rounded-pill">Vencido</span>
-                                        {% else %}
-                                            {# Fallback para qualquer outro status #}
-                                            <span class="badge bg-secondary-subtle text-secondary-emphasis rounded-pill">{{ tarefa.status|default:"N/A" }}</span>
-                                        {% endif %}
-                                    </div>
-                                    <p class="mb-1 small text-muted">{{ tarefa.objeto_str }}</p>
-                                </a>
-                            {% endif %}
+                             {% include 'gestao/partials/_item_pendencia.html' with item=tarefa %}
                         {% empty %}
-                            <div class="list-group-item text-muted small px-0">Nenhuma tarefa geral pendente.</div>
+                            <div class="list-group-item text-muted small p-3">Nenhuma tarefa de serviço pendente.</div>
                         {% endfor %}
                     </div>
                 </div>
@@ -376,44 +247,193 @@
 
 <div>
     <h2 class="h4 mb-3"><i class="bi bi-activity text-success me-2"></i>Pulso do Escritório</h2>
-    <div class="row g-4">
-        <div class="col-lg-12">
-            <div class="card h-100 shadow-sm">
-                 <div class="card-body">
-                    <h5 class="card-subtitle mb-2"><i class="bi bi-clock-history me-2"></i>Últimas Movimentações nos Seus Processos</h5>
-                    <div class="list-group list-group-flush">
-                        {% for mov in ultimas_movimentacoes %}
-                            <a href="{{ mov.processo.get_absolute_url }}" class="list-group-item list-group-item-action px-0">
-                                <div class="d-flex w-100 justify-content-between">
-                                    <span class="fw-bold">{{ mov.titulo }}</span>
-                                    <small class="text-muted">{{ mov.data_criacao|naturaltime }}</small>
-                                </div>
-                                <small class="d-block text-muted">{{ mov.processo }}</small>
-                            </a>
-                        {% empty %}
-                            <div class="list-group-item text-muted small px-0">Nenhuma movimentação recente encontrada.</div>
-                        {% endfor %}
-                    </div>
-                </div>
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h5 class="card-subtitle mb-2"><i class="bi bi-clock-history me-2"></i>Últimas Movimentações nos Seus Processos</h5>
+            <div class="list-group list-group-flush">
+                {% for mov in ultimas_movimentacoes %}
+                    <a href="{{ mov.processo.get_absolute_url }}" class="list-group-item list-group-item-action px-0">
+                        <div class="d-flex w-100 justify-content-between">
+                            <span class="fw-bold">{{ mov.titulo }}</span>
+                            <small class="text-muted">{{ mov.data_criacao|naturaltime }}</small>
+                        </div>
+                        <small class="d-block text-muted">{{ mov.processo }}</small>
+                    </a>
+                {% empty %}
+                    <div class="list-group-item text-muted small px-0">Nenhuma movimentação recente encontrada.</div>
+                {% endfor %}
             </div>
         </div>
     </div>
 </div>
 
-
 {% include 'gestao/partials/_modal_editar_movimentacao.html' %}
 {% include 'gestao/partials/_modal_editar_servico.html' %}
 {% include 'gestao/partials/_modal_editar_movimentacao_servico.html' %}
 {% include 'gestao/partials/_managerial_modal.html' %}
+<form id="csrf-form-container" style="display:none;">{% csrf_token %}</form>
 
 {% endblock %}
 
 
 {% block javascript %}
     {{ block.super }}
-    {% include 'gestao/partials/_detalhe_movimentacao_modal_js.html' %}
-    {% include 'gestao/partials/_lista_servicos_modal_js.html' %}
-    {% include 'gestao/partials/_detalhe_servico_modal_js.html' %}
-    {% include 'gestao/partials/_managerial_modal_js.html' %}
 
-    {% endblock %}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const csrfToken = document.querySelector('#csrf-form-container input[name="csrfmiddlewaretoken"]').value;
+
+        // =================================================================
+        // === SCRIPT UNIVERSAL E CORRIGIDO PARA CARREGAR DADOS EM MODAL ===
+        // =================================================================
+        document.body.addEventListener('show.bs.modal', function(event) {
+            const modalElement = event.target;
+            const triggerElement = event.relatedTarget;
+
+            if (!triggerElement) return;
+
+            // LÓGICA PARA O MODAL GERENCIAL (TOTALIZADORES)
+            if (modalElement.id === 'managerialModal') {
+                const filter = triggerElement.dataset.filter;
+                const modalTitle = modalElement.querySelector('.modal-title');
+
+                // Esconde todas as seções de conteúdo do modal
+                modalElement.querySelectorAll('.filter-content').forEach(el => el.style.display = 'none');
+
+                // Mostra a seção correta e ajusta o título
+                const targetContent = modalElement.querySelector(`#content-${filter}`);
+                if (targetContent) {
+                    targetContent.style.display = 'block';
+                    if (filter === 'processos') modalTitle.textContent = 'Detalhes: Processos Ativos';
+                    else if (filter === 'servicos') modalTitle.textContent = 'Detalhes: Serviços em Andamento';
+                    else if (filter === 'pendencias') modalTitle.textContent = 'Detalhes: Total de Pendências';
+                }
+                return;
+            }
+
+            // LÓGICA PARA MODAIS DE EDIÇÃO (COM FORMULÁRIO)
+            if (!triggerElement.dataset.urlJson) return;
+
+            const url = triggerElement.dataset.urlJson;
+            const form = modalElement.querySelector('form');
+            if (!form) return;
+
+            form.reset();
+            if (triggerElement.dataset.urlEdit) {
+                form.action = triggerElement.dataset.urlEdit;
+            }
+
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) throw new Error('Falha ao buscar dados.');
+                    return response.json();
+                })
+                .then(data => {
+                    for (const key in data) {
+                        const field = form.querySelector(`[name="${key}"]`);
+                        if (field) {
+                            if (field.type === 'checkbox') {
+                                field.checked = data[key];
+                            } else {
+                                field.value = data[key];
+                            }
+                        }
+                    }
+                })
+                .catch(err => console.error(`Erro ao carregar dados para o modal #${modalElement.id}:`, err));
+        });
+
+        // ==============================================
+        // === SCRIPT PARA CONCLUSÃO RÁPIDA (AJAX) =====
+        // ==============================================
+        document.body.addEventListener('click', function(event) {
+            const concluirButton = event.target.closest('.btn-concluir-rapido');
+            if (!concluirButton) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            const url = concluirButton.dataset.url;
+            const itemDiv = concluirButton.closest('.list-group-item');
+
+            concluirButton.disabled = true;
+            concluirButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+            fetch(url, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    itemDiv.classList.add('agenda-item-removing');
+                    setTimeout(() => { itemDiv.remove(); }, 500);
+                } else {
+                    alert('Erro: ' + (data.error || 'Não foi possível concluir a tarefa.'));
+                    concluirButton.disabled = false;
+                    concluirButton.innerHTML = '<i class="bi bi-check-lg"></i>';
+                }
+            })
+            .catch(error => {
+                console.error('Erro na requisição:', error);
+                alert('Erro de comunicação.');
+                concluirButton.disabled = false;
+                concluirButton.innerHTML = '<i class="bi bi-check-lg"></i>';
+            });
+        });
+
+        // =====================================
+        // === LÓGICA DE PAGINAÇÃO COM AJAX ====
+        // =====================================
+        const perPageSelect = document.getElementById('per_page_select');
+        const audienciasContainer = document.getElementById('audiencias-container');
+        const prazosContainer = document.getElementById('prazos-container');
+        const updateAgendaUrl = "{% url 'gestao:update_agenda_partial' %}";
+
+        function loadAgendaList(container, page = 1) {
+            if (!container) return;
+            const listType = container.dataset.listType;
+            const perPage = perPageSelect.value;
+            const url = `${updateAgendaUrl}?list_type=${listType}&page=${page}&per_page=${perPage}`;
+
+            container.innerHTML = `<div class="d-flex justify-content-center align-items-center h-100"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>`;
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) container.innerHTML = data.html;
+                    else container.innerHTML = '<div class="p-3"><div class="alert alert-danger small mb-0">Erro ao carregar a lista.</div></div>';
+                })
+                .catch(error => container.innerHTML = '<div class="p-3"><div class="alert alert-danger small mb-0">Erro de comunicação.</div></div>');
+        }
+
+        function setupPaginationListeners(container) {
+            if (!container) return;
+            container.addEventListener('click', function(e) {
+                const pageLink = e.target.closest('.page-link');
+                if (pageLink && pageLink.dataset.page) {
+                    e.preventDefault();
+                    if (!pageLink.parentElement.classList.contains('disabled')) {
+                        loadAgendaList(container, pageLink.dataset.page);
+                    }
+                }
+            });
+        }
+
+        perPageSelect.addEventListener('change', function() {
+            loadAgendaList(audienciasContainer, 1);
+            loadAgendaList(prazosContainer, 1);
+        });
+
+        loadAgendaList(audienciasContainer, 1);
+        loadAgendaList(prazosContainer, 1);
+        setupPaginationListeners(audienciasContainer);
+        setupPaginationListeners(prazosContainer);
+
+        // Inicializa tooltips
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+    </script>
+{% endblock %}
