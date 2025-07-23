@@ -641,6 +641,9 @@ class EscritorioConfiguracao(models.Model):
     telefone_contato = models.CharField(max_length=20, blank=True, null=True, verbose_name="Telefone de Contato")
     email_contato = models.EmailField(max_length=255, blank=True, null=True, verbose_name="E-mail de Contato")
 
+    logo = models.ImageField(upload_to='logos/', blank=True, null=True)
+
+
     def __str__(self):
         return self.nome_escritorio
 

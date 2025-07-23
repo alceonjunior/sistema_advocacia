@@ -942,7 +942,11 @@ def imprimir_recibo(request, pagamento_pk):
         'cliente': pagamento.lancamento.cliente,
         'data_emissao': timezone.now(),
         'valor_extenso': valor_por_extenso(pagamento.valor_pago),
-        'escritorio': escritorio
+        'escritorio': escritorio,
+        # Alterado: Garante que o nome e a OAB sejam string vazias se forem None ou vazias
+        'emissor_nome': (escritorio.nome_escritorio if escritorio else '') or '',
+        'emissor_oab': (escritorio.oab_principal if escritorio else '') or '',
+        'data_emissao_extenso': data_por_extenso(timezone.now().date()), # Adiciona a data por extenso
     }
 
     return render(request, 'gestao/recibo_pagamento.html', context)
@@ -1603,6 +1607,7 @@ def configuracoes(request):
     config, created = EscritorioConfiguracao.objects.get_or_create(pk=1)
 
     if request.method == 'POST' and 'salvar_escritorio' in request.POST:
+        # É CRUCIAL PASSAR request.FILES AQUI PARA LIDAR COM UPLOAD DE ARQUIVOS
         form_escritorio = EscritorioConfiguracaoForm(request.POST, request.FILES, instance=config)
         if form_escritorio.is_valid():
             form_escritorio.save()
@@ -1636,6 +1641,7 @@ def configuracoes(request):
         'tipos_servico': TipoServico.objects.all().order_by('nome'),
         'areas_processo': AreaProcesso.objects.all().order_by('nome'),
         'tipos_acao': TipoAcao.objects.select_related('area').all().order_by('area__nome', 'nome'),
+        'configuracao_escritorio': config,  # Passa a instância da configuração para o template
     }
     return render(request, 'gestao/configuracoes.html', context)
 
@@ -2627,9 +2633,3 @@ def concluir_item_agenda_ajax(request, tipo, pk):
         return JsonResponse({'success': False, 'error': 'Item não encontrado ou você não tem permissão'}, status=404)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
-
-
-
-
-
