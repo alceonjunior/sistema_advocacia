@@ -279,69 +279,42 @@ além dos refinamentos de design e da paginação AJAX.
 {% block javascript %}
     {{ block.super }}
 
+    {# ================================================================================= #}
+    {# === SCRIPT DE CARREGAMENTO MODULAR E CORRIGIDO ================================== #}
+    {# ================================================================================= #}
+    {% include 'gestao/partials/_modal_loader_js.html' %}
+
     <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // A lógica de carregamento dos modais agora está no _modal_loader_js.html
+        // e já foi incluída acima, funcionando para toda a página.
+
+        // As demais lógicas específicas do dashboard continuam aqui.
         const csrfToken = document.querySelector('#csrf-form-container input[name="csrfmiddlewaretoken"]').value;
 
         // =================================================================
-        // === SCRIPT UNIVERSAL E CORRIGIDO PARA CARREGAR DADOS EM MODAL ===
+        // === LÓGICA PARA O MODAL GERENCIAL (TOTALIZADORES) ================
         // =================================================================
-        document.body.addEventListener('show.bs.modal', function(event) {
-            const modalElement = event.target;
-            const triggerElement = event.relatedTarget;
-
-            if (!triggerElement) return;
-
-            // LÓGICA PARA O MODAL GERENCIAL (TOTALIZADORES)
-            if (modalElement.id === 'managerialModal') {
+        const managerialModal = document.getElementById('managerialModal');
+        if (managerialModal) {
+            managerialModal.addEventListener('show.bs.modal', function(event) {
+                const triggerElement = event.relatedTarget;
                 const filter = triggerElement.dataset.filter;
-                const modalTitle = modalElement.querySelector('.modal-title');
+                const modalTitle = managerialModal.querySelector('.modal-title');
 
                 // Esconde todas as seções de conteúdo do modal
-                modalElement.querySelectorAll('.filter-content').forEach(el => el.style.display = 'none');
+                managerialModal.querySelectorAll('.filter-content').forEach(el => el.style.display = 'none');
 
                 // Mostra a seção correta e ajusta o título
-                const targetContent = modalElement.querySelector(`#content-${filter}`);
+                const targetContent = managerialModal.querySelector(`#content-${filter}`);
                 if (targetContent) {
                     targetContent.style.display = 'block';
                     if (filter === 'processos') modalTitle.textContent = 'Detalhes: Processos Ativos';
                     else if (filter === 'servicos') modalTitle.textContent = 'Detalhes: Serviços em Andamento';
                     else if (filter === 'pendencias') modalTitle.textContent = 'Detalhes: Total de Pendências';
                 }
-                return;
-            }
-
-            // LÓGICA PARA MODAIS DE EDIÇÃO (COM FORMULÁRIO)
-            if (!triggerElement.dataset.urlJson) return;
-
-            const url = triggerElement.dataset.urlJson;
-            const form = modalElement.querySelector('form');
-            if (!form) return;
-
-            form.reset();
-            if (triggerElement.dataset.urlEdit) {
-                form.action = triggerElement.dataset.urlEdit;
-            }
-
-            fetch(url)
-                .then(response => {
-                    if (!response.ok) throw new Error('Falha ao buscar dados.');
-                    return response.json();
-                })
-                .then(data => {
-                    for (const key in data) {
-                        const field = form.querySelector(`[name="${key}"]`);
-                        if (field) {
-                            if (field.type === 'checkbox') {
-                                field.checked = data[key];
-                            } else {
-                                field.value = data[key];
-                            }
-                        }
-                    }
-                })
-                .catch(err => console.error(`Erro ao carregar dados para o modal #${modalElement.id}:`, err));
-        });
+            });
+        }
 
         // ==============================================
         // === SCRIPT PARA CONCLUSÃO RÁPIDA (AJAX) =====

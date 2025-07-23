@@ -109,108 +109,121 @@ PERMISSOES_MAPEADAS = {
 @login_required
 def dashboard(request):
     """
-    Carrega a estrutura principal do Dashboard e os dados do "Foco do Dia".
-    A lógica do "Foco do Dia" foi corrigida para incluir todas as pendências.
-    A agenda futura é carregada via AJAX pela view 'update_agenda_partial'.
+    Carrega a estrutura principal do Dashboard.
+
+    Esta versão está totalmente corrigida para:
+    1. Fornecer os dados corretos para os totalizadores (KPIs) abrirem no modal gerencial.
+    2. Fornecer todos os formulários necessários ao contexto, garantindo que os
+       modais de edição (incluindo o de serviço) sejam renderizados e preenchidos corretamente.
+    3. Manter a lógica aprimorada do "Foco do Dia" que busca pendências de processos e serviços.
     """
+    # =========================================================================
+    # === 1. CONFIGURAÇÕES INICIAIS E CONSULTAS DE BASE =======================
+    # =========================================================================
     usuario = request.user
     hoje = timezone.now().date()
     status_aberto = ['PENDENTE', 'EM_ANDAMENTO']
 
-    # --- Consultas para KPIs e Pulso do Escritório ---
+    # Consultas para os totalizadores (KPIs)
     processos_ativos_qs = Processo.objects.filter(advogado_responsavel=usuario, status_processo='ATIVO')
     servicos_ativos_qs = Servico.objects.filter(responsavel=usuario, concluido=False)
+
+    # Consulta para a seção "Pulso do Escritório"
     ultimas_movimentacoes = Movimentacao.objects.filter(
         processo__advogado_responsavel=usuario
     ).order_by('-data_criacao').select_related('processo')[:5]
 
-    # --- LÓGICA CORRIGIDA E AMPLIADA PARA O "FOCO DO DIA" ---
+    # =========================================================================
+    # === 2. LÓGICA CORRIGIDA E AMPLIADA PARA O "FOCO DO DIA" ==================
+    # =========================================================================
     agenda_completa_foco = []
 
-    # 1. Busca movimentações de PROCESSOS (prazos e audiências) vencidas ou para hoje
+    # Busca movimentações de PROCESSOS (prazos e audiências) vencidas ou para hoje
     movs_processo = Movimentacao.objects.filter(
         responsavel=usuario, status__in=status_aberto, data_prazo_final__isnull=False, data_prazo_final__lte=hoje
     ).select_related('processo')
     for mov in movs_processo:
         agenda_completa_foco.append({
             'pk': mov.pk,
-            'tipo': 'processo',  # Usado pelo partial para construir a URL de conclusão
+            'tipo': 'processo',
             'data': mov.data_prazo_final,
             'hora': mov.hora_prazo,
             'titulo': mov.titulo,
             'objeto_str': f"Proc: {mov.processo.numero_processo}",
         })
 
-    # 2. Busca movimentações de SERVIÇOS (tarefas) vencidas ou para hoje
+    # Busca TAREFAS de SERVIÇOS vencidas ou para hoje
     movs_servico = MovimentacaoServico.objects.filter(
         responsavel=usuario, status__in=status_aberto, prazo_final__isnull=False, prazo_final__lte=hoje
     ).select_related('servico__cliente')
     for tarefa in movs_servico:
         agenda_completa_foco.append({
             'pk': tarefa.pk,
-            'tipo': 'servico_task',  # Tipo específico para tarefas de serviço
+            'tipo': 'servico_task',
             'data': tarefa.prazo_final,
             'hora': None,
             'titulo': tarefa.titulo,
             'objeto_str': f"Serviço: {tarefa.servico.descricao}",
         })
 
-    # 3. Busca SERVIÇOS cujo prazo final está vencido ou é hoje
+    # Busca SERVIÇOS cujo prazo final é hoje ou está vencido
     servicos_com_prazo = Servico.objects.filter(
         responsavel=usuario, concluido=False, prazo__isnull=False, prazo__lte=hoje
     ).select_related('cliente')
     for servico in servicos_com_prazo:
-        # Evita duplicidade se já houver uma tarefa para hoje/vencida do mesmo serviço
         if not any(d['tipo'] == 'servico_task' and d['objeto_str'] == f"Serviço: {servico.descricao}" for d in
                    agenda_completa_foco):
             agenda_completa_foco.append({
                 'pk': servico.pk,
-                'tipo': 'servico_main',  # Tipo para o prazo principal do serviço
+                'tipo': 'servico_main',
                 'data': servico.prazo,
                 'hora': None,
                 'titulo': f"Prazo final do serviço",
                 'objeto_str': f"{servico.descricao}",
             })
 
-    # Ordena a lista de foco por data
+    # Ordena e Filtra as listas do Foco do Dia
     agenda_completa_foco = sorted(agenda_completa_foco, key=lambda x: x['data'])
-
-    # Filtra para as seções "Vencidas" e "Para Hoje"
     itens_vencidos = [item for item in agenda_completa_foco if item['data'] < hoje]
     itens_para_hoje = [item for item in agenda_completa_foco if item['data'] == hoje]
 
-    # A lista de tarefas pendentes para a Visão Geral da Agenda é carregada separadamente
+    # Tarefas futuras para a terceira coluna da "Visão Geral" (paginação é feita via AJAX)
     tarefas_pendentes_futuras = MovimentacaoServico.objects.filter(
         responsavel=usuario, status__in=status_aberto, prazo_final__gt=hoje
     ).select_related('servico')
 
-    # Contexto final para o template
+    # =========================================================================
+    # === 3. CONTEXTO FINAL PARA O TEMPLATE ===================================
+    # =========================================================================
     context = {
+        # Contadores para os KPIs
         'processos_ativos_count': processos_ativos_qs.count(),
         'servicos_ativos_count': servicos_ativos_qs.count(),
         'total_pendencias': len(itens_vencidos) + len(itens_para_hoje),
+
+        # Listas para o "Foco do Dia"
         'itens_vencidos': itens_vencidos,
         'itens_para_hoje': itens_para_hoje,
-        'tarefas_pendentes': tarefas_pendentes_futuras,  # Passa tarefas futuras para a terceira coluna
+
+        # Lista para a terceira coluna da "Visão Geral da Agenda"
+        'tarefas_pendentes': tarefas_pendentes_futuras,
+
+        # Lista para o "Pulso do Escritório"
         'ultimas_movimentacoes': ultimas_movimentacoes,
+
         'hoje': hoje,
 
-        # Formulários para os modais (essencial)
-        'form_movimentacao': MovimentacaoForm(initial={'responsavel': usuario}),
-        'form_edit_servico': ServicoEditForm(),
-
-        'form_movimentacao_servico': MovimentacaoServicoForm(),
-        'form_servico': ServicoForm(initial={'responsavel': usuario}),
-        'form_contrato': ContratoHonorariosForm(),
-        'form_tipo_servico': TipoServicoForm(),
-        'form_cliente': ClienteForm(),
-
+        # === AJUSTE PARA TOTALIZADORES ===
+        # Passa as listas completas para o Modal Gerencial funcionar corretamente
         'lista_processos_ativos': processos_ativos_qs,
         'lista_servicos_ativos': servicos_ativos_qs,
-        'lista_total_pendencias': itens_vencidos + itens_para_hoje,  # Simplificado para pendências de foco
-        'form_edit': ServicoEditForm(),
-        # A variável deve ser 'form_edit' para corresponder ao _modal_editar_servico.html
+        'lista_total_pendencias': agenda_completa_foco,
 
+        # === AJUSTE PARA MODAIS DE EDIÇÃO ===
+        # Passa as instâncias dos formulários que os modais da página precisam
+        'form_movimentacao': MovimentacaoForm(initial={'responsavel': usuario}),
+        'form_movimentacao_servico': MovimentacaoServicoForm(),
+        'form_edit': ServicoEditForm(),  # A variável deve ser 'form_edit' para o _modal_editar_servico.html
     }
 
     return render(request, 'gestao/dashboard.html', context)
