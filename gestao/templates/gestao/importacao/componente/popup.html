@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Extrator Projudi</title>
+    <style>
+        body { font-family: Arial, sans-serif; min-width: 350px; padding: 10px; }
+        h2 { font-size: 1.2em; margin-bottom: 10px; }
+        h3 { font-size: 1em; font-weight: normal; margin-top: 0; margin-bottom: 8px; border-bottom: 1px solid #ccc; padding-bottom: 5px;}
+        #dataContainer { max-height: 400px; overflow-y: auto; }
+        .audiencia-item { margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed #eee; font-size: 0.9em; }
+        .audiencia-item strong { display: inline-block; min-width: 120px; }
+        button { margin-top: 10px; padding: 8px 15px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h2 id="popupTitle">Dados Extraídos</h2>
+    
+    <div id="dataContainer">
+        Analisando página...
+    </div>
+
+    <button id="downloadJson">Download JSON</button>
+    <button id="copyJson">Copiar JSON</button>
+
+    <script src="popup.js"></script>
+</body>
+</html>

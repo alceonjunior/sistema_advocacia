@@ -278,7 +278,8 @@ def lista_processos(request):
 @login_required
 def detalhe_processo(request, pk):
     """
-    View central para exibir todos os detalhes de um processo.
+    View central para exibir todos os detalhes de um processo, agora passando
+    dados completos dos tipos de movimentação para o cálculo de prazo no front-end.
     """
     processo = get_object_or_404(
         Processo.objects.prefetch_related(
@@ -336,6 +337,20 @@ def detalhe_processo(request, pk):
     Pagamento.objects.filter(lancamento__in=lancamentos_qs).aggregate(total=Sum('valor_pago'))['total'] or Decimal(
         '0.00')
 
+    # --- ALTERAÇÃO APLICADA AQUI ---
+    # Buscamos todos os tipos de movimentação para obter não apenas os dias de prazo,
+    # mas também o tipo de contagem (dias úteis ou corridos).
+    tipos_movimentacao = TipoMovimentacao.objects.all()
+    # Criamos um dicionário detalhado para ser convertido em JSON no template.
+    dados_tipos_movimentacao = {
+        tm.id: {
+            'dias_prazo': tm.sugestao_dias_prazo,
+            'tipo_contagem': tm.tipo_contagem_prazo
+        }
+        for tm in tipos_movimentacao if tm.sugestao_dias_prazo is not None
+    }
+    # ---------------------------------
+
     context = {
         'processo': processo,
         'movimentacoes': movimentacoes,
@@ -343,6 +358,7 @@ def detalhe_processo(request, pk):
         'lancamentos_inadimplentes_agrupados': inadimplentes_agrupados,
         'todos_modelos': ModeloDocumento.objects.all().order_by('titulo'),
         'form_movimentacao': MovimentacaoForm(initial={'responsavel': request.user}),
+        'dados_tipos_movimentacao_json': json.dumps(dados_tipos_movimentacao),  # Enviamos o dicionário detalhado
         'form_recurso': RecursoForm(),
         'form_incidente': IncidenteForm(),
         'form_pagamento': PagamentoForm(),
@@ -354,7 +370,6 @@ def detalhe_processo(request, pk):
     }
 
     response = render(request, 'gestao/detalhe_processo.html', context)
-    # [REINTEGRADO] Controle de cache para garantir que os dados da página de detalhes estejam sempre atualizados.
     response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response['Pragma'] = 'no-cache'
     response['Expires'] = '0'
@@ -402,10 +417,16 @@ def lista_servicos(request):
 
 @login_required
 def detalhe_servico(request, pk):
-    """Exibe o painel de controle completo e funcional para um serviço extrajudicial."""
+    """
+    Exibe o painel de controle completo e funcional para um serviço extrajudicial.
+    VERSÃO CORRIGIDA: Utiliza o related_name 'movimentacoes_servico' correto.
+    """
     servico = get_object_or_404(
         Servico.objects.prefetch_related(
-            'movimentacoes__responsavel', 'lancamentos__pagamentos'
+            # --- CORREÇÃO APLICADA AQUI ---
+            'movimentacoes_servico__responsavel',
+            # -----------------------------
+            'lancamentos__pagamentos'
         ), pk=pk
     )
 
@@ -426,11 +447,9 @@ def detalhe_servico(request, pk):
     lancamentos_qs = servico.lancamentos.all()
     regulares_agrupados, inadimplentes_agrupados = _preparar_dados_financeiros(lancamentos_qs)
     valor_total_contratado = lancamentos_qs.aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
-    total_pago = Pagamento.objects.filter(lancamento__in=lancamentos_qs).aggregate(total=Sum('valor_pago'))[
-                     'total'] or Decimal('0.00')
+    total_pago = Pagamento.objects.filter(lancamento__in=lancamentos_qs).aggregate(total=Sum('valor_pago'))['total'] or Decimal('0.00')
     saldo_devedor = valor_total_contratado - total_pago
     percentual_pago = (total_pago / valor_total_contratado * 100) if valor_total_contratado > 0 else 0
-
     percentual_pago_visual = min(percentual_pago, Decimal('100.0'))
     percentual_devedor_visual = Decimal('100.0') - percentual_pago_visual
 
@@ -447,16 +466,13 @@ def detalhe_servico(request, pk):
             info_prazo = {'status': 'EM_DIA', 'texto': f"Restam {delta.days} dia(s)"}
 
     context = {
-                'servico': servico,
-        'movimentacoes': servico.movimentacoes.all().order_by('-data_atividade', '-data_criacao'),
-        # =======================================================
-        # AJUSTE: Passamos o formulário com um nome específico
-        # =======================================================
+        'servico': servico,
+        # --- CORREÇÃO APLICADA AQUI ---
+        'movimentacoes': servico.movimentacoes_servico.all().order_by('-data_atividade', '-data_criacao'),
+        # -----------------------------
         'form_movimentacao_servico': form_movimentacao,
-        # =======================================================
         'form_pagamento': PagamentoForm(),
         'today': timezone.now().date(),
-
         'info_prazo': info_prazo,
         'financeiro': {
             'valor_total': valor_total_contratado,
@@ -473,7 +489,6 @@ def detalhe_servico(request, pk):
     }
 
     response = render(request, 'gestao/detalhe_servico.html', context)
-    # [REINTEGRADO] Controle de cache para garantir que os dados da página de detalhes estejam sempre atualizados.
     response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response['Pragma'] = 'no-cache'
     response['Expires'] = '0'
@@ -1799,33 +1814,34 @@ def imprimir_documento(request, pk):
 @login_required
 def get_movimentacao_json(request, pk):
     """
-    Retorna os dados de uma movimentação específica em formato JSON para ser
-    usado pelo modal de edição.
+    Retorna os dados de uma movimentação em JSON, incluindo os novos campos de data,
+    para preencher o modal de edição.
     """
     try:
         mov = get_object_or_404(Movimentacao, pk=pk)
 
-        # --- AJUSTE: Buscar dados do cliente principal do processo ---
-        cliente_principal = mov.processo.partes.filter(tipo_participacao='AUTOR').first()
+        cliente_principal = mov.processo.partes.filter(is_cliente_do_processo=True).first() or mov.processo.partes.filter(tipo_participacao='AUTOR').first()
         cliente_nome = ""
         cliente_telefone = ""
         if cliente_principal and cliente_principal.cliente.telefone_principal:
             cliente_nome = cliente_principal.cliente.nome_completo
-            # Limpa o telefone para conter apenas números
             cliente_telefone = ''.join(filter(str.isdigit, cliente_principal.cliente.telefone_principal))
 
         data = {
             'pk': mov.pk,
             'titulo': mov.titulo,
             'tipo_movimentacao_id': mov.tipo_movimentacao_id,
-            'data_prazo_final': mov.data_prazo_final.strftime('%Y-%m-%d') if mov.data_prazo_final else '',
-            'hora_prazo': mov.hora_prazo.strftime('%H:%M') if mov.hora_prazo else '',
             'detalhes': mov.detalhes,
             'link_referencia': mov.link_referencia,
             'responsavel_id': mov.responsavel_id,
             'status': mov.status,
-
-            # --- NOVOS DADOS ADICIONADOS AO JSON ---
+            'hora_prazo': mov.hora_prazo.strftime('%H:%M') if mov.hora_prazo else '',
+            # --- NOVOS CAMPOS ADICIONADOS ---
+            'data_publicacao': mov.data_publicacao.strftime('%Y-%m-%d') if mov.data_publicacao else '',
+            'data_intimacao': mov.data_intimacao.strftime('%Y-%m-%d') if mov.data_intimacao else '',
+            'data_inicio_prazo': mov.data_inicio_prazo.strftime('%Y-%m-%d') if mov.data_inicio_prazo else '',
+            'data_prazo_final': mov.data_prazo_final.strftime('%Y-%m-%d') if mov.data_prazo_final else '',
+            # ---------------------------------
             'cliente_nome': cliente_nome,
             'cliente_telefone': cliente_telefone,
             'remetente_nome': request.user.get_full_name() or request.user.username,
@@ -2232,10 +2248,17 @@ def adicionar_lancamento_financeiro_ajax(request):
 @login_required
 def importacao_projudi_view(request):
     """
-    Renderiza a página inicial de importação, que é o primeiro passo do wizard.
-    Seu único trabalho é carregar o template HTML.
+    Renderiza a página de importação, já pré-carregando a lista de todos
+    os processos para uma experiência de vinculação instantânea.
     """
-    context = {'titulo_pagina': "Importar Audiências do Projudi"}
+    # MELHORIA: Pré-carrega todos os processos para o seletor de vinculação.
+    todos_processos = Processo.objects.select_related('advogado_responsavel').prefetch_related(
+        'partes__cliente').order_by('-data_distribuicao')
+
+    context = {
+        'titulo_pagina': "Importador Inteligente do Projudi",
+        'todos_processos': todos_processos,  # Envia a lista para o template
+    }
     return render(request, 'gestao/importacao/importar_projudi.html', context)
 
 
@@ -2243,98 +2266,113 @@ def importacao_projudi_view(request):
 @login_required
 def analisar_dados_projudi_ajax(request):
     """
-    Recebe o JSON do Projudi via AJAX, analisa os dados, compara com o banco,
-    e retorna um HTML de pré-visualização para o passo 2 do wizard.
+    Recebe o JSON, analisa os dados e busca clientes existentes.
+    A lista de processos não é mais buscada aqui, pois já foi pré-carregada.
     """
     try:
-        # Carrega os dados enviados pelo JavaScript
         data = json.loads(request.body)
-        dados_analisados = []
-        nomes_no_json = set()  # Usado para controlar duplicatas dentro do mesmo arquivo JSON
+        import_type = data.get('type')
+        payload = data.get('payload', [])
 
-        # Itera sobre cada audiência encontrada no arquivo JSON
-        for audiencia_data in data:
-            analise = {
-                'partes': [],
-                'processo': {},
-                'audiencia': {}
-            }
-
-            # 1. Analisa o Processo
-            num_processo = audiencia_data.get('processoRecurso')
-            processo = Processo.objects.filter(numero_processo=num_processo).first()
-            analise['processo'] = {
-                'numero': num_processo,
-                'existe': True if processo else False
-            }
-
-            # 2. Analisa as Partes do processo
-            partes_raw = audiencia_data.get('partes', {})
-            for polo, nomes in partes_raw.items():
-                for nome in nomes:
-                    # Limpa o nome para remover "representado(a) por..." para uma busca mais precisa
-                    nome_limpo = nome.split('representado(a) por')[0].strip()
-
-                    parte_info = {'nome_original': nome, 'polo': polo}
-
-                    if nome_limpo in nomes_no_json:
-                        parte_info['status'] = 'DUPLICADO_JSON'
-                    else:
-                        cliente = Cliente.objects.filter(nome_completo__iexact=nome_limpo).first()
-                        parte_info['status'] = 'EXISTENTE' if cliente else 'NOVO'
-                        if cliente:
-                            parte_info['cliente_id'] = cliente.pk
-
-                        nomes_no_json.add(nome_limpo)
-
-                    analise['partes'].append(parte_info)
-
-            # 3. Coleta os dados da audiência
-            tipo_audiencia_projudi = audiencia_data.get('tipoAudiencia', '')
-            analise['audiencia'] = {
-                'data': audiencia_data.get('data'),
-                'hora': audiencia_data.get('hora'),
-                'tipo': tipo_audiencia_projudi,
-                'local': audiencia_data.get('localAudiencia'),
-                'situacao': audiencia_data.get('situacaoAudiencia'),
-                'modalidade': audiencia_data.get('modalidade'),
-            }
-
-            # 4. Sugere um "Tipo de Movimentação" com base em palavras-chave
-            tipo_audiencia_lower = tipo_audiencia_projudi.lower()
-            sugestao_id = None
-            if 'conciliação' in tipo_audiencia_lower:
-                tipo_sugerido = TipoMovimentacao.objects.filter(nome__icontains='Conciliação').first()
-                if tipo_sugerido: sugestao_id = tipo_sugerido.pk
-            elif 'instrução' in tipo_audiencia_lower:
-                tipo_sugerido = TipoMovimentacao.objects.filter(nome__icontains='Instrução').first()
-                if tipo_sugerido: sugestao_id = tipo_sugerido.pk
-
-            analise['audiencia']['sugestao_tipo_id'] = sugestao_id
-
-            dados_analisados.append(analise)
-
-        # 5. Busca os dados necessários para os menus de seleção no template
+        # Otimização: A lista de processos já está na página. Buscamos apenas os clientes.
         todos_clientes = Cliente.objects.all().order_by('nome_completo')
-        tipos_movimentacao_audiencia = TipoMovimentacao.objects.filter(nome__icontains='audiência').order_by('nome')
 
-        # 6. Renderiza o template parcial com os dados analisados
-        html_preview = render_to_string(
-            'gestao/partials/_importacao_projudi_preview.html',
-            {
-                'dados_analisados': dados_analisados,
-                'todos_clientes': todos_clientes,
-                'tipos_movimentacao_audiencia': tipos_movimentacao_audiencia,
-                'csrf_token': get_token(request),  # Passa o token CSRF para o template
-            }
-        )
+        context = {
+            'import_type': import_type,
+            'csrf_token': get_token(request),
+            'todos_clientes': todos_clientes,  # Apenas clientes são necessários aqui
+        }
+        dados_analisados = []
 
+        if import_type == 'audiencias':
+            nomes_no_json = set()
+            for audiencia_data in payload:
+                analise = {'partes': [], 'processo': {}, 'audiencia': {}}
+                num_processo = audiencia_data.get('processoRecurso')
+                processo_qs = Processo.objects.filter(numero_processo=num_processo)
+                analise['processo'] = {'numero': num_processo, 'existe': processo_qs.exists(),
+                                       'id': processo_qs.first().id if processo_qs.exists() else None}
+
+                partes_raw = audiencia_data.get('partes', {})
+                for polo, nomes in partes_raw.items():
+                    for nome in nomes:
+                        nome_limpo = nome.split('representado(a) por')[0].strip()
+                        cliente_qs = Cliente.objects.filter(nome_completo__iexact=nome_limpo)
+                        parte_info = {
+                            'nome_original': nome,
+                            'polo': polo,
+                            'status': 'EXISTENTE' if cliente_qs.exists() else 'NOVO',
+                            'cliente_id': cliente_qs.first().id if cliente_qs.exists() else None
+                        }
+                        analise['partes'].append(parte_info)
+
+                tipo_audiencia_projudi = audiencia_data.get('tipoAudiencia', '')
+                analise['audiencia'] = {
+                    'data': audiencia_data.get('data'), 'hora': audiencia_data.get('hora'),
+                    'tipo': tipo_audiencia_projudi, 'local': audiencia_data.get('localAudiencia'),
+                    'situacao': audiencia_data.get('situacaoAudiencia'), 'modalidade': audiencia_data.get('modalidade'),
+                }
+
+                sugestao = TipoMovimentacao.objects.filter(nome__icontains='Audiência').first()
+                analise['audiencia']['sugestao_tipo_id'] = sugestao.pk if sugestao else None
+                dados_analisados.append(analise)
+
+            context['dados_analisados'] = dados_analisados
+            if import_type == 'audiencias':
+                context['tipos_movimentacao_audiencia'] = TipoMovimentacao.objects.filter(
+                    nome__icontains='audiência').order_by('nome')
+            elif import_type == 'movimentacoes':
+                context['todos_tipos_movimentacao'] = TipoMovimentacao.objects.all().order_by('nome')
+
+            # Renderiza o mesmo template parcial, que foi ajustado para usar a lista de processos da página.
+            html_preview = render_to_string('gestao/partials/_importacao_projudi_preview.html', context)
+            return JsonResponse({'status': 'success', 'html_preview': html_preview})
+
+
+        elif import_type == 'movimentacoes':
+            movimentacoes_agrupadas = {}
+            for mov_data in payload:
+                chave = (mov_data.get('processoRecurso'), mov_data.get('dtPostagem'), mov_data.get('dataIntimacao'),
+                         mov_data.get('prazo'))
+                if chave not in movimentacoes_agrupadas:
+                    movimentacoes_agrupadas[chave] = {'mov_data': mov_data, 'partes_intimadas': []}
+                movimentacoes_agrupadas[chave]['partes_intimadas'].append(mov_data.get('parteIntimada'))
+
+            for grupo in movimentacoes_agrupadas.values():
+                mov_data = grupo['mov_data']
+                analise = {'movimentacao': {}, 'processo': {}, 'partes': []}
+
+                num_processo = mov_data.get('processoRecurso')
+                processo_qs = Processo.objects.filter(numero_processo=num_processo)
+                analise['processo'] = {'numero': num_processo, 'existe': processo_qs.exists(),
+                                       'id': processo_qs.first().id if processo_qs.exists() else None}
+
+                for nome_parte in grupo['partes_intimadas']:
+                    nome_limpo = nome_parte.strip()
+                    cliente_qs = Cliente.objects.filter(nome_completo__iexact=nome_limpo)
+                    analise['partes'].append({
+                        'nome': nome_limpo,
+                        'existe': cliente_qs.exists(),
+                        'cliente_id': cliente_qs.first().id if cliente_qs.exists() else None
+                    })
+
+                analise['movimentacao'] = {
+                    'dtPostagem': mov_data.get('dtPostagem'),
+                    'dataIntimacao': mov_data.get('dataIntimacao'),
+                    'prazo': mov_data.get('prazo'),
+                }
+                dados_analisados.append(analise)
+
+            context['dados_analisados'] = dados_analisados
+            context['todos_tipos_movimentacao'] = TipoMovimentacao.objects.all().order_by('nome')
+
+        else:
+            return JsonResponse({'status': 'error', 'message': 'Tipo de arquivo JSON não reconhecido.'}, status=400)
+
+        html_preview = render_to_string('gestao/partials/_importacao_projudi_preview.html', context)
         return JsonResponse({'status': 'success', 'html_preview': html_preview})
 
-    except json.JSONDecodeError:
-        return JsonResponse({'status': 'error', 'message': 'O texto fornecido não é um JSON válido.'}, status=400)
     except Exception as e:
-        # Retorna uma mensagem de erro detalhada se estiver em modo DEBUG
         if settings.DEBUG:
             return JsonResponse({'status': 'error', 'message': f'Erro interno no servidor: {str(e)}'}, status=500)
         return JsonResponse({'status': 'error', 'message': 'Ocorreu um erro inesperado ao processar os dados.'},
@@ -2346,74 +2384,107 @@ def analisar_dados_projudi_ajax(request):
 @transaction.atomic
 def processar_importacao_projudi(request):
     """
-    Recebe os dados selecionados do formulário de conciliação e cria os
-    registros de processo, clientes, partes e movimentações no banco de dados.
+    Processa os dados conciliados, incluindo a vinculação manual a processos
+    e clientes existentes e a edição de nomes.
     """
     try:
-        # Pega a lista de índices de processos que foram marcados para importação
+        import_type = request.POST.get('import_type')
         indices_a_importar = request.POST.getlist('importar_indice')
 
         for i in indices_a_importar:
-            # --- 1. DADOS DO PROCESSO ---
-            num_processo = request.POST.get(f'processo_{i}_numero')
-            if not num_processo:
-                continue
+            # --- 1. DETERMINAR O PROCESSO (NOVO, EXISTENTE OU VINCULADO) ---
+            processo_action = request.POST.get(f'processo_{i}_action')
+            num_processo_arquivo = request.POST.get(f'processo_{i}_numero')
+            processo_obj = None
 
-            processo_obj, created = Processo.objects.get_or_create(
-                numero_processo=num_processo,
-                defaults={'advogado_responsavel': request.user, 'status_processo': 'ATIVO'}
-            )
+            if processo_action == 'vincular_existente':
+                processo_id = request.POST.get(f'processo_{i}_id_vincular')
+                if processo_id:
+                    processo_obj = Processo.objects.get(pk=processo_id)
+                    # Se o processo vinculado não tinha número, atualiza com o do arquivo
+                    if not processo_obj.numero_processo and num_processo_arquivo:
+                        processo_obj.numero_processo = num_processo_arquivo
+                        processo_obj.save()
 
-            # --- 2. DADOS DA AUDIÊNCIA (MOVIMENTAÇÃO) ---
-            audiencia_titulo = request.POST.get(f'audiencia_{i}_titulo')
-            tipo_mov_pk = request.POST.get(f'audiencia_{i}_tipo_movimentacao')
-            data_audiencia_str = request.POST.get(f'audiencia_{i}_data')
-            hora_audiencia_str = request.POST.get(f'audiencia_{i}_hora')
-            detalhes_audiencia = request.POST.get(f'audiencia_{i}_detalhes')
-
-            data_audiencia = datetime.strptime(data_audiencia_str, '%d/%m/%Y').date() if data_audiencia_str else None
-            hora_audiencia = datetime.strptime(hora_audiencia_str, '%H:%M').time() if hora_audiencia_str else None
-
-            if tipo_mov_pk:
-                Movimentacao.objects.create(
-                    processo=processo_obj,
-                    titulo=audiencia_titulo,
-                    tipo_movimentacao_id=tipo_mov_pk,
-                    data_prazo_final=data_audiencia,
-                    hora_prazo=hora_audiencia,
-                    detalhes=detalhes_audiencia,
-                    responsavel=request.user,
-                    status='PENDENTE'
+            if not processo_obj:  # Se a ação for 'do_arquivo' ou a vinculação falhar
+                processo_obj, _ = Processo.objects.get_or_create(
+                    numero_processo=num_processo_arquivo,
+                    defaults={'advogado_responsavel': request.user, 'status_processo': 'ATIVO'}
                 )
 
-            # --- 3. DADOS DAS PARTES ---
-            # Itera sobre as partes enviadas para este processo específico
-            for j in range(100):  # Um loop seguro para encontrar todas as partes
-                acao_parte = request.POST.get(f'processo_{i}_parte_{j}_acao')
-                if not acao_parte:
-                    break  # Para quando não encontrar mais partes para este processo
+            # --- 2. PROCESSAR AS PARTES E A MOVIMENTAÇÃO ---
+            if import_type == 'audiencias':
+                clientes_principais_ids = request.POST.getlist(f'processo_{i}_cliente_principal')
 
-                if acao_parte == 'ignorar':
-                    continue
+                # Loop para processar todas as partes enviadas para este item
+                for j in range(100):
+                    parte_action = request.POST.get(f'processo_{i}_parte_{j}_action')
+                    if not parte_action: break
 
-                cliente_obj = None
-                if acao_parte == 'criar_novo':
-                    nome_parte = request.POST.get(f'processo_{i}_parte_{j}_nome')
-                    if nome_parte:
-                        cliente_obj, _ = Cliente.objects.get_or_create(nome_completo=nome_parte)
+                    cliente_obj = None
+                    if parte_action == 'vincular_cliente':
+                        cliente_id = request.POST.get(f'processo_{i}_parte_{j}_id_vincular')
+                        if cliente_id: cliente_obj = Cliente.objects.get(pk=cliente_id)
+                    else:  # 'usar_nome'
+                        nome_editado = request.POST.get(f'processo_{i}_parte_{j}_nome_editado')
+                        if nome_editado: cliente_obj, _ = Cliente.objects.get_or_create(nome_completo=nome_editado)
 
-                elif acao_parte == 'vincular' or acao_parte == 'vincular_manual':
-                    cliente_id = request.POST.get(f'processo_{i}_parte_{j}_cliente_id')
-                    if cliente_id:
-                        cliente_obj = Cliente.objects.get(pk=cliente_id)
+                    if cliente_obj:
+                        is_cliente_principal = (str(cliente_obj.pk) in clientes_principais_ids)
+                        polo = request.POST.get(f'processo_{i}_parte_{j}_polo')
+                        tipo_participacao = 'AUTOR' if 'ativo' in polo.lower() or 'autor' in polo.lower() else 'REU'
 
-                if cliente_obj:
-                    polo = request.POST.get(f'processo_{i}_parte_{j}_polo')
-                    tipo_participacao = 'AUTOR' if 'ativo' in polo.lower() or 'autor' in polo.lower() else 'REU'
-                    ParteProcesso.objects.get_or_create(
+                        ParteProcesso.objects.update_or_create(
+                            processo=processo_obj, cliente=cliente_obj,
+                            defaults={'tipo_participacao': tipo_participacao,
+                                      'is_cliente_do_processo': is_cliente_principal}
+                        )
+
+                tipo_mov_pk = request.POST.get(f'audiencia_{i}_tipo_movimentacao')
+                if tipo_mov_pk:
+                    data_str = request.POST.get(f'audiencia_{i}_data')
+                    hora_str = request.POST.get(f'audiencia_{i}_hora')
+                    Movimentacao.objects.create(
                         processo=processo_obj,
-                        cliente=cliente_obj,
-                        defaults={'tipo_participacao': tipo_participacao}
+                        titulo=request.POST.get(f'audiencia_{i}_titulo'),
+                        tipo_movimentacao_id=tipo_mov_pk,
+                        data_prazo_final=datetime.strptime(data_str, '%d/%m/%Y').date() if data_str else None,
+                        hora_prazo=datetime.strptime(hora_str, '%H:%M').time() if hora_str else None,
+                        detalhes=request.POST.get(f'audiencia_{i}_detalhes'),
+                        responsavel=request.user, status='PENDENTE'
+                    )
+
+            elif import_type == 'movimentacoes':
+                # Loop para processar todas as partes do grupo
+                for j in range(100):
+                    parte_action = request.POST.get(f'movimentacao_{i}_parte_{j}_action')
+                    if not parte_action: break
+
+                    cliente_obj = None
+                    if parte_action == 'vincular_cliente':
+                        cliente_id = request.POST.get(f'movimentacao_{i}_parte_{j}_id_vincular')
+                        if cliente_id: cliente_obj = Cliente.objects.get(pk=cliente_id)
+                    else:  # 'usar_nome'
+                        nome_editado = request.POST.get(f'movimentacao_{i}_parte_{j}_nome_editado')
+                        if nome_editado: cliente_obj, _ = Cliente.objects.get_or_create(nome_completo=nome_editado)
+
+                    if cliente_obj:
+                        ParteProcesso.objects.update_or_create(
+                            processo=processo_obj, cliente=cliente_obj,
+                            defaults={'tipo_participacao': 'AUTOR', 'is_cliente_do_processo': True}
+                        )
+
+                tipo_mov_pk = request.POST.get(f'movimentacao_{i}_tipo')
+                if tipo_mov_pk:
+                    tipo_mov_obj = TipoMovimentacao.objects.get(pk=tipo_mov_pk)
+                    prazo_str = request.POST.get(f'movimentacao_{i}_prazo')
+                    Movimentacao.objects.create(
+                        processo=processo_obj,
+                        titulo=f"Prazo: {tipo_mov_obj.nome}",
+                        tipo_movimentacao=tipo_mov_obj,
+                        data_prazo_final=datetime.strptime(prazo_str, '%d/%m/%Y').date() if prazo_str else None,
+                        detalhes=f"Intimação via Projudi.\nData da Postagem: {request.POST.get(f'movimentacao_{i}_postagem')}\nData da Intimação: {request.POST.get(f'movimentacao_{i}_intimacao')}",
+                        responsavel=request.user, status='PENDENTE'
                     )
 
         messages.success(request, 'Dados selecionados foram importados com sucesso!')

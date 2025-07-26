@@ -1,87 +1,162 @@
-{% load l10n %}
-<form id="form-import" method="post" action="{% url 'gestao:processar_importacao_projudi' %}">
-    {% csrf_token %}
+{% comment %}
+Arquivo: gestao/partials/_importacao_projudi_preview.html
+Este template renderiza o passo de revisão para ambos os tipos de importação,
+incluindo a lógica para vincular a registros existentes e editar nomes.
+{% endcomment %}
+
+<form id="form-import" method="POST">
+    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+    <input type="hidden" name="import_type" value="{{ import_type }}">
 
     <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">{% if import_type == 'audiencias' %}Análise de Audiências{% else %}Análise de Prazos e Intimações{% endif %}</h5>
         <div class="form-check form-switch">
             <input class="form-check-input" type="checkbox" role="switch" id="selecionar-todos-switch" checked>
-            <label class="form-check-label" for="selecionar-todos-switch"><strong>Selecionar/Deselecionar Todos</strong></label>
+            <label class="form-check-label" for="selecionar-todos-switch">Importar Todos</label>
         </div>
     </div>
+
+    {% if not dados_analisados %}
+        <div class="alert alert-warning">Nenhum dado válido encontrado no arquivo para análise.</div>
+    {% endif %}
 
     {% for analise in dados_analisados %}
-    <div class="card shadow-sm mb-3 preview-card {% if analise.processo.existe %}status-exists{% else %}status-new{% endif %}">
-        <div class="card-body p-3">
-            <div class="d-flex align-items-start">
-                <div class="form-check me-3 mt-1">
+    <div class="card mb-3 preview-card">
+        <div class="card-header bg-light p-3">
+            <div class="row align-items-start">
+                <div class="col-auto pt-2">
                     <input class="form-check-input import-checkbox" type="checkbox" value="{{ forloop.counter0 }}" name="importar_indice" checked>
                 </div>
-
-                <div class="flex-grow-1">
-                    <h5 class="card-title d-flex justify-content-between">
-                        <span>Processo {{ analise.processo.numero }}</span>
-                        {% if analise.processo.existe %}<span class="badge bg-info">Vincular</span>{% else %}<span class="badge bg-success">Novo</span>{% endif %}
-                    </h5>
-                    <input type="hidden" name="processo_{{ forloop.counter0 }}_numero" value="{{ analise.processo.numero }}">
-                    <hr>
-
-                    <h6><i class="bi bi-calendar-event me-2"></i>Audiência a ser Agendada</h6>
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-7">
-                            <p class="mb-1"><strong class="text-muted">Tipo Projudi:</strong> {{ analise.audiencia.tipo }}</p>
-                            <p class="mb-0"><strong class="text-muted">Data:</strong> {{ analise.audiencia.data }} às {{ analise.audiencia.hora }}</p>
-                        </div>
-                        <div class="col-md-5">
-                             <label class="form-label fw-bold small">Categorizar como:</label>
-                             <select name="audiencia_{{ forloop.counter0 }}_tipo_movimentacao" class="form-select form-select-sm">
-                                {% for tipo in tipos_movimentacao_audiencia %}<option value="{{ tipo.pk }}" {% if tipo.pk == analise.audiencia.sugestao_tipo_id %}selected{% endif %}>{{ tipo.nome }}</option>{% endfor %}
-                            </select>
-                        </div>
+                <div class="col action-toggle-group p-2">
+                    <div class="form-check">
+                        <input class="form-check-input action-toggle" type="radio" name="processo_{{ forloop.counter0 }}_action" id="proc_arq_{{ forloop.counter0 }}" value="do_arquivo" data-target=".proc-vincular-{{ forloop.counter0 }}" checked>
+                        <label class="form-check-label" for="proc_arq_{{ forloop.counter0 }}">
+                            <strong>Processo do Arquivo:</strong> {{ analise.processo.numero }}
+                            {% if analise.processo.existe %}<span class="badge bg-info-subtle text-info-emphasis">Existente no Sistema</span>{% else %}<span class="badge bg-success-subtle text-success-emphasis">Novo no Sistema</span>{% endif %}
+                        </label>
                     </div>
-                    <input type="hidden" name="audiencia_{{ forloop.counter0 }}_titulo" value="{{ analise.audiencia.tipo }}">
-                    <input type="hidden" name="audiencia_{{ forloop.counter0 }}_data" value="{{ analise.audiencia.data }}">
-                    <input type="hidden" name="audiencia_{{ forloop.counter0 }}_hora" value="{{ analise.audiencia.hora }}">
-                    {% with detalhes="Situação: "|add:analise.audiencia.situacao|add:"\nModalidade: "|add:analise.audiencia.modalidade|add:"\nLocal: "|add:analise.audiencia.local %}
-                        <input type="hidden" name="audiencia_{{ forloop.counter0 }}_detalhes" value="{{ detalhes }}">
-                    {% endwith %}
-
-                    <h6><i class="bi bi-people-fill me-2"></i>Partes Envolvidas</h6>
-                    {% for parte in analise.partes %}
-                    <div class="p-3 rounded mb-2 {% if parte.status == 'EXISTENTE' %}bg-info-subtle{% elif parte.status == 'NOVO' %}bg-success-subtle{% else %}bg-warning-subtle{% endif %}">
-                        <div class="row align-items-center">
-                            <div class="col-md-5"><strong>{{ parte.polo }}:</strong><br>{{ parte.nome_original }}</div>
-                            <div class="col-md-3 text-center">
-                                {% if parte.status == 'EXISTENTE' %} <span class="badge bg-info">Cliente Encontrado</span>
-                                {% elif parte.status == 'NOVO' %} <span class="badge bg-success">Novo Cliente</span>
-                                {% else %} <span class="badge bg-warning text-dark">Duplicado</span>{% endif %}
-                            </div>
-                            <div class="col-md-4">
-                                <select name="processo_{{ forloop.parentloop.counter0 }}_parte_{{ forloop.counter0 }}_acao" class="form-select form-select-sm select-acao-parte">
-                                    {% if parte.status == 'EXISTENTE' %}<option value="vincular" selected>Vincular ao existente</option><option value="criar_novo">Criar como um novo cliente</option>
-                                    {% elif parte.status == 'NOVO' %}<option value="criar_novo" selected>Criar como um novo cliente</option>
-                                    {% else %}<option value="ignorar" selected>Ignorar (duplicado)</option>{% endif %}
-                                    <option value="vincular_manual">Vincular a outro cliente...</option>
-                                    <option value="ignorar">Não importar esta parte</option>
-                                </select>
-                                <input type="hidden" name="processo_{{ forloop.parentloop.counter0 }}_parte_{{ forloop.counter0 }}_cliente_id" value="{{ parte.cliente_id|default:'' }}">
-                                <input type="hidden" name="processo_{{ forloop.parentloop.counter0 }}_parte_{{ forloop.counter0 }}_nome" value="{{ parte.nome_original }}">
-                                <input type="hidden" name="processo_{{ forloop.parentloop.counter0 }}_parte_{{ forloop.counter0 }}_polo" value="{{ parte.polo }}">
-                            </div>
-                        </div>
-                        <div class="vincular-manual-container mt-2" style="display:none;">
-                            <select name="processo_{{ forloop.parentloop.counter0 }}_parte_{{ forloop.counter0 }}_cliente_id_manual" class="form-select form-select-sm select2-vincular">
-                                <option value="">Selecione um cliente para vincular...</option>
-                                {% for cliente in todos_clientes %}<option value="{{ cliente.pk }}">{{ cliente.nome_completo }}</option>{% endfor %}
-                            </select>
-                        </div>
+                    <div class="form-check">
+                        <input class="form-check-input action-toggle" type="radio" name="processo_{{ forloop.counter0 }}_action" id="proc_vinc_{{ forloop.counter0 }}" value="vincular_existente" data-target=".proc-vincular-{{ forloop.counter0 }}">
+                        <label class="form-check-label" for="proc_vinc_{{ forloop.counter0 }}">Vincular a um processo existente (sem número ou diferente)</label>
                     </div>
-                    {% endfor %}
+                    <div class="mt-2 action-container proc-vincular-{{ forloop.counter0 }}" style="display: none;">
+                        <select name="processo_{{ forloop.counter0 }}_id_vincular" class="form-select form-select-sm select2-processo">
+                            </select>
+                    </div>
                 </div>
             </div>
+            <input type="hidden" name="processo_{{ forloop.counter0 }}_numero" value="{{ analise.processo.numero }}">
+        </div>
+
+        <div class="card-body p-3">
+            {% if import_type == 'audiencias' %}
+                <div class="row g-3">
+                    <div class="col-md-7 border-end-md">
+                        <h6><i class="bi bi-people-fill me-1"></i> Partes Envolvidas</h6>
+                        <p class="small text-muted mb-2">Marque os clientes do escritório e, se necessário, edite nomes ou vincule a cadastros existentes.</p>
+                        {% for parte in analise.partes %}
+                            <div class="border rounded p-2 mb-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="fw-bold">{{ parte.nome_original }} ({{ parte.polo }})</span>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" name="processo_{{ forloop.parentloop.counter0 }}_cliente_principal" value="{{ parte.cliente_id }}" id="is_cliente_{{ forloop.parentloop.counter0 }}_{{ forloop.counter0 }}">
+                                        <label class="form-check-label" for="is_cliente_{{ forloop.parentloop.counter0 }}_{{ forloop.counter0 }}">É nosso cliente?</label>
+                                    </div>
+                                </div>
+                                <hr class="my-2">
+                                <div class="action-toggle-group p-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input action-toggle" type="radio" name="processo_{{ forloop.parentloop.counter0 }}_parte_{{ forloop.counter0 }}_action" id="parte_nome_{{ forloop.parentloop.counter0 }}_{{ forloop.counter0 }}" value="usar_nome" data-target=".parte-editar-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}" checked>
+                                        <label class="form-check-label small" for="parte_nome_{{ forloop.parentloop.counter0 }}_{{ forloop.counter0 }}">Usar nome do arquivo (pode editar abaixo)</label>
+                                    </div>
+                                    <div class="mt-1 action-container parte-editar-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}">
+                                        <input type="text" class="form-control form-control-sm" name="processo_{{ forloop.parentloop.counter0 }}_parte_{{ forloop.counter0 }}_nome_editado" value="{{ parte.nome_original }}">
+                                    </div>
+                                    <div class="form-check mt-1">
+                                        <input class="form-check-input action-toggle" type="radio" name="processo_{{ forloop.parentloop.counter0 }}_parte_{{ forloop.counter0 }}_action" id="parte_vinc_{{ forloop.parentloop.counter0 }}_{{ forloop.counter0 }}" value="vincular_cliente" data-target=".parte-vincular-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}">
+                                        <label class="form-check-label small" for="parte_vinc_{{ forloop.parentloop.counter0 }}_{{ forloop.counter0 }}">Vincular a um cliente existente</label>
+                                    </div>
+                                    <div class="mt-1 action-container parte-vincular-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}" style="display: none;">
+                                        <select name="processo_{{ forloop.parentloop.counter0 }}_parte_{{ forloop.counter0 }}_id_vincular" class="form-select form-select-sm select2-cliente">
+                                            <option value="">Selecione um cliente...</option>
+                                            {% for c in todos_clientes %}<option value="{{ c.pk }}" {% if c.pk == parte.cliente_id %}selected{% endif %}>{{ c.nome_completo }}</option>{% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <input type="hidden" name="processo_{{ forloop.parentloop.counter0 }}_parte_{{ forloop.counter0 }}_polo" value="{{ parte.polo }}">
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <div class="col-md-5">
+                         <h6><i class="bi bi-calendar-event-fill me-1"></i> Dados da Audiência</h6>
+                         <p class="mb-2"><strong>Tipo:</strong> <input type="text" class="form-control form-control-sm" name="audiencia_{{ forloop.counter0 }}_titulo" value="{{ analise.audiencia.tipo }}"></p>
+                         <p class="mb-2"><strong>Data/Hora:</strong> {{ analise.audiencia.data }} às {{ analise.audiencia.hora }}</p>
+                         <div class="mb-2">
+                             <label class="form-label small">Categorizar como:</label>
+                             <select name="audiencia_{{ forloop.counter0 }}_tipo_movimentacao" class="form-select form-select-sm">
+                                 {% for tipo in tipos_movimentacao_audiencia %}<option value="{{ tipo.pk }}" {% if tipo.pk == analise.audiencia.sugestao_tipo_id %}selected{% endif %}>{{ tipo.nome }}</option>{% endfor %}
+                             </select>
+                         </div>
+                         <input type="hidden" name="audiencia_{{ forloop.counter0 }}_data" value="{{ analise.audiencia.data }}">
+                         <input type="hidden" name="audiencia_{{ forloop.counter0 }}_hora" value="{{ analise.audiencia.hora }}">
+                         <input type="hidden" name="audiencia_{{ forloop.counter0 }}_detalhes" value="Local: {{ analise.audiencia.local }} | Modalidade: {{ analise.audiencia.modalidade }} | Situação Projudi: {{ analise.audiencia.situacao }}">
+                    </div>
+                </div>
+
+            {% elif import_type == 'movimentacoes' %}
+                <div class="row g-3">
+                    <div class="col-md-7 border-end-md">
+                        <h6><i class="bi bi-people-fill me-1"></i> Partes Intimadas (Agrupadas)</h6>
+                        <p class="small text-muted">(Todas serão marcadas como clientes do escritório neste processo)</p>
+                        {% for parte in analise.partes %}
+                        <div class="border rounded p-2 mb-2 action-toggle-group">
+                            <div class="form-check">
+                                <input class="form-check-input action-toggle" type="radio" name="movimentacao_{{ forloop.parentloop.counter0 }}_parte_{{ forloop.counter0 }}_action" id="parte_nome_{{ forloop.parentloop.counter0 }}_{{ forloop.counter0 }}" value="usar_nome" data-target=".parte-editar-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}" checked>
+                                <label class="form-check-label small" for="parte_nome_{{ forloop.parentloop.counter0 }}_{{ forloop.counter0 }}">Usar nome do arquivo (pode editar abaixo)</label>
+                            </div>
+                            <div class="mt-1 action-container parte-editar-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}">
+                                <input type="text" class="form-control form-control-sm" name="movimentacao_{{ forloop.parentloop.counter0 }}_parte_{{ forloop.counter0 }}_nome_editado" value="{{ parte.nome }}">
+                            </div>
+                            <div class="form-check mt-1">
+                                <input class="form-check-input action-toggle" type="radio" name="movimentacao_{{ forloop.parentloop.counter0 }}_parte_{{ forloop.counter0 }}_action" id="parte_vinc_{{ forloop.parentloop.counter0 }}_{{ forloop.counter0 }}" value="vincular_cliente" data-target=".parte-vincular-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}">
+                                <label class="form-check-label small" for="parte_vinc_{{ forloop.parentloop.counter0 }}_{{ forloop.counter0 }}">Vincular a um cliente existente</label>
+                            </div>
+                            <div class="mt-1 action-container parte-vincular-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}" style="display: none;">
+                                <select name="movimentacao_{{ forloop.parentloop.counter0 }}_parte_{{ forloop.counter0 }}_id_vincular" class="form-select form-select-sm select2-cliente">
+                                    <option value="">Selecione um cliente...</option>
+                                    {% for c in todos_clientes %}<option value="{{ c.pk }}" {% if c.pk == parte.cliente_id %}selected{% endif %}>{{ c.nome_completo }}</option>{% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="col-md-5">
+                        <h6><i class="bi bi-hourglass-split me-1"></i> Detalhes do Prazo</h6>
+                        <div class="alert alert-secondary p-2 small">
+                            <strong>Postagem:</strong> {{ analise.movimentacao.dtPostagem }}<br>
+                            <strong>Intimação:</strong> {{ analise.movimentacao.dataIntimacao }}<br>
+                            <strong>Prazo Final:</strong> {{ analise.movimentacao.prazo }}
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label fw-bold">Categorizar como:</label>
+                            <select name="movimentacao_{{ forloop.counter0 }}_tipo" class="form-select">
+                                <option value="">Selecione...</option>
+                                {% for tipo in todos_tipos_movimentacao %}<option value="{{ tipo.pk }}">{{ tipo.nome }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <input type="hidden" name="movimentacao_{{ forloop.counter0 }}_postagem" value="{{ analise.movimentacao.dtPostagem }}">
+                        <input type="hidden" name="movimentacao_{{ forloop.counter0 }}_intimacao" value="{{ analise.movimentacao.dataIntimacao }}">
+                        <input type="hidden" name="movimentacao_{{ forloop.counter0 }}_prazo" value="{{ analise.movimentacao.prazo }}">
+                    </div>
+                </div>
+            {% endif %}
         </div>
     </div>
-    {% empty %}
-        <div class="alert alert-warning">Nenhuma audiência encontrada nos dados do JSON.</div>
     {% endfor %}
-    <div class="text-end mt-4"><button type="submit" class="btn btn-success btn-lg"><i class="bi bi-check-all me-1"></i> Importar Selecionados</button></div>
+
+    <div class="d-flex justify-content-end mt-4">
+        <button type="submit" class="btn btn-success btn-lg">
+            <i class="bi bi-check-all me-1"></i> Confirmar e Importar Selecionados
+        </button>
+    </div>
 </form>

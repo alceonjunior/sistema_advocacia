@@ -1,0 +1,113 @@
+{% comment %}
+Arquivo: _prazo_calculator_js.html (NOVO)
+Este script modular contém toda a lógica para o cálculo inteligente de prazos,
+considerando dias úteis e corridos. Ele é projetado para ser incluído em
+qualquer página que utilize o modal de movimentações.
+{% endcomment %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Converte o JSON de dados dos tipos de movimentação do Django para um objeto JavaScript.
+    // A variável 'dados_tipos_movimentacao_json' deve ser passada pela view que renderiza a página.
+    const dadosTiposMovimentacao = JSON.parse('{{ dados_tipos_movimentacao_json|escapejs }}' || '{}');
+
+    // Função genérica que configura a lógica de cálculo para um modal (seja de adição ou edição).
+    function setupPrazoCalculator(modalSelector) {
+        const modal = document.querySelector(modalSelector);
+        if (!modal) return; // Se o modal não existir na página, não faz nada.
+
+        // Mapeia os elementos do formulário dentro do modal específico pelo seu atributo 'name'.
+        const dataPublicacaoEl = modal.querySelector('[name="data_publicacao"]');
+        const dataIntimacaoEl = modal.querySelector('[name="data_intimacao"]');
+        const dataInicioPrazoEl = modal.querySelector('[name="data_inicio_prazo"]');
+        const dataPrazoFinalEl = modal.querySelector('[name="data_prazo_final"]');
+        const tipoMovimentacaoEl = modal.querySelector('[name="tipo_movimentacao"]');
+
+        // --- Funções Auxiliares para Manipulação de Datas ---
+
+        // Converte uma string de data (YYYY-MM-DD) para um objeto Date, evitando problemas de fuso horário.
+        const toDate = (dateString) => new Date(dateString + 'T12:00:00Z');
+
+        // Formata um objeto Date de volta para a string YYYY-MM-DD que o input[type=date] espera.
+        const formatDate = (date) => date ? date.toISOString().split('T')[0] : '';
+
+        /**
+         * Adiciona uma quantidade de dias a uma data inicial.
+         * @param {Date} startDate - A data de início do cálculo.
+         * @param {number} days - O número de dias a adicionar.
+         * @param {boolean} countBusinessDays - Se true, conta apenas dias úteis (seg-sex).
+         * @returns {Date} A nova data calculada.
+         */
+        const addDays = (startDate, days, countBusinessDays) => {
+            let currentDate = new Date(startDate.valueOf());
+            if (countBusinessDays) {
+                let addedDays = 0;
+                while (addedDays < days) {
+                    currentDate.setDate(currentDate.getDate() + 1);
+                    const dayOfWeek = currentDate.getDay(); // 0 = Domingo, 6 = Sábado
+                    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                        addedDays++;
+                    }
+                }
+            } else { // Dias corridos
+                currentDate.setDate(currentDate.getDate() + days);
+            }
+            return currentDate;
+        };
+
+        /**
+         * Encontra o próximo dia útil a partir de uma data.
+         * @param {Date} startDate - A data de início da busca.
+         * @returns {Date} O próximo dia útil.
+         */
+        const getNextBusinessDay = (startDate) => {
+            let nextDay = new Date(startDate.valueOf());
+            nextDay.setDate(nextDay.getDate() + 1);
+            let dayOfWeek = nextDay.getDay();
+            if (dayOfWeek === 6) nextDay.setDate(nextDay.getDate() + 2); // Se for Sábado, pula para Segunda.
+            else if (dayOfWeek === 0) nextDay.setDate(nextDay.getDate() + 1); // Se for Domingo, pula para Segunda.
+            return nextDay;
+        };
+
+        // --- Função Principal que Orquestra os Cálculos ---
+        function calcularTudo() {
+            // Passo 1: Sugere a Data da Intimação com base na Data de Publicação,
+            // mas apenas se a intimação ainda não tiver sido preenchida.
+            if (dataPublicacaoEl.value && !dataIntimacaoEl.value) {
+                dataIntimacaoEl.value = dataPublicacaoEl.value;
+            }
+
+            // Passo 2: Sugere o Primeiro Dia do Prazo (próximo dia útil) com base na Data da Intimação.
+            if (dataIntimacaoEl.value) {
+                const intimacaoDate = toDate(dataIntimacaoEl.value);
+                dataInicioPrazoEl.value = formatDate(getNextBusinessDay(intimacaoDate));
+            } else {
+                dataInicioPrazoEl.value = ''; // Limpa o campo se a data de intimação for removida.
+            }
+
+            // Passo 3: Calcula a Data do Prazo Final com base no Tipo de Movimentação selecionado.
+            const tipoId = tipoMovimentacaoEl.value;
+            const tipoInfo = dadosTiposMovimentacao[tipoId];
+
+            if (dataInicioPrazoEl.value && tipoInfo && tipoInfo.dias_prazo) {
+                const inicioPrazoDate = toDate(dataInicioPrazoEl.value);
+                const countBusinessDays = tipoInfo.tipo_contagem === 'UTEIS';
+
+                // Subtrai 1, pois a contagem de prazo geralmente inclui o dia de início.
+                const prazoFinalDate = addDays(inicioPrazoDate, tipoInfo.dias_prazo - 1, countBusinessDays);
+                dataPrazoFinalEl.value = formatDate(prazoFinalDate);
+            }
+        }
+
+        // Adiciona os "escutadores" de eventos para acionar o cálculo sempre que um campo relevante for alterado.
+        if(dataPublicacaoEl) dataPublicacaoEl.addEventListener('change', () => { dataIntimacaoEl.value = dataPublicacaoEl.value; calcularTudo(); });
+        if(dataIntimacaoEl) dataIntimacaoEl.addEventListener('change', calcularTudo);
+        if(tipoMovimentacaoEl) tipoMovimentacaoEl.addEventListener('change', calcularTudo);
+    }
+
+    // Inicializa a lógica de cálculo para ambos os modais (Adicionar e Editar)
+    // para garantir que a funcionalidade esteja disponível em ambos os contextos.
+    setupPrazoCalculator('#adicionarMovimentacaoModal');
+    setupPrazoCalculator('#movimentacaoModal');
+});
+</script>

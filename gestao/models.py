@@ -1,50 +1,32 @@
 # gestao/models.py
 import re
-
-# --- Imports Necessários ---
-# Importações padrão do Django para criar modelos e gerenciar URLs.
-from django.db import models
-from django.conf import settings
-from django.urls import reverse
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-from simple_history.models import HistoricalRecords
-
-# Import para relacionamentos genéricos, mantido por compatibilidade.
-from django.contrib.contenttypes.fields import GenericForeignKey
-from django.contrib.contenttypes.models import ContentType
-
-# Import para registrar o histórico de alterações em cada registro. Essencial para auditoria.
-from simple_history.models import HistoricalRecords
-
-# Imports para manipulação de datas e valores decimais.
 from datetime import date, timedelta
-from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 
-# Import do CKEditor para campos de texto rico.
 from ckeditor_uploader.fields import RichTextUploadingField
+from dateutil.relativedelta import relativedelta
+from django.conf import settings
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
+from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.urls import reverse
+from simple_history.models import HistoricalRecords
 
 
-# --- Modelos de Base (Entidades Principais) ---
-# Esta seção define as entidades fundamentais que são usadas em todo o sistema,
-# como Cliente e Perfil de Usuário. Eles permanecem como a base do sistema.
+# ==============================================================================
+# SEÇÃO 1: MODELOS DE BASE (ENTIDADES PRINCIPAIS)
+# ==============================================================================
 
 class Cliente(models.Model):
-    """Representa um cliente do escritório, seja pessoa física ou jurídica, com todos os campos necessários para qualificação processual."""
-
-    # --- Choices (Opções Pré-definidas) ---
+    """Representa um cliente do escritório, seja pessoa física ou jurídica."""
     TIPO_PESSOA_CHOICES = [('PF', 'Pessoa Física'), ('PJ', 'Pessoa Jurídica')]
-    ESTADO_CIVIL_CHOICES = [
-        ('SOLTEIRO', 'Solteiro(a)'),
-        ('CASADO', 'Casado(a)'),
-        ('DIVORCIADO', 'Divorciado(a)'),
-        ('VIUVO', 'Viúvo(a)'),
-        ('UNIAO_ESTAVEL', 'União Estável'),
-    ]
+    ESTADO_CIVIL_CHOICES = [('SOLTEIRO', 'Solteiro(a)'), ('CASADO', 'Casado(a)'), ('DIVORCIADO', 'Divorciado(a)'),
+                            ('VIUVO', 'Viúvo(a)'), ('UNIAO_ESTAVEL', 'União Estável')]
     ESTADOS_BRASILEIROS_CHOICES = [
-        ('AC', 'Acre'), ('AL', 'Alagoas'), ('AP', 'Amapá'), ('AM', 'Amazonas'),
-        ('BA', 'Bahia'), ('CE', 'Ceará'), ('DF', 'Distrito Federal'), ('ES', 'Espírito Santo'),
+        ('AC', 'Acre'), ('AL', 'Alagoas'), ('AP', 'Amapá'), ('AM', 'Amazonas'), ('BA', 'Bahia'), ('CE', 'Ceará'),
+        ('DF', 'Distrito Federal'), ('ES', 'Espírito Santo'),
         ('GO', 'Goiás'), ('MA', 'Maranhão'), ('MT', 'Mato Grosso'), ('MS', 'Mato Grosso do Sul'),
         ('MG', 'Minas Gerais'), ('PA', 'Pará'), ('PB', 'Paraíba'), ('PR', 'Paraná'),
         ('PE', 'Pernambuco'), ('PI', 'Piauí'), ('RJ', 'Rio de Janeiro'), ('RN', 'Rio Grande do Norte'),
@@ -52,23 +34,18 @@ class Cliente(models.Model):
         ('SP', 'São Paulo'), ('SE', 'Sergipe'), ('TO', 'Tocantins')
     ]
 
-    # --- Bloco 1: Dados Fundamentais ---
     nome_completo = models.CharField(max_length=255, verbose_name="Nome Completo / Razão Social")
     tipo_pessoa = models.CharField(max_length=2, choices=TIPO_PESSOA_CHOICES, default='PF',
                                    verbose_name="Tipo de Pessoa")
     cpf_cnpj = models.CharField(max_length=18, unique=True, blank=True, null=True, verbose_name="CPF/CNPJ")
     email = models.EmailField(max_length=255, blank=True, null=True, verbose_name="E-mail")
     telefone_principal = models.CharField(max_length=20, blank=True, null=True, verbose_name="Telefone Principal")
-
-    # --- Bloco 2: Qualificação Pessoa Física (PF) ---
     data_nascimento = models.DateField(blank=True, null=True, verbose_name="Data de Nascimento")
     nacionalidade = models.CharField(max_length=100, blank=True, null=True, default="Brasileiro(a)",
                                      verbose_name="Nacionalidade")
     estado_civil = models.CharField(max_length=20, choices=ESTADO_CIVIL_CHOICES, blank=True, null=True,
                                     verbose_name="Estado Civil")
     profissao = models.CharField(max_length=255, blank=True, null=True, verbose_name="Profissão")
-
-    # --- Bloco 3: Endereço ---
     cep = models.CharField(max_length=9, blank=True, null=True, verbose_name="CEP")
     logradouro = models.CharField(max_length=255, blank=True, null=True, verbose_name="Logradouro (Rua, Av.)")
     numero = models.CharField(max_length=20, blank=True, null=True, verbose_name="Número")
@@ -77,29 +54,23 @@ class Cliente(models.Model):
     cidade = models.CharField(max_length=100, blank=True, null=True, verbose_name="Cidade")
     estado = models.CharField(max_length=2, choices=ESTADOS_BRASILEIROS_CHOICES, blank=True, null=True,
                               verbose_name="Estado (UF)")
-
-    # --- Bloco 4: Representação Pessoa Jurídica (PJ) ---
     representante_legal = models.CharField(max_length=255, blank=True, null=True,
                                            verbose_name="Nome do Representante Legal")
     cpf_representante_legal = models.CharField(max_length=14, blank=True, null=True,
                                                verbose_name="CPF do Representante")
-
-    # --- Bloco 5: Dados de Controle ---
-    is_cliente = models.BooleanField(default=True, verbose_name="É um cliente?") # NOVO CAMPO ADICIONADO
-
+    is_cliente = models.BooleanField(default=True, verbose_name="É um cliente?")
     data_cadastro = models.DateField(auto_now_add=True, verbose_name="Data de Cadastro", editable=False, null=True,
                                      db_index=True)
     history = HistoricalRecords()
+
+    class Meta:
+        ordering = ['nome_completo']
 
     def __str__(self):
         return self.nome_completo
 
     @property
     def qualificacao(self):
-        """
-        Gera o texto de qualificação completo para uso em documentos,
-        adaptando-se para PF ou PJ e tratando campos vazios.
-        """
         if self.tipo_pessoa == 'PF':
             partes = [self.nome_completo]
             if self.nacionalidade: partes.append(self.nacionalidade)
@@ -114,7 +85,7 @@ class Cliente(models.Model):
                 if self.cep: endereco += f", CEP: {self.cep}"
                 partes.append(endereco)
             return ", ".join(filter(None, partes))
-        else:  # Pessoa Jurídica
+        else:
             partes = [self.nome_completo]
             if self.cpf_cnpj: partes.append(f"inscrita no CNPJ sob o nº {self.cpf_cnpj}")
             if self.logradouro:
@@ -129,53 +100,38 @@ class Cliente(models.Model):
 
     @property
     def telefone_principal_digits(self):
-        """Retorna apenas os dígitos do telefone principal, para uso em links como o do WhatsApp."""
         if not self.telefone_principal:
             return ""
         return re.sub(r'\D', '', str(self.telefone_principal))
 
-    class Meta:
-        ordering = ['nome_completo']
-
 
 class UsuarioPerfil(models.Model):
-    """ Estende o modelo de usuário padrão do Django com informações específicas do escritório. """
+    """Estende o modelo de usuário padrão do Django com informações específicas do escritório."""
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="perfil")
-
-    # CAMPOS NOVOS E APRIMORADOS
     cpf = models.CharField(max_length=14, null=True, blank=True, verbose_name="CPF")
     oab = models.CharField(max_length=20, null=True, blank=True, verbose_name="Nº da OAB (ex: 12345/PR)")
     telefone = models.CharField(max_length=20, null=True, blank=True, verbose_name="Telefone")
     data_admissao = models.DateField(null=True, blank=True, verbose_name="Data de Admissão")
     foto = models.ImageField(upload_to='fotos_perfil/', null=True, blank=True, verbose_name="Foto de Perfil")
-
-    # Campo 'cargo' mantido por compatibilidade, mas o ideal é usar os Grupos do Django
     cargo = models.CharField(max_length=20, choices=[('ADVOGADO', 'Advogado(a)'), ('ESTAGIARIO', 'Estagiário(a)')],
                              null=True, blank=True)
-
     history = HistoricalRecords()
 
     def __str__(self):
         return self.user.username
 
 
-# ==========================================================
-# ↓↓↓ SINAL PARA CRIAÇÃO AUTOMÁTICA DE PERFIL ↓↓↓
-# Adicione este código no final do seu models.py
-# ==========================================================
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
 def criar_ou_atualizar_perfil_usuario(sender, instance, created, **kwargs):
-    """
-    Cria um perfil de usuário automaticamente toda vez que um novo usuário é criado.
-    """
+    """Cria um perfil de usuário automaticamente toda vez que um novo usuário é criado."""
     if created:
         UsuarioPerfil.objects.create(user=instance)
     instance.perfil.save()
 
 
-# --- Modelos de Estrutura e Suporte ---
-# Estes modelos servem para categorizar e organizar informações que se repetem.
-# A modelagem normalizada aqui evita a repetição de strings e facilita a manutenção.
+# ==============================================================================
+# SEÇÃO 2: MODELOS DE SUPORTE E CATEGORIZAÇÃO
+# ==============================================================================
 
 class AreaProcesso(models.Model):
     """Categoriza as grandes áreas do direito (Cível, Criminal, etc.)."""
@@ -202,21 +158,6 @@ class TipoServico(models.Model):
     def __str__(self): return self.nome
 
 
-class TipoMovimentacao(models.Model):
-    """Define os tipos de andamentos que podem ocorrer em um processo ou tarefa."""
-    nome = models.CharField(max_length=200, unique=True, verbose_name="Nome do Tipo de Movimentação")
-    sugestao_dias_prazo = models.PositiveIntegerField(null=True, blank=True, verbose_name="Sugestão de Dias para Prazo")
-    history = HistoricalRecords()
-
-    class Meta:
-        ordering = ['nome'] # <-- LINHA ADICIONADA AQUI
-
-    def __str__(self): return self.nome
-
-
-
-# CORREÇÃO DE ORDEM: ModeloDocumento foi movido para ANTES de Documento
-# para resolver o NameError.
 class ModeloDocumento(models.Model):
     """Representa um modelo de documento (template) que pode ser reutilizado."""
 
@@ -236,11 +177,12 @@ class ModeloDocumento(models.Model):
     def __str__(self): return self.titulo
 
 
-# --- Modelo Principal: Processo (Totalmente Refatorado) ---
+# ==============================================================================
+# SEÇÃO 3: MODELOS OPERACIONAIS PRINCIPAIS
+# ==============================================================================
 
 class Processo(models.Model):
     """Modelo central que consolida todas as informações de um caso judicial."""
-    # Seção de CHOICES: Centraliza as opções para os campos de escolha.
     STATUS_CHOICES = [('ATIVO', 'Ativo'), ('SUSPENSO', 'Suspenso'), ('ARQUIVADO', 'Arquivado'), ('EXTINTO', 'Extinto'),
                       ('EM_RECURSO', 'Em Recurso'), ('ENCERRADO', 'Encerrado com Resolução')]
     FASE_CHOICES = [('POSTULATORIA', 'Postulatória'), ('INSTRUTORIA', 'Instrutória'), ('DECISORIA', 'Decisória'),
@@ -254,7 +196,6 @@ class Processo(models.Model):
                          ('PARCIALMENTE', 'Parcialmente Procedente'), ('ACORDO', 'Acordo'),
                          ('EXTINTO', 'Extinto sem mérito')]
 
-    # Bloco 1: Informações Básicas
     numero_processo = models.CharField("Número do Processo (CNJ)", max_length=25, blank=True, null=True,
                                        help_text="Formato: 0000000-00.0000.0.00.0000")
     tipo_acao = models.ForeignKey(TipoAcao, on_delete=models.SET_NULL, null=True, blank=True, related_name="processos",
@@ -267,28 +208,20 @@ class Processo(models.Model):
     segredo_justica = models.BooleanField("Segredo de Justiça", default=False)
     justica_gratuita = models.BooleanField("Justiça Gratuita", default=False)
     prioridade_tramitacao = models.BooleanField("Prioridade na Tramitação", default=False)
-
-    # Bloco 2: Dados do Juízo
     tribunal = models.CharField("Tribunal", max_length=10, choices=TRIBUNAL_CHOICES, blank=True, null=True)
     vara_comarca_orgao = models.CharField("Órgão Julgador (Vara/Comarca)", max_length=255, blank=True, null=True)
     juiz_responsavel = models.CharField("Juiz Responsável", max_length=200, blank=True, null=True)
     grau_jurisdicao = models.CharField("Grau de Jurisdição", max_length=20, choices=GRAU_CHOICES, default='PRIMEIRO')
-
-    # Bloco 8: Informações Complementares
     observacoes_internas = models.TextField("Notas Internas (visível apenas para a equipe)", blank=True, null=True)
     numero_sei = models.CharField("Número SEI (se aplicável)", max_length=50, blank=True, null=True)
     numero_outro_sistema = models.CharField("Nº em Outro Sistema (PJe, etc.)", max_length=50, blank=True, null=True)
     link_acesso = models.URLField("Link do Processo Eletrônico", max_length=500, blank=True, null=True)
-
-    # Bloco 9: Controle de Acesso
     advogado_responsavel = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
                                              related_name="processos_responsaveis", verbose_name="Usuário Responsável")
     advogados_envolvidos = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="processos_envolvidos",
                                                   blank=True, verbose_name="Outros Colaboradores")
     nivel_permissao = models.CharField("Nível de Permissão", max_length=20, choices=PERMISSAO_CHOICES,
                                        default='PUBLICO')
-
-    # Bloco 11: Execução
     resultado = models.CharField("Resultado Final", max_length=20, choices=RESULTADO_CHOICES, blank=True, null=True)
     data_transito_em_julgado = models.DateField("Data do Trânsito em Julgado", blank=True, null=True)
     execucao_iniciada = models.BooleanField("Execução Iniciada?", default=False)
@@ -296,7 +229,6 @@ class Processo(models.Model):
                                           blank=True)
     bloqueios_penhoras = models.JSONField("Bloqueios e Penhoras", blank=True, null=True,
                                           help_text="Estrutura para registrar bloqueios. Ex: [{'sistema': 'SISBAJUD', 'valor': 1500.00}]")
-
     history = HistoricalRecords()
 
     def __str__(self):
@@ -307,66 +239,100 @@ class Processo(models.Model):
     def get_absolute_url(self):
         return reverse('gestao:detalhe_processo', kwargs={'pk': self.pk})
 
-    def get_polo_ativo_display(self): return ", ".join(
-        [p.cliente.nome_completo for p in self.partes.filter(tipo_participacao='AUTOR')]) or "N/A"
+    def get_polo_ativo_display(self):
+        return ", ".join([p.cliente.nome_completo for p in self.partes.filter(tipo_participacao='AUTOR')]) or "N/A"
 
-    def get_polo_passivo_display(self): return ", ".join(
-        [p.cliente.nome_completo for p in self.partes.filter(tipo_participacao='REU')]) or "N/A"
+    def get_polo_passivo_display(self):
+        return ", ".join([p.cliente.nome_completo for p in self.partes.filter(tipo_participacao='REU')]) or "N/A"
 
-    # --- MÉTODO ADICIONADO ---
     def get_cliente_principal_display(self):
-        """
-        Retorna o nome do cliente que o escritório representa no processo.
-        1. Prioriza a parte marcada com 'is_cliente_do_processo'.
-        2. Se não houver, retorna o primeiro autor do polo ativo.
-        3. Se não houver, retorna uma mensagem padrão.
-        """
-        # Tenta encontrar a parte explicitamente marcada como cliente
         cliente_principal = self.partes.filter(is_cliente_do_processo=True).first()
         if cliente_principal:
             return cliente_principal.cliente.nome_completo
-
-        # Se não encontrar, usa o primeiro autor como fallback (plano B)
         polo_ativo = self.partes.filter(tipo_participacao='AUTOR').first()
         if polo_ativo:
             return polo_ativo.cliente.nome_completo
-
-        # Se não houver nenhum dos dois
         return "Cliente não definido"
 
 
-# --- Modelos Relacionados ao Processo (Tabelas Auxiliares) ---
+class Servico(models.Model):
+    """Modelo para serviços extrajudiciais."""
+    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="servicos")
+    tipo_servico = models.ForeignKey(TipoServico, on_delete=models.PROTECT, related_name="servicos")
+    responsavel = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name="servicos_responsaveis", verbose_name="Responsável pelo Serviço")
+    descricao = models.CharField(max_length=255, verbose_name="Descrição Detalhada do Serviço")
+    codigo_servico_municipal = models.CharField(max_length=10, blank=True, null=True,
+                                                verbose_name="Cód. do Serviço Municipal (LC 116/03)",
+                                                help_text="Ex: 01.07, 14.01, etc.")
+    data_inicio = models.DateField(default=date.today)
+    prazo = models.DateField(null=True, blank=True, verbose_name="Prazo de Conclusão")
+    concluido = models.BooleanField(default=False, verbose_name="Concluído")
+    data_encerramento = models.DateField(null=True, blank=True, verbose_name="Data de Encerramento (para recorrentes)")
+    recorrente = models.BooleanField(default=False, verbose_name="É um serviço recorrente (mensal)?")
+    ativo = models.BooleanField(default=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ['-data_inicio']
+
+    def __str__(self):
+        return f"{self.tipo_servico} - {self.cliente}"
+
+    def get_absolute_url(self):
+        return reverse('gestao:detalhe_servico', kwargs={'pk': self.pk})
+
+
+# ==============================================================================
+# SEÇÃO 4: MODELOS DEPENDENTES (Filhos de Processo e Serviço)
+# ==============================================================================
+
+class TipoMovimentacao(models.Model):
+    """Define os tipos de andamentos, agora com lógica aprimorada para prazos."""
+    TIPO_CONTAGEM_CHOICES = [('UTEIS', 'Dias Úteis'), ('CORRIDOS', 'Dias Corridos')]
+
+    nome = models.CharField(max_length=200, unique=True, verbose_name="Nome do Tipo de Movimentação")
+    sugestao_dias_prazo = models.PositiveIntegerField(null=True, blank=True, verbose_name="Sugestão de Dias para Prazo")
+    tipo_contagem_prazo = models.CharField(max_length=10, choices=TIPO_CONTAGEM_CHOICES, default='UTEIS',
+                                           verbose_name="Tipo de Contagem do Prazo",
+                                           help_text="Define se o prazo deve ser contado em dias úteis ou corridos.")
+    fase_processual_sugerida = models.CharField(max_length=30, choices=Processo.FASE_CHOICES, null=True, blank=True,
+                                                verbose_name="Fase Processual Padrão",
+                                                help_text="Associe este tipo de movimentação a uma fase do processo para facilitar a seleção.")
+    dias_antecedencia_lembrete = models.PositiveIntegerField(null=True, blank=True,
+                                                             verbose_name="Antecedência para Lembrete (dias)",
+                                                             help_text="Ex: 3. O sistema poderá usar este valor para criar um lembrete 3 dias antes do prazo final.")
+    favorito = models.BooleanField(default=False, verbose_name="Favorito",
+                                   help_text="Marque para que este tipo apareça no topo das listas de seleção.")
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ['-favorito', 'nome']
+
+    def __str__(self):
+        return self.nome
+
+
 class ParteProcesso(models.Model):
-    """Tabela intermediária (N:N) que conecta Clientes a Processos, definindo seu papel."""
+    """Tabela intermediária que conecta Clientes a Processos, definindo seu papel."""
     TIPO_CHOICES = [('AUTOR', 'Polo Ativo'), ('REU', 'Polo Passivo'), ('TERCEIRO', 'Terceiro Interessado'),
                     ('VITIMA', 'Vítima'), ('TESTEMUNHA', 'Testemunha')]
     processo = models.ForeignKey(Processo, on_delete=models.CASCADE, related_name="partes")
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name="participacoes")
     tipo_participacao = models.CharField("Tipo de Participação", max_length=20, choices=TIPO_CHOICES)
-
-    is_cliente_do_processo = models.BooleanField(
-        default=False,
-        verbose_name="É o cliente que representamos neste processo?",
-        help_text="Marque esta opção se esta parte for o cliente do escritório neste processo específico."
-    )
-
-    # --- ADICIONE ESTE CAMPO ---
-    # ForeignKey('self') cria um relacionamento com o próprio modelo.
-    # null=True, blank=True torna o campo opcional.
-    # on_delete=models.SET_NULL para não apagar a parte se seu representante for removido.
-    representado_por = models.ForeignKey(
-        'self',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='representantes'
-    )
-
+    is_cliente_do_processo = models.BooleanField(default=False,
+                                                 verbose_name="É o cliente que representamos neste processo?",
+                                                 help_text="Marque esta opção se esta parte for o cliente do escritório neste processo específico.")
+    representado_por = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True,
+                                         related_name='representantes')
     history = HistoricalRecords()
 
-    class Meta: unique_together = ('processo', 'cliente'); ordering = ['tipo_participacao', 'cliente__nome_completo']
+    class Meta:
+        unique_together = ('processo', 'cliente')
+        ordering = ['tipo_participacao', 'cliente__nome_completo']
 
-    def __str__(self): return f"{self.cliente.nome_completo} ({self.get_tipo_participacao_display()})"
+    def __str__(self):
+        return f"{self.cliente.nome_completo} ({self.get_tipo_participacao_display()})"
 
 
 class Documento(models.Model):
@@ -390,11 +356,11 @@ class Documento(models.Model):
                                       verbose_name="Gerado a partir do Modelo")
     history = HistoricalRecords()
 
-    def __str__(self): return self.titulo
+    class Meta:
+        ordering = ['-data_criacao']
 
-    def get_absolute_url(self): return reverse('editar_documento', kwargs={'pk': self.pk})
-
-    class Meta: ordering = ['-data_criacao']
+    def __str__(self):
+        return self.titulo
 
 
 class Movimentacao(models.Model):
@@ -403,26 +369,24 @@ class Movimentacao(models.Model):
     tipo_movimentacao = models.ForeignKey(TipoMovimentacao, on_delete=models.SET_NULL, null=True, blank=True)
     titulo = models.CharField(max_length=255)
     detalhes = models.TextField(blank=True, null=True)
-    data_publicacao = models.DateField("Data do Ato/Publicação", null=True, blank=True)
-    dias_prazo = models.PositiveIntegerField(null=True, blank=True, verbose_name="Dias de Prazo")
-    data_prazo_final = models.DateField("Data do Prazo/Audiência", null=True, blank=True)
+    data_publicacao = models.DateField("Data da Publicação", null=True, blank=True)
+    data_intimacao = models.DateField("Data da Intimação", null=True, blank=True)
+    data_inicio_prazo = models.DateField("Primeiro Dia do Prazo", null=True, blank=True)
+    data_prazo_final = models.DateField("Data do Prazo Final", null=True, blank=True)
+    dias_prazo = models.PositiveIntegerField(null=True, blank=True, verbose_name="Dias de Prazo (manual)")
     responsavel = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
                                     related_name="movimentacoes_responsaveis")
     status = models.CharField(max_length=20, choices=[('PENDENTE', 'Pendente'), ('EM_ANDAMENTO', 'Em Andamento'),
                                                       ('CONCLUIDA', 'Concluída')], default='PENDENTE')
-    hora_prazo = models.TimeField("Horário", null=True, blank=True, help_text="Preencha apenas para audiências ou eventos com hora marcada.")
+    hora_prazo = models.TimeField("Horário", null=True, blank=True,
+                                  help_text="Preencha apenas para audiências ou eventos com hora marcada.")
     data_criacao = models.DateTimeField(auto_now_add=True)
-
-    link_referencia = models.URLField("Link de Referência", max_length=500, blank=True, null=True, help_text="Cole aqui o link para o andamento no sistema do tribunal, se houver.")
-
+    link_referencia = models.URLField("Link de Referência", max_length=500, blank=True, null=True,
+                                      help_text="Cole aqui o link para o andamento no sistema do tribunal, se houver.")
     history = HistoricalRecords()
 
-    def __str__(self): return self.titulo
-
-    def save(self, *args, **kwargs):
-        if self.data_publicacao and self.dias_prazo and not self.data_prazo_final:
-            self.data_prazo_final = self.data_publicacao + timedelta(days=self.dias_prazo)
-        super().save(*args, **kwargs)
+    def __str__(self):
+        return self.titulo
 
 
 class Recurso(models.Model):
@@ -437,7 +401,8 @@ class Recurso(models.Model):
     detalhes = models.TextField("Detalhes", blank=True, null=True)
     history = HistoricalRecords()
 
-    class Meta: ordering = ['-data_interposicao']
+    class Meta:
+        ordering = ['-data_interposicao']
 
 
 class Incidente(models.Model):
@@ -450,35 +415,14 @@ class Incidente(models.Model):
     data_ocorrido = models.DateField("Data", default=date.today)
     history = HistoricalRecords()
 
-    class Meta: ordering = ['-data_ocorrido']
-
-
-# --- Outros Modelos do Sistema (mantidos para integridade) ---
-class Servico(models.Model):
-    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="servicos")
-    tipo_servico = models.ForeignKey(TipoServico, on_delete=models.PROTECT, related_name="servicos")
-    responsavel = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
-                                    related_name="servicos_responsaveis", verbose_name="Responsável pelo Serviço")
-    descricao = models.CharField(max_length=255, verbose_name="Descrição Detalhada do Serviço")
-    codigo_servico_municipal = models.CharField(max_length=10, blank=True, null=True, verbose_name="Cód. do Serviço Municipal (LC 116/03)", help_text="Ex: 01.07, 14.01, etc.")
-    data_inicio = models.DateField(default=date.today)
-    prazo = models.DateField(null=True, blank=True, verbose_name="Prazo de Conclusão")
-    concluido = models.BooleanField(default=False, verbose_name="Concluído")
-    data_encerramento = models.DateField(null=True, blank=True, verbose_name="Data de Encerramento (para recorrentes)")
-    recorrente = models.BooleanField(default=False, verbose_name="É um serviço recorrente (mensal)?")
-    ativo = models.BooleanField(default=True)
-    history = HistoricalRecords()
-
-    def __str__(self): return f"{self.tipo_servico} - {self.cliente}"
-
-    def get_absolute_url(self):
-        return reverse('gestao:detalhe_servico', kwargs={'pk': self.pk})
-
-    class Meta: ordering = ['-data_inicio']
+    class Meta:
+        ordering = ['-data_ocorrido']
 
 
 class MovimentacaoServico(models.Model):
-    servico = models.ForeignKey(Servico, on_delete=models.CASCADE, related_name="movimentacoes")
+    """Registra cada andamento ou tarefa de um serviço extrajudicial."""
+    servico = models.ForeignKey(Servico, on_delete=models.CASCADE,
+                                related_name="movimentacoes_servico")  # Nome do related_name ajustado para evitar conflito
     titulo = models.CharField(max_length=255, verbose_name="Título / Resumo da Atividade")
     detalhes = models.TextField(blank=True, null=True)
     data_atividade = models.DateField(default=date.today)
@@ -491,10 +435,16 @@ class MovimentacaoServico(models.Model):
     data_criacao = models.DateTimeField(auto_now_add=True)
     history = HistoricalRecords()
 
-    def __str__(self): return self.titulo
+    def __str__(self):
+        return self.titulo
 
+
+# ==============================================================================
+# SEÇÃO 5: MODELOS FINANCEIROS
+# ==============================================================================
 
 class ContratoHonorarios(models.Model):
+    """Define um contrato financeiro, que pode estar ligado a um Processo ou Serviço."""
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
     content_object = GenericForeignKey('content_type', 'object_id')
@@ -528,8 +478,14 @@ class ContratoHonorarios(models.Model):
 
 
 class LancamentoFinanceiro(models.Model):
+    """Representa uma única conta a pagar ou a receber."""
     TIPO_CHOICES = [('RECEITA', 'Receita'), ('DESPESA', 'Despesa')]
-    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="lancamentos")
+    CATEGORIA_CHOICES = [('HONORARIOS', 'Honorários'), ('TAXAS', 'Taxas Judiciais/Administrativas'),
+                         ('CUSTAS', 'Custas Processuais'), ('ALUGUEL', 'Aluguel'), ('SALARIO', 'Salário'),
+                         ('OUTROS', 'Outros')]
+
+    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="lancamentos", null=True,
+                                blank=True)  # Cliente é opcional
     processo = models.ForeignKey(Processo, on_delete=models.CASCADE, null=True, blank=True, related_name="lancamentos")
     servico = models.ForeignKey(Servico, on_delete=models.CASCADE, null=True, blank=True, related_name="lancamentos")
     contrato = models.ForeignKey(ContratoHonorarios, on_delete=models.SET_NULL, null=True, blank=True,
@@ -538,24 +494,7 @@ class LancamentoFinanceiro(models.Model):
     valor = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Valor Devido")
     tipo = models.CharField(max_length=10, choices=TIPO_CHOICES, default='RECEITA')
     data_vencimento = models.DateField()
-
-    CATEGORIA_CHOICES = [
-        ('HONORARIOS', 'Honorários'),
-        ('TAXAS', 'Taxas Judiciais/Administrativas'),
-        ('CUSTAS', 'Custas Processuais'),
-        ('ALUGUEL', 'Aluguel'),
-        ('SALARIO', 'Salário'),
-        ('OUTROS', 'Outros'),
-        # Adicione mais categorias conforme necessário
-    ]
-    categoria = models.CharField(
-        max_length=50,
-        choices=CATEGORIA_CHOICES,
-        default='OUTROS',
-        blank=True,  # Permite que o campo seja vazio no banco de dados
-        null=True  # Permite que o campo seja NULL no banco de dados
-    )
-
+    categoria = models.CharField(max_length=50, choices=CATEGORIA_CHOICES, default='OUTROS', blank=True, null=True)
     history = HistoricalRecords()
 
     @property
@@ -578,6 +517,7 @@ class LancamentoFinanceiro(models.Model):
 
 
 class Pagamento(models.Model):
+    """Registra um pagamento efetuado para um LancamentoFinanceiro."""
     lancamento = models.ForeignKey(LancamentoFinanceiro, on_delete=models.CASCADE, related_name="pagamentos")
     data_pagamento = models.DateField(default=date.today)
     valor_pago = models.DecimalField(max_digits=12, decimal_places=2)
@@ -585,10 +525,16 @@ class Pagamento(models.Model):
     observacoes = models.TextField(blank=True, null=True)
     history = HistoricalRecords()
 
-    def __str__(self): return f"Pagamento de R$ {self.valor_pago} para {self.lancamento.descricao}"
+    def __str__(self):
+        return f"Pagamento de R$ {self.valor_pago} para {self.lancamento.descricao}"
 
+
+# ==============================================================================
+# SEÇÃO 6: MODELOS DE FERRAMENTAS E CONFIGURAÇÕES
+# ==============================================================================
 
 class CalculoJudicial(models.Model):
+    """Armazena o resultado e os parâmetros de um cálculo judicial realizado."""
     processo = models.ForeignKey(Processo, on_delete=models.CASCADE, related_name="calculos")
     descricao = models.CharField(max_length=255, default="Cálculo Padrão")
     responsavel = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
@@ -611,23 +557,19 @@ class CalculoJudicial(models.Model):
     memoria_calculo = models.JSONField()
     history = HistoricalRecords()
 
-    def __str__(self): return f"{self.descricao} (R$ {self.valor_original})"
+    class Meta:
+        ordering = ['-data_calculo']
 
-    class Meta: ordering = ['-data_calculo']
+    def __str__(self):
+        return f"{self.descricao} (R$ {self.valor_original})"
 
 
 class EscritorioConfiguracao(models.Model):
-    """
-    Armazena as configurações globais do escritório.
-    Este modelo é projetado para ter apenas uma única instância (Singleton).
-    """
+    """Armazena as configurações globais do escritório (Singleton)."""
     nome_escritorio = models.CharField(max_length=255, verbose_name="Nome do Escritório")
     cnpj = models.CharField(max_length=18, blank=True, null=True, verbose_name="CNPJ")
     inscricao_municipal = models.CharField(max_length=20, blank=True, null=True, verbose_name="Inscrição Municipal")
-
     oab_principal = models.CharField(max_length=20, blank=True, null=True, verbose_name="Inscrição OAB Principal")
-
-    # Endereço
     cep = models.CharField(max_length=9, blank=True, null=True, verbose_name="CEP")
     logradouro = models.CharField(max_length=255, blank=True, null=True, verbose_name="Logradouro")
     numero = models.CharField(max_length=20, blank=True, null=True, verbose_name="Número")
@@ -636,53 +578,39 @@ class EscritorioConfiguracao(models.Model):
     cidade = models.CharField(max_length=100, blank=True, null=True, verbose_name="Cidade")
     estado = models.CharField(max_length=2, choices=Cliente.ESTADOS_BRASILEIROS_CHOICES, blank=True, null=True,
                               verbose_name="UF")
-
-    # Contato
     telefone_contato = models.CharField(max_length=20, blank=True, null=True, verbose_name="Telefone de Contato")
     email_contato = models.EmailField(max_length=255, blank=True, null=True, verbose_name="E-mail de Contato")
-
     logo = models.ImageField(upload_to='logos/', blank=True, null=True)
-
-
-    def __str__(self):
-        return self.nome_escritorio
-
-    def save(self, *args, **kwargs):
-        # Garante que só exista uma instância deste modelo no banco de dados.
-        self.pk = 1
-        super(EscritorioConfiguracao, self).save(*args, **kwargs)
 
     class Meta:
         verbose_name = "Configuração do Escritório"
         verbose_name_plural = "Configurações do Escritório"
 
+    def __str__(self):
+        return self.nome_escritorio
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super(EscritorioConfiguracao, self).save(*args, **kwargs)
+
 
 class NotaFiscalServico(models.Model):
     """Armazena o resultado da emissão de uma NFS-e para um serviço."""
-    STATUS_CHOICES = [
-        ('PROCESSANDO', 'Em Processamento'),
-        ('ACEITO', 'Aceito'),
-        ('ERRO', 'Erro'),
-        ('CANCELADO', 'Cancelado'),
-    ]
+    STATUS_CHOICES = [('PROCESSANDO', 'Em Processamento'), ('ACEITO', 'Aceito'), ('ERRO', 'Erro'),
+                      ('CANCELADO', 'Cancelado')]
     servico = models.ForeignKey(Servico, on_delete=models.CASCADE, related_name="notas_fiscais")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PROCESSANDO')
-
-    # Dados retornados pela prefeitura
     numero_nfse = models.CharField(max_length=15, blank=True, null=True, verbose_name="Número da NFS-e")
     codigo_verificacao = models.CharField(max_length=50, blank=True, null=True, verbose_name="Código de Verificação")
     data_emissao_nfse = models.DateTimeField(blank=True, null=True, verbose_name="Data de Emissão")
-
-    # Para auditoria
     xml_enviado = models.TextField(blank=True, null=True)
     xml_recebido = models.TextField(blank=True, null=True)
     mensagem_retorno = models.TextField(blank=True, null=True)
-
     data_criacao = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"NFS-e {self.numero_nfse or '(Aguardando)'} para {self.servico}"
 
     class Meta:
         verbose_name = "Nota Fiscal de Serviço"
         verbose_name_plural = "Notas Fiscais de Serviço"
+
+    def __str__(self):
+        return f"NFS-e {self.numero_nfse or '(Aguardando)'} para {self.servico}"

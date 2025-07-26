@@ -7,24 +7,77 @@
 {{ block.super }}
 <style>
     /* Efeito de carregamento para os containers AJAX */
-    .loading-container { opacity: 0.5; transition: opacity 0.3s; position: relative; min-height: 100px; }
-    .loading-container::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 2rem; height: 2rem; border: 4px solid #f3f3f3; border-top: 4px solid var(--bs-primary); border-radius: 50%; animation: spin 1s linear infinite; }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .loading-container {
+        opacity: 0.5;
+        transition: opacity 0.3s;
+        position: relative;
+        min-height: 100px;
+    }
+    .loading-container::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 2rem;
+        height: 2rem;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid var(--bs-primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
 
     /* Estilos para a Linha do Tempo (Timeline) */
-    .timeline { list-style-type: none; padding-left: 25px; position: relative; border-left: 2px solid #e9ecef; }
-    .timeline-item { position: relative; padding-bottom: 25px; padding-left: 25px; }
-    .timeline-item:last-child { padding-bottom: 0; }
-    .timeline-marker { position: absolute; left: -14px; top: 0px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 50%; z-index: 1; border: 3px solid white; }
-    .timeline-content { background-color: #f8f9fa; border-radius: .375rem; padding: 1rem; }
-    .border-end-lg { border-right: 1px solid #dee2e6 !important; }
-    @media (max-width: 991.98px) { .border-end-lg { border-right: none !important; } }
+    .timeline {
+        list-style-type: none;
+        padding-left: 25px;
+        position: relative;
+        border-left: 2px solid #e9ecef;
+    }
+    .timeline-item {
+        position: relative;
+        padding-bottom: 25px;
+        padding-left: 25px;
+    }
+    .timeline-item:last-child {
+        padding-bottom: 0;
+    }
+    .timeline-marker {
+        position: absolute;
+        left: -14px;
+        top: 0px;
+        width: 26px;
+        height: 26px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        z-index: 1;
+        border: 3px solid white;
+    }
+    .timeline-content {
+        background-color: #f8f9fa;
+        border-radius: .375rem;
+        padding: 1rem;
+    }
+    .border-end-lg {
+        border-right: 1px solid #dee2e6 !important;
+    }
+    @media (max-width: 991.98px) {
+        .border-end-lg {
+            border-right: none !important;
+        }
+    }
 </style>
 {% endblock %}
 
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
         <h1 class="h2 mb-0 d-flex align-items-center gap-2"><i class="bi bi-briefcase-fill text-primary"></i> Painel do Serviço</h1>
         <p class="text-muted mb-0" title="{{ servico.descricao }}">{{ servico.descricao|truncatechars:70 }}</p>
@@ -34,7 +87,9 @@
             <i class="bi bi-receipt-cutoff me-1"></i> Emitir NFS-e
         </button>
 
-        {% if not servico.concluido %}<button id="btn-concluir-servico" type="button" class="btn btn-success"><i class="bi bi-check-circle-fill me-1"></i> Concluir Serviço</button>{% endif %}
+        {% if not servico.concluido %}
+            <button id="btn-concluir-servico" type="button" class="btn btn-success"><i class="bi bi-check-circle-fill me-1"></i> Concluir Serviço</button>
+        {% endif %}
         <a href="{% url 'gestao:editar_servico' pk=servico.pk %}" class="btn btn-outline-secondary"><i class="bi bi-pencil"></i> Editar</a>
         <a href="{% url 'gestao:lista_servicos' %}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle"></i> Voltar</a>
     </div>
@@ -85,34 +140,59 @@
     </div>
 </div>
 
+{# Modal para Adicionar Andamento - CORRIGIDO para usar o formulário correto #}
 <div class="modal fade" id="addAndamentoModal" tabindex="-1">
-    <div class="modal-dialog"><div class="modal-content">
-        <form method="post" action="{% url 'gestao:adicionar_movimentacao_servico_ajax' servico_pk=servico.pk %}" data-ajax-form="true" data-reload-container="#andamento-timeline-container" data-reload-url="{% url 'gestao:atualizar_historico_servico_partial' servico_pk=servico.pk %}">
-            {% csrf_token %}
-            <div class="modal-header"><h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Adicionar Novo Andamento</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-            <div class="modal-body">
-                <div class="alert alert-danger d-none p-2 small form-errors"></div>
-                <div class="mb-3">{{ form_movimentacao.titulo.label_tag }} {{ form_movimentacao.titulo }}</div>
-                <div class="mb-3">{{ form_movimentacao.detalhes.label_tag }} {{ form_movimentacao.detalhes }}</div>
-                <div class="row g-3"><div class="col-md-6">{{ form_movimentacao.data_atividade.label_tag }} {{ form_movimentacao.data_atividade }}</div><div class="col-md-6">{{ form_movimentacao.status.label_tag }} {{ form_movimentacao.status }}</div></div>
-                <div class="mt-3">{{ form_movimentacao.responsavel.label_tag }} {{ form_movimentacao.responsavel }}</div>
-            </div>
-            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-primary">Salvar Atividade</button></div>
-        </form>
-    </div></div>
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'gestao:adicionar_movimentacao_servico_ajax' servico_pk=servico.pk %}" data-ajax-form="true" data-reload-container="#andamento-timeline-container" data-reload-url="{% url 'gestao:atualizar_historico_servico_partial' servico_pk=servico.pk %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Adicionar Novo Andamento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger d-none p-2 small form-errors"></div>
+                    <div class="mb-3">{{ form_movimentacao_servico.titulo.label_tag }} {{ form_movimentacao_servico.titulo }}</div>
+                    <div class="mb-3">{{ form_movimentacao_servico.detalhes.label_tag }} {{ form_movimentacao_servico.detalhes }}</div>
+                    <div class="row g-3">
+                        <div class="col-md-6">{{ form_movimentacao_servico.data_atividade.label_tag }} {{ form_movimentacao_servico.data_atividade }}</div>
+                        <div class="col-md-6">{{ form_movimentacao_servico.status.label_tag }} {{ form_movimentacao_servico.status }}</div>
+                    </div>
+                    <div class="mt-3">{{ form_movimentacao_servico.responsavel.label_tag }} {{ form_movimentacao_servico.responsavel }}</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Atividade</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
+{# Modal para Concluir Serviço #}
 <div class="modal fade" id="concluirServicoModal" tabindex="-1">
-  <div class="modal-dialog"><div class="modal-content">
-      <form action="{% url 'gestao:concluir_servico' pk=servico.pk %}" method="post">
-          {% csrf_token %}
-          <div class="modal-header"><h5 class="modal-title"><i class="bi bi-check-circle-fill me-2"></i>Concluir Serviço</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-          <div class="modal-body"><p>Você tem certeza?</p>{{ financeiro.form_concluir.as_p }}</div>
-          <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-success">Sim, Concluir</button></div>
-      </form>
-  </div></div>
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{% url 'gestao:concluir_servico' pk=servico.pk %}" method="post">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-check-circle-fill me-2"></i>Concluir Serviço</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Você tem certeza que deseja marcar este serviço como concluído?</p>
+                    {{ financeiro.form_concluir.as_p }}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Sim, Concluir</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
+{# Inclusão dos outros modais e seus scripts #}
 {% include 'gestao/partials/_modal_pagamento.html' %}
 {% include 'gestao/partials/_modal_editar_movimentacao_servico.html' %}
 {% include 'gestao/partials/_modal_emitir_nfse.html' %}
@@ -177,11 +257,7 @@ $(function() {
 });
 </script>
 
-{% comment %}
-================================================================================
-SUBSTITUIÇÃO DOS SCRIPTS ANTIGOS PELO NOVO SCRIPT MODULAR
-================================================================================
-{% endcomment %}
+{# Inclusão dos scripts modulares para AJAX e interatividade #}
 {% include 'gestao/partials/_modal_loader_js.html' %}
 {% include 'gestao/partials/_detalhe_financeiro_js.html' %}
 

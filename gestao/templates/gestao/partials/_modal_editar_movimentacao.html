@@ -1,74 +1,75 @@
+{% comment %}
+Arquivo: _modal_editar_movimentacao.html (VERSÃO CORRIGIDA)
+Remove o uso dos filtros 'add_class' e 'attr' que exigem a biblioteca 'widget_tweaks'.
+Os campos agora são renderizados da forma padrão do Django, usando as classes
+definidas diretamente no MovimentacaoForm em forms.py.
+{% endcomment %}
+
 <div class="modal fade" id="movimentacaoModal" tabindex="-1" aria-labelledby="movimentacaoModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <form id="formEditarMovimentacao" method="post" action="">
                 {% csrf_token %}
                 <div class="modal-header">
-                    <h5 class="modal-title d-flex align-items-center gap-2" id="movimentacaoModalLabel">
-                        <i class="bi bi-pencil-square text-primary"></i>
-                        Visualizar / Editar Movimentação
-                    </h5>
+                    <h5 class="modal-title d-flex align-items-center gap-2" id="movimentacaoModalLabel"><i class="bi bi-pencil-square text-primary"></i> Visualizar / Editar Movimentação</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-
                 <div class="modal-body">
                     <div class="row g-3">
-                        <div class="col-md-6">
-                            <label for="{{ form_movimentacao.tipo_movimentacao.id_for_label }}" class="form-label">Tipo de Movimentação</label>
+                        <div class="col-md-6 mb-3">
+                            <label for="id_tipo_movimentacao" class="form-label fw-bold">{{ form_movimentacao.tipo_movimentacao.label }}</label>
                             {{ form_movimentacao.tipo_movimentacao }}
                         </div>
-                        <div class="col-md-6">
-                            <label for="{{ form_movimentacao.titulo.id_for_label }}" class="form-label">Título</label>
+                        <div class="col-md-6 mb-3">
+                            <label for="id_titulo" class="form-label">{{ form_movimentacao.titulo.label }}</label>
                             {{ form_movimentacao.titulo }}
                         </div>
                     </div>
-
-                    <hr class="my-3">
-
+                    <hr>
+                    <h6 class="text-primary">Cálculo de Prazo</h6>
                     <div class="row g-3">
-                        <div class="col-md-6">
-                            <label for="{{ form_movimentacao.data_prazo_final.id_for_label }}" class="form-label">Data do Prazo / Audiência</label>
+                        <div class="col-md-6 col-lg-3 mb-3">
+                            <label for="id_data_publicacao" class="form-label">{{ form_movimentacao.data_publicacao.label }}</label>
+                            {{ form_movimentacao.data_publicacao }}
+                        </div>
+                        <div class="col-md-6 col-lg-3 mb-3">
+                            <label for="id_data_intimacao" class="form-label">{{ form_movimentacao.data_intimacao.label }}</label>
+                            {{ form_movimentacao.data_intimacao }}
+                        </div>
+                        <div class="col-md-6 col-lg-3 mb-3">
+                            <label for="id_data_inicio_prazo" class="form-label">{{ form_movimentacao.data_inicio_prazo.label }}</label>
+                            {{ form_movimentacao.data_inicio_prazo }}
+                        </div>
+                        <div class="col-md-6 col-lg-3 mb-3">
+                            <label for="id_data_prazo_final" class="form-label fw-bold">Data do Prazo Final</label>
                             {{ form_movimentacao.data_prazo_final }}
                         </div>
-                        <div class="col-md-6 mb-3 d-none" id="div_id_hora_prazo">
-                            <label for="{{ form_movimentacao.hora_prazo.id_for_label }}" class="form-label">Horário</label>
-                            {{ form_movimentacao.hora_prazo }}
-                        </div>
                     </div>
-
+                    <hr>
                     <div class="mb-3">
-                        <label for="{{ form_movimentacao.detalhes.id_for_label }}" class="form-label">Detalhes da Movimentação</label>
+                        <label for="id_detalhes" class="form-label">{{ form_movimentacao.detalhes.label }}</label>
                         {{ form_movimentacao.detalhes }}
                     </div>
-                     <div class="mb-3">
-                        <label for="{{ form_movimentacao.link_referencia.id_for_label }}" class="form-label">Link de Referência Externo</label>
+                    <div class="mb-3">
+                        <label for="id_link_referencia" class="form-label">{{ form_movimentacao.link_referencia.label }}</label>
                         {{ form_movimentacao.link_referencia }}
                     </div>
-
-                    <hr class="my-3">
-
                     <div class="row g-3">
-                        <div class="col-md-6">
-                            <label for="{{ form_movimentacao.responsavel.id_for_label }}" class="form-label">Responsável</label>
+                        <div class="col-md-6 mb-3">
+                            <label for="id_responsavel" class="form-label">{{ form_movimentacao.responsavel.label }}</label>
                             {{ form_movimentacao.responsavel }}
                         </div>
-                        <div class="col-md-6">
-                            <label for="{{ form_movimentacao.status.id_for_label }}" class="form-label">Status</label>
+                        <div class="col-md-6 mb-3">
+                            <label for="id_status" class="form-label">{{ form_movimentacao.status.label }}</label>
                             {{ form_movimentacao.status }}
                         </div>
                     </div>
-                    </div>
-
+                </div>
                 <div class="modal-footer justify-content-between">
                     <div>
-                        <a id="btn-comunicar-whatsapp" href="#" target="_blank" class="btn btn-success" style="display: none;">
-                            <i class="bi bi-whatsapp"></i> Comunicar Cliente
-                        </a>
+                        <a id="btn-comunicar-whatsapp" href="#" target="_blank" class="btn btn-success" style="display: none;"><i class="bi bi-whatsapp"></i> Comunicar Cliente</a>
                         <form id="formExcluirMovimentacao" method="post" action="" class="d-inline">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Tem certeza que deseja excluir esta movimentação?');">
-                                <i class="bi bi-trash-fill"></i> Excluir
-                            </button>
+                            {% csrf_token %}<button type="submit" class="btn btn-outline-danger" onclick="return confirm('Tem certeza?');"><i class="bi bi-trash-fill"></i> Excluir</button>
                         </form>
                     </div>
                     <div>

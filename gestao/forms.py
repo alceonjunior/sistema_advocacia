@@ -324,19 +324,26 @@ class MovimentacaoForm(forms.ModelForm):
 
     class Meta:
         model = Movimentacao
+        # --- LISTA DE CAMPOS ATUALIZADA ---
         fields = [
-            'tipo_movimentacao', 'titulo', 'detalhes', 'data_publicacao',
-            'dias_prazo', 'data_prazo_final', 'hora_prazo', 'responsavel',
-            'status', 'link_referencia'
+            'tipo_movimentacao', 'titulo', 'detalhes',
+            'data_publicacao', 'data_intimacao', 'data_inicio_prazo', 'data_prazo_final',
+            'dias_prazo', 'hora_prazo', 'responsavel', 'status', 'link_referencia'
         ]
-        # ... o dicionário de widgets permanece o mesmo ...
+        # ------------------------------------
         widgets = {
             'tipo_movimentacao': forms.Select(attrs={'class': 'form-select select2'}),
             'titulo': forms.TextInput(attrs={'class': 'form-control'}),
             'detalhes': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+
+            # --- WIDGETS PARA OS NOVOS CAMPOS ---
             'data_publicacao': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
-            'dias_prazo': forms.NumberInput(attrs={'class': 'form-control'}),
+            'data_intimacao': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+            'data_inicio_prazo': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
             'data_prazo_final': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+            # ------------------------------------
+
+            'dias_prazo': forms.NumberInput(attrs={'class': 'form-control'}),
             'hora_prazo': forms.TimeInput(format='%H:%M', attrs={'type': 'time', 'class': 'form-control'}),
             'responsavel': forms.Select(attrs={'class': 'form-select'}),
             'link_referencia': forms.URLInput(

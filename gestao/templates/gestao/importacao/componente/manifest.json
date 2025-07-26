@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Extrator Projudi",
+  "version": "4.2",
+  "description": "Extrai dados de audiências e intimações diretamente da página do Projudi, com opção de salvar ou copiar.",
+  "permissions": [
+    "downloads",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "*://*.tjpr.jus.br/projudi/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.tjpr.jus.br/projudi/*"
+      ],
+      "js": [
+        "contentScript.js"
+      ],
+      "all_frames": true
+    }
+  ],
+  "icons": {
+    "16": "images/icon16.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
+  }
+}
