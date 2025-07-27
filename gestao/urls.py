@@ -1,161 +1,196 @@
 # gestao/urls.py
 
-# A importação 'include' não é mais necessária aqui, pois as rotas de outros
-# apps foram movidas para o local correto.
-from django.urls import path
-from . import views
-from .views import lista_clientes, lista_pessoas
+"""
+Arquivo de configuração de URLs para o app 'gestao'.
 
-# O app_name é essencial para que o Django possa diferenciar as URLs
-# deste aplicativo de outros. Ex: {% url 'gestao:detalhe_cliente' cliente.pk %}
+Este arquivo mapeia as URLs (endereços web) para as views (funções Python)
+que lidam com as requisições. A organização é feita em blocos lógicos
+para facilitar a manutenção e a escalabilidade do sistema.
+"""
+
+# Importações do Django
+from django.urls import path, include
+
+# Importação das views locais
+from . import views
+
+# O app_name é crucial para criar um namespace para as URLs deste app.
+# Isso evita conflitos com outros apps e permite referenciar as URLs de forma segura
+# nos templates, como por exemplo: {% url 'gestao:home' %}.
 app_name = 'gestao'
 
 urlpatterns = [
     # ==============================================================================
-    # ROTAS GERAIS E DASHBOARD
-    # Esta seção contém as URLs para a página inicial e o painel principal do sistema.
+    # CORE & AUTENTICAÇÃO
+    # Rotas centrais do sistema, incluindo o painel principal e o fluxo de
+    # autenticação (login, logout, redefinição de senha).
     # ==============================================================================
-    path('', views.dashboard, name='home'),  # Rota para a página inicial (raiz do app)
-    path('dashboard/', views.dashboard, name='dashboard'), # Rota explícita para o dashboard
+    # [CORREÇÃO] A rota raiz agora é nomeada 'home' para corresponder ao LOGIN_REDIRECT_URL
+    # e aos links dos templates, resolvendo o erro NoReverseMatch.
+    path('', views.dashboard, name='home'),
+
+    # Rota explícita para o dashboard para manter a consistência e a compatibilidade.
+    path('dashboard/', views.dashboard, name='dashboard'),
+
+    # Inclui todas as URLs de autenticação padrão do Django (/login, /logout, etc.).
+    # NOTA: O Django procura os templates de autenticação em uma pasta 'registration'.
+    # Ex: 'registration/login.html'.
+    path('accounts/', include('django.contrib.auth.urls')),
 
     # ==============================================================================
-    # GESTÃO DE CLIENTES
-    # URLs para gerenciar clientes, incluindo listagem, adição, detalhes, exclusão
-    # e operações AJAX para formulários modais.
+    # MÓDULO: CLIENTES E PESSOAS
+    # Gerenciamento completo de clientes e pessoas (contrapartes, etc.).
     # ==============================================================================
-    path('clientes/', lista_clientes, name='lista_clientes'),
-    path('pessoas/', lista_pessoas, name='lista_pessoas'),
-    path('clientes/excluir-massa/', views.excluir_clientes_em_massa, name='excluir_clientes_em_massa'),
-
-    path('clientes/adicionar/', views.adicionar_cliente_page, name='adicionar_cliente_page'), # Página para adicionar um novo cliente
-    path('clientes/<int:pk>/', views.detalhe_cliente, name='detalhe_cliente'), # Detalhes de um cliente específico
-    path('clientes/<int:pk>/excluir/', views.excluir_cliente, name='excluir_cliente'), # Excluir um cliente
-
-    # Rotas AJAX para operações de Cliente
-    path('clientes/salvar/', views.salvar_cliente, name='adicionar_cliente'), # Salvar novo cliente via AJAX
-    path('clientes/<int:pk>/salvar/', views.salvar_cliente, name='editar_cliente'), # Editar cliente existente via AJAX
-    path('clientes/<int:pk>/json/', views.get_cliente_json, name='get_cliente_json'), # Retornar dados do cliente em JSON
-    path('cliente/adicionar/modal/', views.adicionar_cliente_modal, name='adicionar_cliente_modal'), # Adicionar cliente via modal AJAX
+    path('clientes/', views.lista_clientes, name='lista_clientes'),
+    path('pessoas/', views.lista_pessoas, name='lista_pessoas'),
+    path('clientes/adicionar/', views.adicionar_cliente_page, name='adicionar_cliente_page'),
+    path('clientes/<int:pk>/', views.detalhe_cliente, name='detalhe_cliente'),
+    path('clientes/<int:pk>/excluir/', views.excluir_cliente, name='excluir_cliente'),
 
     # ==============================================================================
-    # GESTÃO DE PROCESSOS
-    # URLs para o gerenciamento de processos judiciais, incluindo CRUD e
-    # ações relacionadas a movimentações e partes.
+    # MÓDULO: PROCESSOS
+    # Gerenciamento de processos judiciais.
     # ==============================================================================
-    path('processos/', views.lista_processos, name='lista_processos'), # Lista de todos os processos
-    path('processo/adicionar/', views.adicionar_processo, name='adicionar_processo'), # Adicionar novo processo
-    path('processo/<int:pk>/', views.detalhe_processo, name='detalhe_processo'), # Detalhes de um processo
-    path('processo/<int:pk>/editar/', views.editar_processo, name='editar_processo'), # Editar processo
-    path('processo/<int:pk>/arquivar/', views.arquivar_processo, name='arquivar_processo'), # Arquivar processo
-    path('processo/<int:pk>/desarquivar/', views.desarquivar_processo, name='desarquivar_processo'), # Desarquivar processo
-    path('processo/<int:processo_pk>/gerenciar-partes/', views.gerenciar_partes, name='gerenciar_partes'), # Gerenciar partes do processo
-    path('processo/<int:processo_pk>/partial/partes/', views.detalhe_processo_partes_partial, name='detalhe_processo_partes_partial'), # Partial para partes do processo
-    path('movimentacao/<int:pk>/editar/', views.editar_movimentacao, name='editar_movimentacao'), # Editar movimentação
-    path('movimentacao/<int:pk>/excluir/', views.excluir_movimentacao, name='excluir_movimentacao'), # Excluir movimentação
-    path('movimentacao/<int:pk>/concluir/', views.concluir_movimentacao, name='concluir_movimentacao'), # Concluir movimentação
+    path('processos/', views.lista_processos, name='lista_processos'),
+    path('processo/adicionar/', views.adicionar_processo, name='adicionar_processo'),
+    path('processo/<int:pk>/', views.detalhe_processo, name='detalhe_processo'),
+    path('processo/<int:pk>/editar/', views.editar_processo, name='editar_processo'),
+    path('processo/<int:pk>/arquivar/', views.arquivar_processo, name='arquivar_processo'),
+    path('processo/<int:pk>/desarquivar/', views.desarquivar_processo, name='desarquivar_processo'),
+    path('processo/<int:processo_pk>/gerenciar-partes/', views.gerenciar_partes, name='gerenciar_partes'),
 
     # ==============================================================================
-    # GESTÃO DE SERVIÇOS EXTRAJUDICIAIS
-    # URLs para gerenciar serviços, incluindo listagem, adição, detalhes, edição
-    # e movimentações/tarefas específicas de serviços.
+    # MÓDULO: SERVIÇOS EXTRAJUDICIAIS
+    # Gerenciamento de serviços que não são processos judiciais.
     # ==============================================================================
-    path('servicos/', views.lista_servicos, name='lista_servicos'), # Lista de todos os serviços
-    path('servico/adicionar/', views.adicionar_servico_view, name='adicionar_servico'), # Adicionar novo serviço
-    path('servico/<int:pk>/', views.detalhe_servico, name='detalhe_servico'), # Detalhes de um serviço
-    path('servico/<int:pk>/editar/', views.editar_servico, name='editar_servico'), # Editar serviço
-    path('servico/<int:pk>/concluir/', views.concluir_servico, name='concluir_servico'), # Concluir serviço
-    path('movimentacao-servico/<int:pk>/editar/', views.editar_movimentacao_servico, name='editar_movimentacao_servico'), # Editar movimentação de serviço
-    path('movimentacao-servico/<int:pk>/excluir/', views.excluir_movimentacao_servico, name='excluir_movimentacao_servico'), # Excluir movimentação de serviço
-    path('movimentacao-servico/<int:pk>/concluir/', views.concluir_movimentacao_servico, name='concluir_movimentacao_servico'), # Concluir movimentação de serviço
-    path('servico/<int:pk>/excluir/', views.excluir_servico, name='excluir_servico'), # Excluir serviço
+    path('servicos/', views.lista_servicos, name='lista_servicos'),
+    path('servico/adicionar/', views.adicionar_servico_view, name='adicionar_servico'),
+    path('servico/<int:pk>/', views.detalhe_servico, name='detalhe_servico'),
+    path('servico/<int:pk>/editar/', views.editar_servico, name='editar_servico'),
+    path('servico/<int:pk>/concluir/', views.concluir_servico, name='concluir_servico'),
+    path('servico/<int:pk>/excluir/', views.excluir_servico, name='excluir_servico'),
 
     # ==============================================================================
-    # GESTÃO FINANCEIRA (Contratos, Pagamentos, Painéis e Despesas)
-    # URLs para o painel financeiro, gerenciamento de contratos, pagamentos
-    # e o novo fluxo de adição de despesas.
+    # MÓDULO: FINANCEIRO
+    # Painel financeiro, contratos, pagamentos e despesas.
     # ==============================================================================
-    path('financeiro/', views.painel_financeiro, name='painel_financeiro'), # Painel financeiro principal
-
-    # Rota para o novo wizard de adição de despesas
+    path('financeiro/', views.painel_financeiro, name='painel_financeiro'),
+    path('financeiro/despesas/', views.painel_despesas, name='painel_despesas'),
     path('financeiro/despesa/adicionar/', views.adicionar_despesa_wizard, name='adicionar_despesa_wizard'),
 
-    # Rotas para contratos e pagamentos
-    path('processo/<int:processo_pk>/adicionar-contrato/', views.adicionar_contrato, name='adicionar_contrato_processo'), # Adicionar contrato a um processo
-    path('servico/<int:servico_pk>/adicionar-contrato/', views.adicionar_contrato, name='adicionar_contrato_servico'), # Adicionar contrato a um serviço
-    path('pagamento/<int:pk>/editar/', views.editar_pagamento, name='editar_pagamento'), # Editar pagamento
-    path('pagamento/<int:pk>/excluir/', views.excluir_pagamento, name='excluir_pagamento'), # Excluir pagamento
-    path('lancamento/<int:pk>/adicionar_pagamento/', views.adicionar_pagamento, name='adicionar_pagamento'), # Adicionar pagamento a um lançamento
-    path('recibo/<int:pagamento_pk>/imprimir/', views.imprimir_recibo, name='imprimir_recibo'), # Imprimir recibo de pagamento
-
-    # Rota para salvar lançamentos financeiros via AJAX (usado no modal de Receitas/Despesas avulsas)
-    path('financeiro/lancamento/adicionar/ajax/', views.adicionar_lancamento_financeiro_ajax, name='adicionar_lancamento_financeiro_ajax'),
+    path('processo/<int:processo_pk>/adicionar-contrato/', views.adicionar_contrato,
+         name='adicionar_contrato_processo'),
+    path('servico/<int:servico_pk>/adicionar-contrato/', views.adicionar_contrato, name='adicionar_contrato_servico'),
+    path('pagamento/<int:pk>/editar/', views.editar_pagamento, name='editar_pagamento'),
+    path('pagamento/<int:pk>/excluir/', views.excluir_pagamento, name='excluir_pagamento'),
+    path('lancamento/<int:pk>/adicionar_pagamento/', views.adicionar_pagamento, name='adicionar_pagamento'),
+    path('recibo/<int:pagamento_pk>/imprimir/', views.imprimir_recibo, name='imprimir_recibo'),
 
     # ==============================================================================
-    # FERRAMENTAS (Modelos, Documentos, Cálculos Judiciais)
-    # URLs para gerenciar modelos de documentos, gerar/editar documentos e
-    # usar a ferramenta de cálculo judicial.
+    # FERRAMENTAS E UTILITÁRIOS
+    # Modelos de documentos, cálculos judiciais, importação, etc.
     # ==============================================================================
-    path('modelos/', views.lista_modelos, name='lista_modelos'), # Lista de modelos de documentos
-    path('modelos/adicionar/', views.adicionar_modelo, name='adicionar_modelo'), # Adicionar novo modelo
-    path('modelos/<int:pk>/editar/', views.editar_modelo, name='editar_modelo'), # Editar modelo
-    path('modelos/<int:pk>/excluir/', views.excluir_modelo, name='excluir_modelo'), # Excluir modelo
-    path('processo/<int:processo_pk>/gerar-documento/<int:modelo_pk>/', views.gerar_documento, name='gerar_documento'), # Gerar documento a partir de modelo
-    path('documento/<int:pk>/editar/', views.editar_documento, name='editar_documento'), # Editar documento
-    path('documento/<int:pk>/imprimir/', views.imprimir_documento, name='imprimir_documento'), # Imprimir documento
-    path('processo/<int:processo_pk>/calculos/', views.realizar_calculo, name='pagina_de_calculos'), # Página de cálculos judiciais
-    path('processo/<int:processo_pk>/calculo/novo/', views.realizar_calculo, name='novo_calculo'), # Novo cálculo
-    path('processo/<int:processo_pk>/calculos/<int:calculo_pk>/', views.realizar_calculo, name='carregar_calculo'), # Carregar cálculo existente
-    path('calculo/<int:calculo_pk>/atualizar-hoje/', views.atualizar_calculo_hoje, name='atualizar_calculo_hoje'), # Atualizar cálculo para data de hoje
-    path('calculo/<int:calculo_pk>/excluir/', views.excluir_calculo, name='excluir_calculo'), # Excluir cálculo
-    path('processo/<int:processo_pk>/calculos/excluir-todos/', views.excluir_todos_calculos, name='excluir_todos_calculos'), # Excluir todos os cálculos de um processo
-
-    # ==============================================================================
-    # CONFIGURAÇÕES E GERENCIAMENTO DE USUÁRIOS
-    # URLs para as configurações gerais do escritório e gestão de usuários/permissões.
-    # ==============================================================================
-    path('configuracoes/', views.configuracoes, name='configuracoes'), # Página de configurações
-    path('configuracoes/usuarios/adicionar/', views.adicionar_usuario, name='adicionar_usuario'), # Adicionar novo usuário
-    path('configuracoes/usuarios/<int:user_id>/editar/', views.editar_usuario, name='editar_usuario'), # Editar usuário
-    path('configuracoes/usuarios/<int:user_id>/ativar-desativar/', views.ativar_desativar_usuario, name='ativar_desativar_usuario'), # Ativar/desativar usuário
-    path('configuracoes/permissoes/grupo/<int:group_id>/', views.get_permissoes_grupo_ajax, name='get_permissoes_grupo_ajax'), # Obter permissões de grupo via AJAX
-    path('configuracoes/permissoes/salvar/<int:group_id>/', views.salvar_permissoes_grupo, name='salvar_permissoes_grupo'), # Salvar permissões de grupo
-    path('configuracoes/cadastros/salvar/<str:modelo>/', views.salvar_cadastro_auxiliar_ajax, name='salvar_cadastro_auxiliar_ajax'), # Salvar cadastro auxiliar (tipos, áreas) via AJAX
-    path('configuracoes/cadastros/salvar/<str:modelo>/<int:pk>/', views.salvar_cadastro_auxiliar_ajax, name='editar_cadastro_auxiliar_ajax'), # Editar cadastro auxiliar via AJAX
-    path('configuracoes/cadastros/excluir/<str:modelo>/<int:pk>/', views.excluir_cadastro_auxiliar_ajax, name='excluir_cadastro_auxiliar_ajax'), # Excluir cadastro auxiliar via AJAX
-
-    # ==============================================================================
-    # ROTAS DE SERVIÇO (AJAX e Partials Específicos)
-    # Estas rotas são usadas principalmente para interações assíncronas (AJAX) e
-    # carregamento de partes de templates (partials).
-    # ==============================================================================
-    path('servico/salvar/ajax/', views.salvar_servico_ajax, name='salvar_servico_ajax'), # Salvar serviço via AJAX
-    path('tiposervico/adicionar/modal/', views.adicionar_tipo_servico_modal, name='adicionar_tipo_servico_modal'), # Adicionar tipo de serviço via modal
-    path('servico/<int:servico_pk>/andamento/ajax/adicionar/', views.adicionar_movimentacao_servico_ajax, name='adicionar_movimentacao_servico_ajax'), # Adicionar movimentação de serviço via AJAX
-    path('servico/<int:servico_pk>/andamento/partial/', views.atualizar_historico_servico_partial, name='atualizar_historico_servico_partial'), # Atualizar histórico de serviço via partial
-    path('servico/<int:pk>/componentes-financeiros/', views.atualizar_componentes_financeiros_servico, name='atualizar_componentes_financeiros_servico'), # Atualizar componentes financeiros do serviço
-    path('ajax/tabela_financeira/<int:parent_pk>/<str:parent_type>/', views.atualizar_tabela_financeira_partial, name='atualizar_tabela_financeira_partial'), # Atualizar tabela financeira via partial
-
-    # Rotas AJAX para buscar e editar movimentações/serviços
-    path('movimentacao/<int:pk>/json/', views.get_movimentacao_json, name='get_movimentacao_json'), # Obter movimentação em JSON
-    path('movimentacao/<int:pk>/editar/ajax/', views.editar_movimentacao_ajax, name='editar_movimentacao_ajax'), # Editar movimentação via AJAX
-
-    path('servico/<int:pk>/json/', views.get_servico_json, name='get_servico_json'), # Obter serviço em JSON
-    path('servico/<int:pk>/editar/ajax/', views.editar_servico_ajax, name='editar_servico_ajax'), # Editar serviço via AJAX
-
-    path('movimentacao-servico/<int:pk>/json/', views.get_movimentacao_servico_json, name='get_movimentacao_servico_json'), # Obter movimentação de serviço em JSON
-    path('movimentacao-servico/<int:pk>/editar/ajax/', views.editar_movimentacao_servico_ajax, name='editar_movimentacao_servico_ajax'), # Editar movimentação de serviço via AJAX
-
-    path('servico/<int:servico_pk>/emitir-nfse/', views.emitir_nfse_view, name='emitir_nfse'), # Emitir NFS-e para serviço
-
-    path('clientes/json/all/', views.get_all_clients_json, name='get_all_clients_json'), # Obter todos os clientes em JSON
-
+    path('modelos/', views.lista_modelos, name='lista_modelos'),
+    path('modelos/adicionar/', views.adicionar_modelo, name='adicionar_modelo'),
+    path('modelos/<int:pk>/editar/', views.editar_modelo, name='editar_modelo'),
+    path('modelos/<int:pk>/excluir/', views.excluir_modelo, name='excluir_modelo'),
+    path('processo/<int:processo_pk>/gerar-documento/<int:modelo_pk>/', views.gerar_documento, name='gerar_documento'),
+    path('documento/<int:pk>/editar/', views.editar_documento, name='editar_documento'),
+    path('documento/<int:pk>/imprimir/', views.imprimir_documento, name='imprimir_documento'),
+    path('processo/<int:processo_pk>/calculos/', views.realizar_calculo, name='pagina_de_calculos'),
+    path('processo/<int:processo_pk>/calculo/novo/', views.realizar_calculo, name='novo_calculo'),
+    path('processo/<int:processo_pk>/calculos/<int:calculo_pk>/', views.realizar_calculo, name='carregar_calculo'),
+    path('calculo/<int:calculo_pk>/atualizar-hoje/', views.atualizar_calculo_hoje, name='atualizar_calculo_hoje'),
+    path('calculo/<int:calculo_pk>/excluir/', views.excluir_calculo, name='excluir_calculo'),
+    path('processo/<int:processo_pk>/calculos/excluir-todos/', views.excluir_todos_calculos,
+         name='excluir_todos_calculos'),
     path('importar/projudi/', views.importacao_projudi_view, name='importacao_projudi'),
-    path('importacao/projudi/analisar/', views.analisar_dados_projudi_ajax, name='analisar_dados_projudi_ajax'),
 
-    path('importacao/projudi/processar/', views.processar_importacao_projudi, name='processar_importacao_projudi'),
+    # ==============================================================================
+    # CONFIGURAÇÕES
+    # Gestão de usuários, permissões e cadastros auxiliares do sistema.
+    # ==============================================================================
+    path('configuracoes/', views.configuracoes, name='configuracoes'),
+    path('configuracoes/usuarios/adicionar/', views.adicionar_usuario, name='adicionar_usuario'),
+    path('configuracoes/usuarios/<int:user_id>/editar/', views.editar_usuario, name='editar_usuario'),
+    path('configuracoes/usuarios/<int:user_id>/ativar-desativar/', views.ativar_desativar_usuario,
+         name='ativar_desativar_usuario'),
+    path('configuracoes/permissoes/salvar/<int:group_id>/', views.salvar_permissoes_grupo,
+         name='salvar_permissoes_grupo'),
 
+    # ==============================================================================
+    # ENDPOINTS DE SERVIÇO (AJAX, JSON, PARTIALS)
+    # Rotas que retornam dados (JSON) ou trechos de HTML (partials) para
+    # interações dinâmicas na interface, sem recarregar a página inteira.
+    # ==============================================================================
+    # --- Geral ---
     path('ajax/global-search/', views.global_search, name='global_search'),
     path('dashboard/update-agenda/', views.update_agenda_partial, name='update_agenda_partial'),
     path('agenda/concluir/<str:tipo>/<int:pk>/', views.concluir_item_agenda_ajax, name='concluir_item_agenda_ajax'),
+
+    # --- Clientes ---
+    path('clientes/excluir-massa/', views.excluir_clientes_em_massa, name='excluir_clientes_em_massa'),
+    path('clientes/salvar/', views.salvar_cliente, name='adicionar_cliente'),
+    path('clientes/<int:pk>/salvar/', views.salvar_cliente, name='editar_cliente'),
+    path('clientes/<int:pk>/json/', views.get_cliente_json, name='get_cliente_json'),
+    path('clientes/json/all/', views.get_all_clients_json, name='get_all_clients_json'),
+    path('cliente/adicionar/modal/', views.adicionar_cliente_modal, name='adicionar_cliente_modal'),
+
+    # --- Processos e Movimentações ---
+    path('processo/<int:processo_pk>/partial/partes/', views.detalhe_processo_partes_partial,
+         name='detalhe_processo_partes_partial'),
+    path('movimentacao/<int:pk>/editar/', views.editar_movimentacao, name='editar_movimentacao'),
+    path('movimentacao/<int:pk>/excluir/', views.excluir_movimentacao, name='excluir_movimentacao'),
+    path('movimentacao/<int:pk>/concluir/', views.concluir_movimentacao, name='concluir_movimentacao'),
+    path('movimentacao/<int:pk>/json/', views.get_movimentacao_json, name='get_movimentacao_json'),
+    path('movimentacao/<int:pk>/editar/ajax/', views.editar_movimentacao_ajax, name='editar_movimentacao_ajax'),
+
+    # --- Serviços e Movimentações de Serviço ---
+    path('servico/salvar/ajax/', views.salvar_servico_ajax, name='salvar_servico_ajax'),
+    path('tiposervico/adicionar/modal/', views.adicionar_tipo_servico_modal, name='adicionar_tipo_servico_modal'),
+    path('servico/<int:servico_pk>/andamento/ajax/adicionar/', views.adicionar_movimentacao_servico_ajax,
+         name='adicionar_movimentacao_servico_ajax'),
+    path('servico/<int:servico_pk>/andamento/partial/', views.atualizar_historico_servico_partial,
+         name='atualizar_historico_servico_partial'),
+    path('servico/<int:pk>/componentes-financeiros/', views.atualizar_componentes_financeiros_servico,
+         name='atualizar_componentes_financeiros_servico'),
+    path('servico/<int:pk>/json/', views.get_servico_json, name='get_servico_json'),
+    path('servico/<int:pk>/editar/ajax/', views.editar_servico_ajax, name='editar_servico_ajax'),
+    path('movimentacao-servico/<int:pk>/editar/', views.editar_movimentacao_servico,
+         name='editar_movimentacao_servico'),
+    path('movimentacao-servico/<int:pk>/excluir/', views.excluir_movimentacao_servico,
+         name='excluir_movimentacao_servico'),
+    path('movimentacao-servico/<int:pk>/concluir/', views.concluir_movimentacao_servico,
+         name='concluir_movimentacao_servico'),
+    path('movimentacao-servico/<int:pk>/json/', views.get_movimentacao_servico_json,
+         name='get_movimentacao_servico_json'),
+    path('movimentacao-servico/<int:pk>/editar/ajax/', views.editar_movimentacao_servico_ajax,
+         name='editar_movimentacao_servico_ajax'),
+
+    # --- Financeiro e NFS-e ---
+    path('financeiro/lancamento/adicionar/ajax/', views.adicionar_lancamento_financeiro_ajax,
+         name='adicionar_lancamento_financeiro_ajax'),
+    path('ajax/tabela_financeira/<int:parent_pk>/<str:parent_type>/', views.atualizar_tabela_financeira_partial,
+         name='atualizar_tabela_financeira_partial'),
+    path('servico/<int:servico_pk>/emitir-nfse/', views.emitir_nfse_view, name='emitir_nfse'),
+
+    # --- Importação Projudi ---
+    path('importacao/projudi/analisar/', views.analisar_dados_projudi_ajax, name='analisar_dados_projudi_ajax'),
+    path('importacao/projudi/processar/', views.processar_importacao_projudi, name='processar_importacao_projudi'),
+
+    # --- Configurações ---
+    path('configuracoes/permissoes/grupo/<int:group_id>/', views.get_permissoes_grupo_ajax,
+         name='get_permissoes_grupo_ajax'),
+    path('configuracoes/cadastros/salvar/<str:modelo>/', views.salvar_cadastro_auxiliar_ajax,
+         name='salvar_cadastro_auxiliar_ajax'),
+    path('configuracoes/cadastros/salvar/<str:modelo>/<int:pk>/', views.salvar_cadastro_auxiliar_ajax,
+         name='editar_cadastro_auxiliar_ajax'),
+    path('configuracoes/cadastros/excluir/<str:modelo>/<int:pk>/', views.excluir_cadastro_auxiliar_ajax,
+         name='excluir_cadastro_auxiliar_ajax'),
+
+    # ==============================================================================
+    # ROTA PARA A BUSCA GLOBAL (AJAX)
+    # ==============================================================================
+    path('ajax/global-search/', views.global_search, name='global_search'),
 
 ]

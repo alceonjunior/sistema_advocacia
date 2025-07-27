@@ -1,32 +1,25 @@
-"""
-URL configuration for sistema_advocacia project.
+# config/urls.py
 
-[...]
-"""
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from django.urls import path, include  # Garanta que 'include' está aqui
-
 
 urlpatterns = [
+    # 1. Rota para a área administrativa.
     path('admin/', admin.site.urls),
 
-    # =======================================================================
-    # ↓↓↓ ADICIONE ESTA LINHA AQUI ↓↓↓
-    # =======================================================================
-    # Inclui as URLs de autenticação padrão do Django (login, logout, etc.)
-    # Agora a tag {% url 'logout' %} funcionará.
+    # 2. Rota para as URLs de autenticação (login, logout, etc.).
     path('accounts/', include('django.contrib.auth.urls')),
-    # =======================================================================
 
-    # Rota principal que direciona para as URLs do seu app
-    path('', include('gestao.urls')),
+    # 3. Rota para o CKEditor.
     path('ckeditor/', include('ckeditor_uploader.urls')),
 
+    # 4. Rota principal que delega para o app 'gestao'.
+    # A remoção do 'namespace' aqui resolve o conflito.
+    path('', include('gestao.urls')),
 ]
 
-# Bloco para servir arquivos de mídia (sem alterações)
+# Bloco para servir arquivos de mídia em desenvolvimento.
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

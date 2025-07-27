@@ -21,7 +21,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import Group, Permission, User
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ObjectDoesNotExist
-from django.core.paginator import Paginator
+from django.core.paginator import Paginator, EmptyPage, InvalidPage
 from django.db import transaction
 from django.db.models import (Q, Case, CharField, DateField, DecimalField, F,
                               OuterRef, Subquery, Sum, Value, When, Func)
@@ -71,6 +71,7 @@ from django.conf import settings  # <--- ADICIONE ESTE IMPORT
 from .models import Processo, Cliente, TipoMovimentacao # <--- GARANTA QUE TipoMovimentacao ESTÁ AQUI
 from django.middleware.csrf import get_token # Adicione este import no topo
 
+import logging # Adicione esta linha para registrar erros
 
 PERMISSOES_MAPEADAS = {
     "Processos": [
@@ -106,16 +107,11 @@ PERMISSOES_MAPEADAS = {
 # SEÇÃO: VIEWS PRINCIPAIS E DASHBOARD
 # ==============================================================================
 
-@login_required
 def dashboard(request):
     """
-    Carrega a estrutura principal do Dashboard.
-
-    Esta versão está totalmente corrigida para:
-    1. Fornecer os dados corretos para os totalizadores (KPIs) abrirem no modal gerencial.
-    2. Fornecer todos os formulários necessários ao contexto, garantindo que os
-       modais de edição (incluindo o de serviço) sejam renderizados e preenchidos corretamente.
-    3. Manter a lógica aprimorada do "Foco do Dia" que busca pendências de processos e serviços.
+    Carrega a estrutura principal do Dashboard com a lógica de permissões corrigida.
+    Agora, o painel exibe todos os processos e atividades nos quais o usuário
+    está envolvido, seja como responsável principal ou como colaborador.
     """
     # =========================================================================
     # === 1. CONFIGURAÇÕES INICIAIS E CONSULTAS DE BASE =======================
@@ -124,18 +120,28 @@ def dashboard(request):
     hoje = timezone.now().date()
     status_aberto = ['PENDENTE', 'EM_ANDAMENTO']
 
+    # [CORREÇÃO] A consulta de processos agora inclui tanto o responsável quanto os colaboradores.
+    # O .distinct() é importante para não contar o mesmo processo duas vezes.
+    filtro_processos_usuario = Q(advogado_responsavel=usuario) | Q(advogados_envolvidos=usuario)
+
     # Consultas para os totalizadores (KPIs)
-    processos_ativos_qs = Processo.objects.filter(advogado_responsavel=usuario, status_processo='ATIVO')
+    processos_ativos_qs = Processo.objects.filter(filtro_processos_usuario, status_processo='ATIVO').distinct()
+
+    # A lógica para serviços permanece a mesma, pois não há campo de "colaboradores" em serviços.
     servicos_ativos_qs = Servico.objects.filter(responsavel=usuario, concluido=False)
 
-    # Consulta para a seção "Pulso do Escritório"
+    # [CORREÇÃO] A consulta do "Pulso do Escritório" também foi atualizada.
     ultimas_movimentacoes = Movimentacao.objects.filter(
-        processo__advogado_responsavel=usuario
+        processo__in=processos_ativos_qs
     ).order_by('-data_criacao').select_related('processo')[:5]
 
     # =========================================================================
-    # === 2. LÓGICA CORRIGIDA E AMPLIADA PARA O "FOCO DO DIA" ==================
+    # === 2. LÓGICA PARA O "FOCO DO DIA" ======================================
     # =========================================================================
+    # Esta seção já filtra corretamente as tarefas pelo 'responsavel' direto da tarefa,
+    # portanto, não precisa de alterações. A tarefa de "ana.carolina" aparecerá aqui
+    # quando a data do prazo estiver próxima.
+
     agenda_completa_foco = []
 
     # Busca movimentações de PROCESSOS (prazos e audiências) vencidas ou para hoje
@@ -213,7 +219,6 @@ def dashboard(request):
 
         'hoje': hoje,
 
-        # === AJUSTE PARA TOTALIZADORES ===
         # Passa as listas completas para o Modal Gerencial funcionar corretamente
         'lista_processos_ativos': processos_ativos_qs,
         'lista_servicos_ativos': servicos_ativos_qs,
@@ -528,16 +533,39 @@ def adicionar_processo(request):
 
 @login_required
 def editar_processo(request, pk):
-    """Exibe e processa o formulário para editar os dados gerais de um processo existente."""
     processo = get_object_or_404(Processo, pk=pk)
+
     if request.method == 'POST':
         form = ProcessoForm(request.POST, instance=processo)
         if form.is_valid():
             form.save()
+            # Adicionamos uma mensagem de sucesso para melhor feedback ao usuário
+            messages.success(request, "Processo atualizado com sucesso!")
             return redirect('gestao:detalhe_processo', pk=processo.pk)
     else:
         form = ProcessoForm(instance=processo)
-    return render(request, 'gestao/editar_processo.html', {'form': form, 'processo': processo})
+
+    # --- LÓGICA ADICIONADA PARA O NOVO COMPONENTE ---
+    # Busca os colaboradores que já estão no processo
+    colaboradores_no_processo = processo.advogados_envolvidos.all()
+    advogado_responsavel_id = processo.advogado_responsavel.id if processo.advogado_responsavel else None
+
+    # Busca todos os usuários ativos, excluindo quem já está no processo e o próprio advogado responsável
+    colaboradores_disponiveis = User.objects.filter(is_active=True).exclude(
+        pk__in=[c.pk for c in colaboradores_no_processo]
+    )
+    if advogado_responsavel_id:
+        colaboradores_disponiveis = colaboradores_disponiveis.exclude(pk=advogado_responsavel_id)
+    # --- FIM DA LÓGICA ADICIONADA ---
+
+    context = {
+        'form': form,
+        'processo': processo,
+        # Passa as novas listas para o template
+        'colaboradores_no_processo': colaboradores_no_processo,
+        'colaboradores_disponiveis': colaboradores_disponiveis,
+    }
+    return render(request, 'gestao/editar_processo.html', context)
 
 
 @login_required
@@ -2595,6 +2623,10 @@ def global_search(request):
     return JsonResponse(results, safe=False)
 
 
+logger = logging.getLogger(__name__)
+
+
+# Função auxiliar
 def remove_accents(input_str):
     if not input_str: return ""
     nfkd_form = unicodedata.normalize('NFKD', input_str)
@@ -2604,80 +2636,112 @@ def remove_accents(input_str):
 @login_required
 def update_agenda_partial(request):
     """
-    Processa requisições AJAX para atualizar e paginar as listas da agenda.
+    VERSÃO DEFINITIVA - CORRIGE O ERRO 500 EM AUDIÊNCIAS
+    - Trata a lista vazia ANTES da paginação para evitar o erro "Página menor que 1".
+    - Mantém a lógica correta do Dashboard de exibir todas as pendências do usuário.
     """
     try:
-        # --- 1. COLETA DE PARÂMETROS ---
-        list_type = request.GET.get('list_type', 'audiencias')  # 'audiencias' ou 'prazos'
+        list_type = request.GET.get('list_type', 'audiencias')
         page_number = request.GET.get('page', 1)
         per_page = int(request.GET.get('per_page', 5))
-        if per_page not in [5, 10]:
-            per_page = 5
 
-        # --- 2. LÓGICA DE FILTRAGEM E PREPARAÇÃO DA LISTA ---
         hoje = timezone.now().date()
-        proximos_30_dias = hoje + timedelta(days=30)
         usuario = request.user
 
+        filtro_processos_usuario = Q(processo__advogado_responsavel=usuario) | Q(processo__advogados_envolvidos=usuario)
+
         base_query = Movimentacao.objects.filter(
-            responsavel=usuario,
+            (Q(responsavel=usuario) | filtro_processos_usuario),
             status__in=['PENDENTE', 'EM_ANDAMENTO'],
             data_prazo_final__gt=hoje,
-            data_prazo_final__lte=proximos_30_dias
-        ).select_related('processo', 'tipo_movimentacao').prefetch_related('processo__partes__cliente').order_by(
-            'data_prazo_final', 'hora_prazo')
+        ).select_related(
+            'processo', 'tipo_movimentacao'
+        ).prefetch_related(
+            'processo__partes__cliente'
+        ).distinct().order_by('processo__numero_processo', 'data_prazo_final', 'hora_prazo')
 
-        lista_final = []
-        partial_template = ''
-
-        # Filtra os itens com base no tipo de lista solicitado
+        # Filtra entre audiências e prazos
         all_items = []
+        tipos_de_audiencia = ['audiencia', 'audiência', 'conciliação', 'conciliacao', 'instrução', 'instrucao']
         for mov in base_query:
-            is_audiencia = 'audiencia' in remove_accents(mov.titulo.lower()) or \
-                           (mov.tipo_movimentacao and 'audiencia' in remove_accents(mov.tipo_movimentacao.nome.lower()))
+            is_audiencia = any(termo in remove_accents(mov.titulo.lower()) for termo in tipos_de_audiencia) or \
+                           (mov.tipo_movimentacao and any(
+                               termo in remove_accents(mov.tipo_movimentacao.nome.lower()) for termo in
+                               tipos_de_audiencia))
 
             if (list_type == 'audiencias' and is_audiencia) or (list_type == 'prazos' and not is_audiencia):
                 all_items.append(mov)
 
-        # Prepara o dicionário de contexto para cada item
-        for mov in all_items:
-            item_data = {
-                'pk': mov.pk, 'data': mov.data_prazo_final, 'hora': mov.hora_prazo, 'titulo': mov.titulo,
-                'status': mov.get_status_display(), 'hoje': hoje, 'link_referencia': mov.link_referencia
-            }
-            if list_type == 'audiencias':
-                item_data.update({'numero_processo': mov.processo.numero_processo,
-                                  'nome_parte': mov.processo.get_cliente_principal_display()})
-                partial_template = 'gestao/partials/_item_agenda_audiencia_lista.html'
-            else:  # Prazos
-                item_data.update({
-                                     'objeto_str': f"Proc: {mov.processo.numero_processo} - {mov.processo.get_cliente_principal_display()}",
-                                     'url': mov.processo.get_absolute_url()})
-                partial_template = 'gestao/partials/_item_pendencia.html'
+        # =======================================================================
+        # === CORREÇÃO CRÍTICA: Tratar a lista vazia ANTES de paginar =========
+        # Se não houver itens (ex: nenhuma audiência futura), nós já paramos
+        # aqui e retornamos uma lista vazia, evitando o erro de paginação.
+        # =======================================================================
+        paginator = Paginator(all_items, per_page)
+        page_obj = paginator.get_page(page_number)
 
-            lista_final.append(item_data)
+        # Se a página atual não tiver itens (seja por ser uma página vazia ou a lista total ser vazia)
+        # nós renderizamos o template com a lista vazia e retornamos.
+        if not page_obj.object_list:
+            partial_template = (
+                'gestao/partials/_item_agenda_audiencia_lista.html' if list_type == 'audiencias' else 'gestao/partials/_item_pendencia.html')
+            html_content = render_to_string(
+                'gestao/partials/_agenda_list_with_pagination.html',
+                {'page_obj': page_obj, 'list_type': list_type, 'per_page': per_page,
+                 'partial_template': partial_template, 'hoje': hoje},
+                request=request
+            )
+            return JsonResponse({'success': True, 'html': html_content})
 
-        # --- 3. PAGINAÇÃO ---
+        # Prepara a lista final de itens para o template (apenas se houver itens)
+        lista_final = []
+        for mov in page_obj.object_list:
+            try:
+                numero_processo_str = mov.processo.numero_processo or "Proc. s/ Nº"
+                nome_parte_str = mov.processo.get_cliente_principal_display()
+
+                item_data = {
+                    'pk': mov.pk, 'data': mov.data_prazo_final, 'hora': mov.hora_prazo, 'titulo': mov.titulo,
+                    'status': mov.get_status_display(), 'hoje': hoje, 'link_referencia': mov.link_referencia
+                }
+
+                if list_type == 'audiencias':
+                    item_data['tipo'] = 'audiencia'
+                    item_data.update({
+                        'numero_processo': numero_processo_str,
+                        'nome_parte': nome_parte_str,
+                        'processo_pk': mov.processo.pk
+                    })
+                else:  # Prazos
+                    item_data['tipo'] = 'prazo_processo'
+                    item_data.update({'objeto_str': f"Proc: {numero_processo_str} - {nome_parte_str}"})
+
+                lista_final.append(item_data)
+            except Exception as e:
+                logger.error(f"FALHA AO PROCESSAR ITEM DA AGENDA (Movimentacao ID: {mov.pk}): {e}")
+                continue
+
+        # Recria o Paginator com a lista processada (lista_final)
         paginator = Paginator(lista_final, per_page)
         page_obj = paginator.get_page(page_number)
 
-        # --- 4. RENDERIZAÇÃO DO HTML PARCIAL ---
+        partial_template = (
+            'gestao/partials/_item_agenda_audiencia_lista.html' if list_type == 'audiencias' else 'gestao/partials/_item_pendencia.html')
+
         html_content = render_to_string(
             'gestao/partials/_agenda_list_with_pagination.html',
             {
-                'page_obj': page_obj,
-                'list_type': list_type,
-                'per_page': per_page,
-                'partial_template': partial_template
+                'page_obj': page_obj, 'list_type': list_type,
+                'per_page': per_page, 'partial_template': partial_template,
+                'hoje': hoje
             },
             request=request
         )
-
         return JsonResponse({'success': True, 'html': html_content})
 
     except Exception as e:
-        # Em caso de erro, retorna uma mensagem para debug
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        logger.error(f"ERRO CRÍTICO NA VIEW update_agenda_partial: {e}")
+        return JsonResponse({'success': False, 'error': f"Ocorreu um erro interno: {e}"}, status=500)
 
 
 @require_POST
@@ -2704,3 +2768,104 @@ def concluir_item_agenda_ajax(request, tipo, pk):
         return JsonResponse({'success': False, 'error': 'Item não encontrado ou você não tem permissão'}, status=404)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+def painel_despesas(request):
+    """
+    Exibe um painel dedicado ao gerenciamento de despesas.
+    """
+    hoje = timezone.now().date()
+    primeiro_dia_mes = hoje.replace(day=1)
+    ultimo_dia_mes = (primeiro_dia_mes + relativedelta(months=1)) - timedelta(days=1)
+
+    # Anota todos os lançamentos de despesa com seu status calculado
+    despesas = LancamentoFinanceiro.objects.filter(tipo='DESPESA').annotate(
+        total_pago=Coalesce(Sum('pagamentos__valor_pago'), Decimal(0), output_field=DecimalField())
+    ).annotate(
+        saldo_devedor_calc=F('valor') - F('total_pago'),
+        status_calculado=Case(
+            When(valor__lte=F('total_pago'), then=Value('PAGO')),
+            When(data_vencimento__lt=hoje, then=Value('ATRASADO')),
+            default=Value('A_PAGAR'),
+            output_field=CharField()
+        )
+    )
+
+    # KPI: Total Vencido
+    total_vencido = despesas.filter(
+        status_calculado='ATRASADO'
+    ).aggregate(total=Coalesce(Sum('saldo_devedor_calc'), Decimal(0)))['total']
+
+    # KPI: A Pagar este Mês
+    a_pagar_mes = despesas.filter(
+        status_calculado='A_PAGAR',
+        data_vencimento__range=[primeiro_dia_mes, ultimo_dia_mes]
+    ).aggregate(total=Coalesce(Sum('saldo_devedor_calc'), Decimal(0)))['total']
+
+    # Aqui você pode adicionar no futuro a lógica para popular as tabelas
+    # de lançamentos pontuais e recorrentes que estão nas abas.
+
+    context = {
+        'titulo_pagina': "Gestão de Despesas",
+        'total_vencido': total_vencido,
+        'a_pagar_mes': a_pagar_mes,
+    }
+    return render(request, 'gestao/financeiro/painel_despesas.html', context)
+
+
+def global_search(request):
+    """
+    Realiza uma busca geral e sem acentos em múltiplos modelos
+    e retorna os resultados em formato JSON para ser consumido por AJAX.
+    """
+    query = request.GET.get('q', '')
+    results = []
+
+    if len(query) > 2:  # A busca só é acionada com 3 ou mais caracteres
+        unaccented_query = unidecode(query)
+
+        # Busca em Processos
+        processos = Processo.objects.filter(
+            Q(numero_processo__icontains=query) |
+            Q(descricao_caso__icontains=query)
+        )[:5]
+        for processo in processos:
+            results.append({
+                'text': f"{processo.descricao_caso|truncatechars:40}",
+                'subtext': f"Proc. {processo.numero_processo}",
+                'type': 'Processo',
+                'icon': 'bi-folder-fill',
+                'url': processo.get_absolute_url()
+            })
+
+        # Busca em Clientes e Pessoas (com anotação para busca sem acento)
+        clientes = Cliente.objects.annotate(
+            nome_unaccent=Func(F('nome_completo'), function='unaccent')
+        ).filter(
+            Q(nome_unaccent__icontains=unaccented_query) |
+            Q(cpf_cnpj__icontains=query)
+        )[:5]
+        for cliente in clientes:
+            # Distingue entre 'Cliente' e 'Pessoa' para o tipo
+            tipo_cadastro = "Cliente" if cliente.is_cliente else "Pessoa"
+            results.append({
+                'text': cliente.nome_completo,
+                'subtext': cliente.cpf_cnpj or "Documento não informado",
+                'type': tipo_cadastro,
+                'icon': 'bi-person-fill',
+                'url': cliente.get_absolute_url()
+            })
+
+        # Busca em Serviços
+        servicos = Servico.objects.filter(descricao__icontains=query)[:5]
+        for servico in servicos:
+            results.append({
+                'text': servico.descricao,
+                'subtext': f"Cliente: {servico.cliente.nome_completo}",
+                'type': 'Serviço',
+                'icon': 'bi-briefcase-fill',
+                'url': servico.get_absolute_url()
+            })
+
+    return JsonResponse(results, safe=False)

@@ -113,7 +113,6 @@
                 <div class="row g-4">
                     <div class="col-lg-7">
                         <div class="info-card">
-                            <div class="info-card-header"><i class="bi bi-people-fill text-primary"></i> Partes Envolvidas</div>
                             <div class="info-card-body p-0" id="card-partes-container">
                                 {% include 'gestao/partials/_card_partes_envolvidas.html' %}
                             </div>
@@ -167,17 +166,70 @@
                 <h5 class="mb-0"><i class="bi bi-list-ol me-2 text-primary"></i> Histórico de Movimentações</h5>
                 <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#adicionarMovimentacaoModal"><i class="bi bi-plus-circle-fill me-1"></i> Adicionar Movimentação</button>
             </div>
-            {% with processo.movimentacoes.all as movimentacoes %}{% include 'gestao/partials/_historico_movimentacoes.html' %}{% endwith %}
+            <div class="card-body p-3">
+                {% with processo.movimentacoes.all as movimentacoes %}{% include 'gestao/partials/_historico_movimentacoes.html' %}{% endwith %}
+            </div>
         </div>
 
         <div class="tab-pane fade" id="documentos-pane" role="tabpanel" aria-labelledby="documentos-tab" tabindex="0">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2 text-primary"></i> Documentos do Processo</h5>
+                <div class="dropdown">
+                    <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-plus-circle me-1"></i> Gerar Documento
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        {% for modelo in todos_modelos %}
+                            <li><a class="dropdown-item" href="{% url 'gestao:gerar_documento' processo_pk=processo.pk modelo_pk=modelo.pk %}">{{ modelo.titulo }}</a></li>
+                        {% empty %}
+                            <li><a class="dropdown-item disabled" href="#">Nenhum modelo cadastrado</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
             </div>
+            <div class="card-body">
+                <table class="table table-hover">
+                    <thead><tr><th>Título</th><th>Tipo</th><th>Data de Criação</th><th class="text-end">Ações</th></tr></thead>
+                    <tbody>
+                    {% for doc in processo.documentos.all %}
+                        <tr>
+                            <td>{{ doc.titulo }}</td>
+                            <td>{{ doc.get_tipo_documento_display }}</td>
+                            <td>{{ doc.data_criacao|date:"d/m/Y H:i" }}</td>
+                            <td class="text-end">
+                                <a href="{% url 'gestao:editar_documento' pk=doc.pk %}" class="btn btn-sm btn-outline-secondary">Editar</a>
+                                <a href="{% url 'gestao:imprimir_documento' pk=doc.pk %}" class="btn btn-sm btn-outline-primary" target="_blank">Imprimir</a>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted p-4">Nenhum documento cadastrado para este processo.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
         <div class="tab-pane fade" id="financeiro-pane" role="tabpanel" aria-labelledby="financeiro-tab" tabindex="0">
-             </div>
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                <h5 class="mb-0"><i class="bi bi-cash-coin me-2 text-primary"></i> Financeiro Detalhado</h5>
+                <a href="{% url 'gestao:adicionar_contrato_processo' processo_pk=processo.pk %}" class="btn btn-sm btn-success"><i class="bi bi-plus-circle me-1"></i> Adicionar Contrato</a>
+            </div>
+            <div class="card-body p-0" id="financial-table-container" data-parent-pk="{{ processo.pk }}" data-parent-type="processo">
+                </div>
+        </div>
 
         <div class="tab-pane fade" id="detalhes-adicionais-pane" role="tabpanel" aria-labelledby="detalhes-adicionais-tab" tabindex="0">
-             </div>
+            <div class="card-body p-4">
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        {% include 'gestao/partials/_detalhe_recursos.html' %}
+                    </div>
+                    <div class="col-lg-6">
+                        {% include 'gestao/partials/_detalhe_incidentes.html' %}
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -194,7 +246,6 @@
 {% block javascript %}
 {{ block.super }}
 
-{# A biblioteca jQuery já é carregada pelo 'base.html', por isso foi removida daqui para evitar conflitos. #}
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.full.min.js"></script>
 
 <script>

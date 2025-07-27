@@ -87,7 +87,7 @@ class ProcessoForm(forms.ModelForm):
             'execucao_iniciada': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
 
             # Campos de Múltipla Escolha
-            'advogados_envolvidos': forms.SelectMultiple(attrs={'class': 'form-select select2'}),
+            'advogados_envolvidos': forms.SelectMultiple(attrs={'class': 'd-none'}),
             'nivel_permissao': forms.RadioSelect(), # RadioSelect é ideal para poucas opções
         }
 
@@ -320,64 +320,32 @@ class MovimentacaoServicoForm(forms.ModelForm):
 
 
 class MovimentacaoForm(forms.ModelForm):
-    """Formulário para andamentos, tarefas e prazos de um processo."""
+    """
+    Formulário para andamentos, tarefas e prazos de um processo.
+    VERSÃO CORRIGIDA E SIMPLIFICADA: Removemos o método 'clean_tipo_movimentacao'
+    que era desnecessário e causava inconsistências com o widget Select2.
+    """
 
     class Meta:
         model = Movimentacao
-        # --- LISTA DE CAMPOS ATUALIZADA ---
         fields = [
             'tipo_movimentacao', 'titulo', 'detalhes',
             'data_publicacao', 'data_intimacao', 'data_inicio_prazo', 'data_prazo_final',
-            'dias_prazo', 'hora_prazo', 'responsavel', 'status', 'link_referencia'
+            'hora_prazo', 'responsavel', 'status', 'link_referencia'
         ]
-        # ------------------------------------
         widgets = {
             'tipo_movimentacao': forms.Select(attrs={'class': 'form-select select2'}),
             'titulo': forms.TextInput(attrs={'class': 'form-control'}),
             'detalhes': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
-
-            # --- WIDGETS PARA OS NOVOS CAMPOS ---
             'data_publicacao': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
             'data_intimacao': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
             'data_inicio_prazo': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
             'data_prazo_final': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
-            # ------------------------------------
-
-            'dias_prazo': forms.NumberInput(attrs={'class': 'form-control'}),
             'hora_prazo': forms.TimeInput(format='%H:%M', attrs={'type': 'time', 'class': 'form-control'}),
             'responsavel': forms.Select(attrs={'class': 'form-select'}),
-            'link_referencia': forms.URLInput(
-                attrs={'class': 'form-control', 'placeholder': 'https://tribunal.jus.br/consulta/...'}),
+            'link_referencia': forms.URLInput(attrs={'class': 'form-control', 'placeholder': 'https://tribunal.jus.br/consulta/...'}),
             'status': forms.Select(attrs={'class': 'form-select'}),
         }
-
-    # =======================================================
-    #     ADICIONE ESTE MÉTODO À CLASSE MOVIMENTACAOFORM
-    # =======================================================
-    def clean_tipo_movimentacao(self):
-        """
-        Processa o valor do campo 'tipo_movimentacao'.
-        Se for um número, trata como um ID de um objeto existente.
-        Se for um texto, cria um novo objeto TipoMovimentacao.
-        """
-        # Pega o dado enviado pelo formulário
-        tipo_movimentacao_valor = self.cleaned_data.get('tipo_movimentacao')
-
-        # Se o valor for um número (string contendo apenas dígitos),
-        # significa que o usuário selecionou uma opção existente.
-        if isinstance(tipo_movimentacao_valor, TipoMovimentacao):
-            # O ModelChoiceField já converteu para um objeto, então está tudo certo
-            return tipo_movimentacao_valor
-
-        # Se for um texto, é uma nova opção digitada pelo usuário.
-        # Usamos get_or_create para criar o novo tipo ou usar um que já exista com o mesmo nome.
-        # A função retorna uma tupla (objeto, foi_criado)
-        novo_tipo, criado = TipoMovimentacao.objects.get_or_create(
-            nome=str(tipo_movimentacao_valor).strip()
-        )
-
-        # O método clean_ deve sempre retornar o valor final limpo.
-        return novo_tipo
 
 
 class ServicoConcluirForm(forms.ModelForm):

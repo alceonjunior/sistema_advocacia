@@ -44,50 +44,43 @@
 
                 <div id="content-pendencias" class="filter-content" style="display: none;">
                     <ul class="list-group list-group-flush">
-                        {% for grupo in lista_total_pendencias %}
+                        {% for item in lista_total_pendencias %}
 
-                            {% if grupo.tipo_grupo == 'processo' %}
+                            {# --- Bloco para Tarefas de Processos --- #}
+                            {% if item.tipo == 'processo' %}
                                 <div class="list-group-item list-group-item-action" style="cursor: pointer;"
                                      data-bs-toggle="modal" data-bs-target="#movimentacaoModal"
-                                     data-url-json="{% url 'gestao:get_movimentacao_json' grupo.item.pk %}"
-                                     data-url-edit="{% url 'gestao:editar_movimentacao_ajax' grupo.item.pk %}"
-                                     data-url-delete="{% url 'gestao:excluir_movimentacao' grupo.item.pk %}">
+                                     data-url-json="{% url 'gestao:get_movimentacao_json' item.pk %}">
                                     <div class="d-flex justify-content-between">
-                                        <span class="fw-bold {% if grupo.item.data < hoje %}text-danger{% endif %}">{{ grupo.item.titulo }}</span>
-                                        <small class="fw-bold {% if grupo.item.data < hoje %}text-danger{% endif %}">{{ grupo.item.data|date:"d/m/Y" }}</small>
+                                        <span class="fw-bold {% if item.data < hoje %}text-danger{% endif %}">{{ item.titulo }}</span>
+                                        <small class="fw-bold {% if item.data < hoje %}text-danger{% endif %}">{{ item.data|date:"d/m/Y" }}</small>
                                     </div>
-                                    <small class="d-block text-muted">{{ grupo.item.objeto_str }}</small>
+                                    <small class="d-block text-muted">{{ item.objeto_str }}</small>
                                 </div>
-                            {% endif %}
 
-                            {% if grupo.tipo_grupo == 'servico' %}
-                                {% if grupo.servico %}
-                                    <div class="list-group-item bg-light-subtle" style="cursor: pointer;"
-                                         data-bs-toggle="modal" data-bs-target="#servicoModal"
-                                         data-url-json="{% url 'gestao:get_servico_json' grupo.servico.pk %}"
-                                         data-url-edit="{% url 'gestao:editar_servico_ajax' grupo.servico.pk %}">
-                                        <div class="d-flex justify-content-between">
-                                            <span class="fw-bold {% if grupo.servico.data < hoje %}text-danger{% endif %}">{{ grupo.servico.titulo }}</span>
-                                            <small class="fw-bold {% if grupo.servico.data < hoje %}text-danger{% endif %}">{{ grupo.servico.data|date:"d/m/Y" }}</small>
-                                        </div>
-                                        <small class="d-block text-muted">{{ grupo.servico.objeto_str }}</small>
+                            {# --- Bloco para Tarefas de Serviços --- #}
+                            {% elif item.tipo == 'servico_task' %}
+                                <div class="list-group-item list-group-item-action" style="cursor: pointer;"
+                                     data-bs-toggle="modal" data-bs-target="#servicoMovimentacaoModal"
+                                     data-url-json="{% url 'gestao:get_movimentacao_servico_json' item.pk %}">
+                                    <div class="d-flex justify-content-between">
+                                        <span class="fw-bold {% if item.data < hoje %}text-danger{% endif %}">{{ item.titulo }}</span>
+                                        <small class="fw-bold {% if item.data < hoje %}text-danger{% endif %}">{{ item.data|date:"d/m/Y" }}</small>
                                     </div>
-                                {% endif %}
+                                    <small class="d-block text-muted">{{ item.objeto_str }}</small>
+                                </div>
 
-                                {% for atividade in grupo.atividades %}
-                                    <div class="list-group-item list-group-item-action" style="cursor: pointer;"
-                                         data-bs-toggle="modal" data-bs-target="#servicoMovimentacaoModal"
-                                         data-url-json="{% url 'gestao:get_movimentacao_servico_json' atividade.pk %}"
-                                         data-url-edit="{% url 'gestao:editar_movimentacao_servico_ajax' atividade.pk %}"
-                                         data-url-delete="{% url 'gestao:excluir_movimentacao_servico' atividade.pk %}">
-                                        <div class="d-flex justify-content-between ps-3">
-                                            <span class="fw-bold {% if atividade.data < hoje %}text-danger{% endif %}">
-                                                <i class="bi bi-arrow-return-right me-2 text-muted"></i>{{ atividade.titulo }}
-                                            </span>
-                                            <small class="fw-bold {% if atividade.data < hoje %}text-danger{% endif %}">{{ atividade.data|date:"d/m/Y" }}</small>
-                                        </div>
+                            {# --- Bloco para Prazos Finais de Serviços --- #}
+                            {% elif item.tipo == 'servico_main' %}
+                                <div class="list-group-item list-group-item-action" style="cursor: pointer;"
+                                     data-bs-toggle="modal" data-bs-target="#servicoModal"
+                                     data-url-json="{% url 'gestao:get_servico_json' item.pk %}">
+                                    <div class="d-flex justify-content-between">
+                                        <span class="fw-bold {% if item.data < hoje %}text-danger{% endif %}">{{ item.titulo }}</span>
+                                        <small class="fw-bold {% if item.data < hoje %}text-danger{% endif %}">{{ item.data|date:"d/m/Y" }}</small>
                                     </div>
-                                {% endfor %}
+                                    <small class="d-block text-muted">{{ item.objeto_str }}</small>
+                                </div>
                             {% endif %}
 
                         {% empty %}

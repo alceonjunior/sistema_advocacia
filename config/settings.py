@@ -153,4 +153,12 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-LOGIN_URL = '/admin/login/'
+# Altere o LOGIN_REDIRECT_URL para a URL raiz. É mais robusto.
+LOGIN_REDIRECT_URL = 'gestao:home'
+
+# Mantenha o LOGIN_URL como está, ele está correto.
+LOGIN_URL = 'login'
+LOGOUT_REDIRECT_URL = 'login'
+
+
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
