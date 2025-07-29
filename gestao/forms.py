@@ -321,31 +321,70 @@ class MovimentacaoServicoForm(forms.ModelForm):
 
 class MovimentacaoForm(forms.ModelForm):
     """
-    Formulário para andamentos, tarefas e prazos de um processo.
-    VERSÃO CORRIGIDA E SIMPLIFICADA: Removemos o método 'clean_tipo_movimentacao'
-    que era desnecessário e causava inconsistências com o widget Select2.
+    Formulário aprimorado para criar e editar andamentos, tarefas e prazos de um processo.
     """
-
     class Meta:
         model = Movimentacao
+        # Lista de campos completa e na ordem lógica
         fields = [
-            'tipo_movimentacao', 'titulo', 'detalhes',
-            'data_publicacao', 'data_intimacao', 'data_inicio_prazo', 'data_prazo_final',
-            'hora_prazo', 'responsavel', 'status', 'link_referencia'
+            'titulo', 'tipo_movimentacao',
+            'data_publicacao', 'data_intimacao',
+            'dias_prazo', 'data_prazo_final', 'hora_prazo',
+            'detalhes', 'link_referencia',
+            'responsavel', 'status',
         ]
+        # Widgets para usar os melhores tipos de input do HTML5
         widgets = {
-            'tipo_movimentacao': forms.Select(attrs={'class': 'form-select select2'}),
-            'titulo': forms.TextInput(attrs={'class': 'form-control'}),
-            'detalhes': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
-            'data_publicacao': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
-            'data_intimacao': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
-            'data_inicio_prazo': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
-            'data_prazo_final': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
-            'hora_prazo': forms.TimeInput(format='%H:%M', attrs={'type': 'time', 'class': 'form-control'}),
-            'responsavel': forms.Select(attrs={'class': 'form-select'}),
-            'link_referencia': forms.URLInput(attrs={'class': 'form-control', 'placeholder': 'https://tribunal.jus.br/consulta/...'}),
-            'status': forms.Select(attrs={'class': 'form-select'}),
+            'data_publicacao': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+            'data_intimacao': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+            'data_prazo_final': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+            'hora_prazo': forms.TimeInput(format='%H:%M', attrs={'type': 'time'}),
+            'detalhes': forms.Textarea(attrs={'rows': 4}),
+            'link_referencia': forms.URLInput(attrs={'placeholder': 'https://tribunal.jus.br/consulta/...'}),
         }
+        # Rótulos personalizados para clareza
+        labels = {
+            'titulo': 'Título / Resumo da Movimentação',
+            'tipo_movimentacao': 'Tipo de Movimentação',
+            'dias_prazo': 'Prazo em Dias (alternativo)',
+        }
+
+    def __init__(self, *args, **kwargs):
+        """
+        Construtor para aplicar classes do Bootstrap e outras lógicas dinâmicas.
+        """
+        super().__init__(*args, **kwargs)
+
+        # Querysets para otimizar e ordenar as opções dos selects
+        self.fields['tipo_movimentacao'].queryset = TipoMovimentacao.objects.all().order_by('-favorito', 'nome')
+        self.fields['responsavel'].queryset = User.objects.filter(is_active=True).order_by('first_name', 'last_name')
+
+        # Aplica a classe 'form-control' ou 'form-select' a todos os campos
+        for field_name, field in self.fields.items():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs['class'] = 'form-select'
+            elif not isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs['class'] = 'form-control'
+
+    def clean(self):
+        """
+        Validação personalizada para garantir a consistência dos dados de prazo.
+        """
+        cleaned_data = super().clean()
+        dias_prazo = cleaned_data.get('dias_prazo')
+        data_prazo_final = cleaned_data.get('data_prazo_final')
+
+        # Se o usuário preencher os dois, priorizamos a data final e limpamos os dias.
+        if dias_prazo and data_prazo_final:
+            cleaned_data['dias_prazo'] = None
+            self.add_error(
+                'dias_prazo',
+                forms.ValidationError(
+                    "Ambos os campos de prazo foram preenchidos. O sistema priorizou a 'Data do Prazo Final'.",
+                    code='prazo_conflitante'
+                )
+            )
+        return cleaned_data
 
 
 class ServicoConcluirForm(forms.ModelForm):

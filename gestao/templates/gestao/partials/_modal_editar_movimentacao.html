@@ -1,12 +1,12 @@
 {% comment %}
-Arquivo: _modal_editar_movimentacao.html (VERSÃO CORRIGIDA)
-Remove o uso dos filtros 'add_class' e 'attr' que exigem a biblioteca 'widget_tweaks'.
-Os campos agora são renderizados da forma padrão do Django, usando as classes
-definidas diretamente no MovimentacaoForm em forms.py.
+Arquivo: _modal_editar_movimentacao.html (VERSÃO FINAL COM UX APRIMORADA)
+- Layout em duas colunas para melhor organização.
+- Lógica de UI reintegrada: o formulário se adapta dinamicamente,
+  ocultando/exibindo campos e ajustando rótulos se o tipo for "Audiência".
 {% endcomment %}
 
 <div class="modal fade" id="movimentacaoModal" tabindex="-1" aria-labelledby="movimentacaoModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
             <form id="formEditarMovimentacao" method="post" action="">
                 {% csrf_token %}
@@ -14,63 +14,59 @@ definidas diretamente no MovimentacaoForm em forms.py.
                     <h5 class="modal-title d-flex align-items-center gap-2" id="movimentacaoModalLabel"><i class="bi bi-pencil-square text-primary"></i> Visualizar / Editar Movimentação</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body">
-                    <div class="row g-3">
-                        <div class="col-md-6 mb-3">
-                            <label for="id_tipo_movimentacao" class="form-label fw-bold">{{ form_movimentacao.tipo_movimentacao.label }}</label>
-                            {{ form_movimentacao.tipo_movimentacao }}
+                <div class="modal-body p-4">
+                    <div class="row g-4">
+
+                        <div class="col-lg-7 border-end pe-lg-4">
+                            <h6 class="text-primary fw-bold">Detalhes Principais</h6>
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-7"><label class="form-label">{{ form_movimentacao.titulo.label }}</label>{{ form_movimentacao.titulo }}</div>
+                                <div class="col-md-5"><label class="form-label">{{ form_movimentacao.tipo_movimentacao.label }}</label>{{ form_movimentacao.tipo_movimentacao }}</div>
+                            </div>
+                            <div class="mb-3"><label class="form-label">{{ form_movimentacao.detalhes.label }}</label>{{ form_movimentacao.detalhes }}</div>
+                            <div class="mb-3"><label class="form-label">{{ form_movimentacao.link_referencia.label }}</label>{{ form_movimentacao.link_referencia }}</div>
+                            <div class="mb-3">
+                                <label for="id_link_referencia" class="form-label">{{ form_movimentacao.link_referencia.label }}</label>
+                                {{ form_movimentacao.link_referencia }}
+                                <div id="linkReferenciaDisplay" class="mt-2" style="display: none;">
+                                    <i class="bi bdi-link-45deg me-1"></i> <a href="#" target="_blank" id="linkReferenciaAnchor">Abrir Link de Referência</a>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="id_titulo" class="form-label">{{ form_movimentacao.titulo.label }}</label>
-                            {{ form_movimentacao.titulo }}
-                        </div>
-                    </div>
-                    <hr>
-                    <h6 class="text-primary">Cálculo de Prazo</h6>
-                    <div class="row g-3">
-                        <div class="col-md-6 col-lg-3 mb-3">
-                            <label for="id_data_publicacao" class="form-label">{{ form_movimentacao.data_publicacao.label }}</label>
-                            {{ form_movimentacao.data_publicacao }}
-                        </div>
-                        <div class="col-md-6 col-lg-3 mb-3">
-                            <label for="id_data_intimacao" class="form-label">{{ form_movimentacao.data_intimacao.label }}</label>
-                            {{ form_movimentacao.data_intimacao }}
-                        </div>
-                        <div class="col-md-6 col-lg-3 mb-3">
-                            <label for="id_data_inicio_prazo" class="form-label">{{ form_movimentacao.data_inicio_prazo.label }}</label>
-                            {{ form_movimentacao.data_inicio_prazo }}
-                        </div>
-                        <div class="col-md-6 col-lg-3 mb-3">
-                            <label for="id_data_prazo_final" class="form-label fw-bold">Data do Prazo Final</label>
-                            {{ form_movimentacao.data_prazo_final }}
-                        </div>
-                    </div>
-                    <hr>
-                    <div class="mb-3">
-                        <label for="id_detalhes" class="form-label">{{ form_movimentacao.detalhes.label }}</label>
-                        {{ form_movimentacao.detalhes }}
-                    </div>
-                    <div class="mb-3">
-                        <label for="id_link_referencia" class="form-label">{{ form_movimentacao.link_referencia.label }}</label>
-                        {{ form_movimentacao.link_referencia }}
-                    </div>
-                    <div class="row g-3">
-                        <div class="col-md-6 mb-3">
-                            <label for="id_responsavel" class="form-label">{{ form_movimentacao.responsavel.label }}</label>
-                            {{ form_movimentacao.responsavel }}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="id_status" class="form-label">{{ form_movimentacao.status.label }}</label>
-                            {{ form_movimentacao.status }}
+
+                        <div class="col-lg-5">
+                            <h6 class="text-primary fw-bold">Datas e Prazos</h6>
+
+                            <div id="bloco-campos-prazo">
+                                <div class="row g-3">
+                                    <div class="col-6"><label class="form-label">{{ form_movimentacao.data_publicacao.label }}</label>{{ form_movimentacao.data_publicacao }}</div>
+                                    <div class="col-6"><label class="form-label">{{ form_movimentacao.data_intimacao.label }}</label>{{ form_movimentacao.data_intimacao }}</div>
+                                    <div class="col-6"><label class="form-label">Prazo em Dias</label>{{ form_movimentacao.dias_prazo }}</div>
+                                    <div class="col-6"><label class="form-label fw-bold">Prazo Final</label>{{ form_movimentacao.data_prazo_final }}</div>
+                                </div>
+                            </div>
+
+                            <div id="bloco-campos-audiencia" class="d-none">
+                                <div class="row g-3">
+                                    <div class="col-7"><label class="form-label fw-bold">Data da Audiência</label>{{ form_movimentacao.data_prazo_final }}</div>
+                                    <div class="col-5"><label class="form-label">{{ form_movimentacao.hora_prazo.label }}</label>{{ form_movimentacao.hora_prazo }}</div>
+                                </div>
+                            </div>
+
+                            <hr>
+
+                            <h6 class="text-primary fw-bold">Responsabilidade</h6>
+                            <div class="row g-3">
+                                <div class="col-md-6"><label class="form-label">{{ form_movimentacao.responsavel.label }}</label>{{ form_movimentacao.responsavel }}</div>
+                                <div class="col-md-6"><label class="form-label">{{ form_movimentacao.status.label }}</label>{{ form_movimentacao.status }}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer justify-content-between">
                     <div>
-                        <a id="btn-comunicar-whatsapp" href="#" target="_blank" class="btn btn-success" style="display: none;"><i class="bi bi-whatsapp"></i> Comunicar Cliente</a>
-                        <form id="formExcluirMovimentacao" method="post" action="" class="d-inline">
-                            {% csrf_token %}<button type="submit" class="btn btn-outline-danger" onclick="return confirm('Tem certeza?');"><i class="bi bi-trash-fill"></i> Excluir</button>
-                        </form>
+                        <a id="btn-comunicar-whatsapp" href="#" target="_blank" class="btn btn-success" style="display: none;"><i class="bi bi-whatsapp"></i> Comunicar</a>
+                        <button type="button" id="btn-excluir-movimentacao" class="btn btn-outline-danger"><i class="bi bi-trash-fill"></i> Excluir</button>
                     </div>
                     <div>
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -78,6 +74,93 @@ definidas diretamente no MovimentacaoForm em forms.py.
                     </div>
                 </div>
             </form>
+            <form id="formExcluirMovimentacao" method="post" action="" class="d-none">{% csrf_token %}</form>
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const modalEl = document.getElementById('movimentacaoModal');
+    if (!modalEl) return;
+
+    const form = modalEl.querySelector('#formEditarMovimentacao');
+
+    // Mapeamento dos elementos da UI
+    const uiElements = {
+        formDelete: document.getElementById('formExcluirMovimentacao'),
+        btnExcluir: modalEl.querySelector('#btn-excluir-movimentacao'),
+        tipoMovimentacaoSelect: form.querySelector('[name="tipo_movimentacao"]'),
+        blocoPrazo: form.querySelector('#bloco-campos-prazo'),
+        blocoAudiencia: form.querySelector('#bloco-campos-audiencia')
+    };
+
+    // ==========================================================
+    // === FUNÇÃO PRINCIPAL DE CONTROLE DA INTERFACE ============
+    // ==========================================================
+    function ajustarInterface() {
+        if (!uiElements.tipoMovimentacaoSelect) return;
+
+        const selectedOption = uiElements.tipoMovimentacaoSelect.options[uiElements.tipoMovimentacaoSelect.selectedIndex];
+        const selectedText = selectedOption ? selectedOption.text.toLowerCase() : '';
+        const isAudiencia = selectedText.includes('audiência') || selectedText.includes('audiencia');
+
+        // Mostra/esconde os blocos corretos usando a classe 'd-none' do Bootstrap
+        uiElements.blocoPrazo.classList.toggle('d-none', isAudiencia);
+        uiElements.blocoAudiencia.classList.toggle('d-none', !isAudiencia);
+    }
+
+    // Listener que dispara quando o modal é aberto
+    modalEl.addEventListener('show.bs.modal', function (event) {
+        const triggerElement = event.relatedTarget;
+        if (!triggerElement || !triggerElement.dataset.urlJson) return;
+
+        form.action = triggerElement.dataset.urlEdit || '';
+        uiElements.formDelete.action = triggerElement.dataset.urlDelete || '';
+        form.reset();
+
+        fetch(triggerElement.dataset.urlJson)
+            .then(response => { if (!response.ok) throw new Error('Falha na resposta da rede.'); return response.json(); })
+            .then(data => {
+                if (data.error) throw new Error(data.error);
+
+                // Preenche todos os campos
+                for (const key in data) {
+                    const field = form.querySelector(`[name="${key}"]`);
+                    if (field) field.value = data[key];
+                }
+
+                // Usa jQuery para os selects com Select2, garantindo compatibilidade
+                $(form.querySelector('[name="responsavel"]')).val(data.responsavel_id).trigger('change');
+
+                // ==========================================================
+                // === PONTO-CHAVE DA CORREÇÃO ==============================
+                // ==========================================================
+                // 1. Preenche o valor do select de tipo
+                $(form.querySelector('[name="tipo_movimentacao"]')).val(data.tipo_movimentacao_id);
+                // 2. CHAMA a função que ajusta a UI
+                ajustarInterface();
+                // 3. Dispara o 'change' para o Select2 se atualizar visualmente
+                $(form.querySelector('[name="tipo_movimentacao"]')).trigger('change');
+            })
+            .catch(error => {
+                console.error("Erro ao carregar dados da movimentação:", error);
+                alert('Não foi possível carregar os dados da movimentação.');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if(modal) modal.hide();
+            });
+    });
+
+    // Listener para o campo de tipo de movimentação para interatividade em tempo real
+    if (uiElements.tipoMovimentacaoSelect) {
+        uiElements.tipoMovimentacaoSelect.addEventListener('change', ajustarInterface);
+    }
+
+    // Listener para o botão de exclusão
+    uiElements.btnExcluir.addEventListener('click', function() {
+        if (confirm('Tem certeza que deseja excluir esta movimentação?')) {
+            uiElements.formDelete.submit();
+        }
+    });
+});
+</script>

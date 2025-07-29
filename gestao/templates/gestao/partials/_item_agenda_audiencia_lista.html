@@ -1,7 +1,10 @@
 {% comment %}
-Componente para exibir um item de AUDIÊNCIA na lista do dashboard.
-Recebe um objeto 'aud' (que é um dicionário montado na view).
-================================================================================
+Componente de Audiência para a Agenda do Dashboard
+VERSÃO APRIMORADA (UX/UI)
+- Layout reestruturado em 3 colunas para alinhamento consistente.
+- Adicionado ícone de "gavel" (martelo) para identificação visual.
+- Coluna de status (data, hora, link) com largura fixa para padronização.
+- Utiliza 'text-truncate' para lidar com títulos e nomes longos sem quebrar o layout.
 {% endcomment %}
 
 <div class="list-group-item list-group-item-action" style="cursor: pointer;"
@@ -11,23 +14,35 @@ Recebe um objeto 'aud' (que é um dicionário montado na view).
      data-url-edit="{% url 'gestao:editar_movimentacao_ajax' aud.pk %}"
      data-url-delete="{% url 'gestao:excluir_movimentacao' aud.pk %}">
 
-    <div class="d-flex w-100 justify-content-between">
-        <h6 class="mb-1 fw-bold {% if aud.data < hoje %}text-danger{% endif %}">{{ aud.titulo }}</h6>
-        <div>
-            <span class="badge bg-primary rounded-pill me-2">{{ aud.data|date:"d/m/Y" }}</span>
+    <div class="d-flex align-items-center gap-3">
+        <div class="d-flex align-items-center justify-content-center pe-2 text-primary fs-4" style="flex-shrink: 0;">
+            <i class="bi bi-gavel"></i>
+        </div>
+
+        <div class="flex-grow-1" style="min-width: 0;">
+            <h6 class="mb-1 fw-bold text-truncate" title="{{ aud.titulo }}">{{ aud.titulo }}</h6>
+            <p class="mb-1 text-muted small text-truncate" title="{{ aud.numero_processo }}">
+                <i class="bi bi-folder-fill me-1"></i>
+                <a href="{% url 'gestao:detalhe_processo' aud.processo_pk %}" class="text-decoration-none" onclick="event.stopPropagation()">
+                    {{ aud.numero_processo }}
+                </a>
+            </p>
+            <p class="mb-0 text-muted small text-truncate" title="{{ aud.nome_parte }}">
+                <i class="bi bi-person-fill me-1"></i>
+                {{ aud.nome_parte }}
+            </p>
+        </div>
+
+        <div class="d-flex flex-column align-items-end justify-content-center ps-2" style="flex-shrink: 0; width: 110px;">
+            <span class="badge bg-primary rounded-pill mb-1 w-100">{{ aud.data|date:"d/m/Y" }}</span>
             {% if aud.hora %}
-                <span class="badge bg-info rounded-pill">{{ aud.hora|time:"H:i" }}</span>
+                <span class="badge bg-info rounded-pill mb-1 w-100">{{ aud.hora|time:"H:i" }}</span>
+            {% endif %}
+            {% if aud.link_referencia %}
+                <a href="{{ aud.link_referencia }}" target="_blank" onclick="event.stopPropagation();" class="badge bg-secondary text-decoration-none w-100" title="Abrir link de referência">
+                    <i class="bi bi-link-45deg"></i> Link
+                </a>
             {% endif %}
         </div>
     </div>
-    <p class="mb-1 text-muted small">
-        <i class="bi bi-folder-fill me-1"></i>
-        <a href="{% url 'gestao:detalhe_processo' aud.processo_pk %}" class="text-decoration-none" onclick="event.stopPropagation()">
-            {{ aud.numero_processo }}
-        </a>
-    </p>
-    <p class="mb-0 text-muted small">
-        <i class="bi bi-person-fill me-1"></i>
-        {{ aud.nome_parte }}
-    </p>
 </div>

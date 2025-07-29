@@ -176,7 +176,6 @@ urlpatterns = [
 
     # --- Importação Projudi ---
     path('importacao/projudi/analisar/', views.analisar_dados_projudi_ajax, name='analisar_dados_projudi_ajax'),
-    path('importacao/projudi/processar/', views.processar_importacao_projudi, name='processar_importacao_projudi'),
 
     # --- Configurações ---
     path('configuracoes/permissoes/grupo/<int:group_id>/', views.get_permissoes_grupo_ajax,
@@ -192,5 +191,11 @@ urlpatterns = [
     # ROTA PARA A BUSCA GLOBAL (AJAX)
     # ==============================================================================
     path('ajax/global-search/', views.global_search, name='global_search'),
+
+    path('importacao/projudi/', views.importacao_projudi_view, name='importacao_projudi'),
+
+    path('importacao/projudi/analisar-ajax/', views.analisar_dados_projudi_ajax, name='analisar_dados_projudi_ajax'),
+    path('importacao/projudi/confirmar/', views.confirmar_importacao_projudi, name='confirmar_importacao_projudi'),
+    path('importacao/projudi/executar/', views.executar_importacao_projudi, name='executar_importacao_projudi'),
 
 ]

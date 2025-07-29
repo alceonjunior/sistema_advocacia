@@ -1,0 +1,88 @@
+{% extends 'gestao/base.html' %}
+
+{% block title %}Confirmar Importação - Passo Final{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card shadow-sm">
+                <div class="card-header text-center bg-primary text-white">
+                    <h4 class="mb-0"><i class="bi bi-check2-circle me-2"></i>Passo 3: Resumo e Confirmação Final</h4>
+                </div>
+                <div class="card-body p-4">
+                    <h5 class="card-title">Você está prestes a importar {{ resumo.movimentacoes|length }} intimação(ões)</h5>
+                    <p class="card-text">As seguintes ações serão executadas no sistema. Por favor, revise com atenção.</p>
+
+                    <div class="mt-4">
+                        <h6><i class="bi bi-bell-fill text-primary me-2"></i>Movimentações/Prazos a Serem Criados</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered table-striped">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th scope="col">#</th>
+                                        <th scope="col">Número do Processo</th>
+                                        <th scope="col">Tipo de Movimentação</th>
+                                        <th scope="col">Data de Intimação</th>
+                                        <th scope="col">Prazo Final Calculado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for mov in resumo.movimentacoes %}
+                                    <tr>
+                                        <td>{{ forloop.counter }}</td>
+                                        <td>{{ mov.numero_processo }}</td>
+                                        <td>{{ mov.tipo }}</td>
+                                        <td>{{ mov.intimacao }}</td>
+                                        <td><strong>{{ mov.prazo_final }}</strong></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <h6 class="mt-4"><i class="bi bi-people-fill text-success me-2"></i>Clientes e Partes Envolvidas</h6>
+                         <div class="table-responsive">
+                            <table class="table table-sm table-bordered table-striped">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th scope="col">Nome</th>
+                                        <th scope="col">Polo no Processo</th>
+                                        <th scope="col">Ação no Sistema</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for cliente in resumo.clientes_envolvidos %}
+                                    <tr>
+                                        <td>{{ cliente.nome }}</td>
+                                        <td>{{ cliente.polo }}</td>
+                                        <td><span class="badge {% if 'Novo' in cliente.status %}bg-success-subtle text-success-emphasis{% else %}bg-info-subtle text-info-emphasis{% endif %}">{{ cliente.status }}</span></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-warning mt-4" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        Esta ação é irreversível. Após a confirmação, os dados serão salvos no banco de dados.
+                    </div>
+
+                    <form action="{% url 'gestao:executar_importacao_projudi' %}" method="POST">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-4">
+                            <button type="button" class="btn btn-secondary" onclick="window.history.back();">
+                                <i class="bi bi-arrow-left-circle me-1"></i> Voltar e Corrigir
+                            </button>
+                            <button type="submit" class="btn btn-lg btn-success">
+                                <i class="bi bi-check-all me-1"></i> Sim, Confirmar e Importar Tudo
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

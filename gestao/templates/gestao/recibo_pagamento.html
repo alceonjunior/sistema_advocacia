@@ -3,182 +3,177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recibo de Pagamento - Escritório de Advocacia</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Recibo de Pagamento - {{ escritorio.nome_escritorio|default:'Escritório de Advocacia' }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
         body {
-            font-family: 'Arial', sans-serif;
-            background-color: #f8f9fa;
-            color: #343a40;
-            margin: 0;
-            padding: 20px;
-            font-size: 16px; /* Aumenta o tamanho base da fonte */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Fonte moderna */
+            background-color: #f0f2f5;
+            color: #212529;
+            font-size: 12pt;
         }
         .receipt-container {
-            max-width: 700px; /* Largura máxima para telas maiores */
-            width: 90%; /* Adapta-se à largura da tela */
-            margin: 20px auto; /* Centraliza e adiciona margem superior/inferior */
+            max-width: 21cm; /* Padrão A4 */
+            min-height: 29.7cm;
+            margin: 2rem auto;
             background-color: #fff;
-            border: 1px solid #dee2e6;
-            padding: 30px; /* Aumenta o preenchimento interno */
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1); /* Sombra mais suave */
+            padding: 2cm;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            display: flex;
+            flex-direction: column;
         }
         .receipt-header {
-            text-align: center;
-            margin-bottom: 30px; /* Mais espaço abaixo do cabeçalho */
-            border-bottom: 1px dashed #ced4da;
-            padding-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 2rem;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 1rem;
+            margin-bottom: 1.5rem;
         }
-        .receipt-header h4 {
-            margin: 0;
-            color: #007bff;
-            font-weight: bold;
-            font-size: 1.8em; /* Aumenta o título do recibo */
+        .header-logo img {
+            max-height: 80px;
+            width: auto;
         }
-        .receipt-header p {
-            margin: 5px 0; /* Mais espaço entre as linhas do endereço */
-            font-size: 0.9em; /* Mantém o tamanho da fonte para informações de contato menor */
+        .header-info {
+            text-align: right;
+            font-size: 0.9em;
             color: #6c757d;
         }
+        .header-info p {
+            margin: 0;
+            line-height: 1.4;
+        }
+        .receipt-title {
+            text-align: center;
+            margin: 1.5rem 0;
+            font-weight: bold;
+            font-size: 1.8rem;
+            color: #343a40;
+        }
         .receipt-body {
-            font-size: 1.1em; /* Aumenta o tamanho da fonte do corpo principal */
-            line-height: 1.8; /* Aumenta o espaçamento entre as linhas */
-            margin-bottom: 40px; /* Mais espaço abaixo do corpo */
+            font-size: 1.1rem;
+            line-height: 1.7;
+            text-align: justify;
+            flex-grow: 1; /* Faz o corpo ocupar o espaço disponível */
         }
         .receipt-body strong {
             color: #000;
         }
-        /* Novo estilo para destacar o texto editável */
-        .receipt-body p[contenteditable="true"] {
+        .receipt-body p#receiptText { /* Aplica o estilo editável apenas ao parágrafo principal */
             border: 1px dashed #007bff;
-            padding: 10px; /* Mais padding para a área editável */
+            padding: 0.5rem;
             background-color: #e9f5ff;
-            min-height: 100px; /* Garante uma altura mínima para edição */
+            white-space: pre-line; /* Mantém as quebras de linha */
         }
         .receipt-footer {
             text-align: center;
-            font-size: 0.9em; /* Ajusta o tamanho da fonte do rodapé */
-            color: #6c757d;
-            border-top: 1px dashed #ced4da;
-            padding-top: 20px;
+            font-size: 1rem;
+            color: #495057;
+            margin-top: 4rem; /* Garante espaço acima do rodapé */
         }
         .signature-line {
-            border-top: 1px solid #adb5bd;
-            width: 60%; /* Linha de assinatura um pouco menor */
-            margin: 40px auto 10px auto; /* Mais espaço acima da linha */
+            border-top: 1px solid #495057;
+            width: 70%;
+            margin: 5rem auto 0.5rem auto;
         }
-        .receipt-footer p {
-            margin-bottom: 5px; /* Espaçamento entre linhas da assinatura */
-        }
-        .print-button-container {
-            text-align: center;
-            margin-top: 30px; /* Mais espaço acima dos botões */
-        }
-
-        /* Media Queries para Responsividade */
-        @media (max-width: 768px) {
-            body {
-                padding: 10px; /* Menos padding em telas menores */
-            }
-            .receipt-container {
-                padding: 20px; /* Ajusta o padding do container */
-                margin: 10px auto;
-            }
-            .receipt-header h4 {
-                font-size: 1.5em; /* Reduz o título em telas menores */
-            }
-            .receipt-body {
-                font-size: 1em; /* Reduz a fonte do corpo em telas menores */
-            }
-            .signature-line {
-                width: 80%; /* Linha de assinatura um pouco maior em telas menores */
-            }
+        .print-controls {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1050;
         }
 
         /* Estilos de Impressão */
         @media print {
-            body {
-                padding: 0;
-                margin: 0;
-                background-color: #fff;
-            }
+            body { background-color: white; font-size: 12pt; }
             .receipt-container {
-                border: none;
-                box-shadow: none;
-                margin: 0;
-                width: auto; /* Remove largura fixa para impressão */
-                padding: 10mm; /* Padding para impressão, ajustável */
+                border: none; box-shadow: none; margin: 0; padding: 0;
+                max-width: 100%; min-height: 0;
             }
-            .print-button-container,
-            #editButton { /* Esconde o botão de editar na impressão */
-                display: none;
-            }
-            /* Garante que o texto editável não tenha bordas na impressão */
-            .receipt-body p[contenteditable="true"] {
-                border: none !important;
-                background-color: transparent !important;
-                padding: 0 !important;
+            .print-controls, #editButton { display: none; }
+            .receipt-body p#receiptText { border: none !important; background-color: transparent !important; padding: 0 !important; }
+            @page {
+                size: A4;
+                margin: 2cm;
             }
         }
     </style>
 </head>
 <body>
-    <div class="receipt-container">
-        <div class="receipt-header">
-            <h4>RECIBO DE PAGAMENTO</h4>
-            {% if escritorio %}
-                <p>{{ escritorio.nome_escritorio }}</p>
-                <p>{{ escritorio.endereco }}, {{ escritorio.numero }} - {{ escritorio.bairro }}</p>
-                <p>{{ escritorio.cidade }} - {{ escritorio.estado }}, CEP {{ escritorio.cep }}</p>
-                <p>Tel: {{ escritorio.telefone_principal }} | Email: {{ escritorio.email_contato }}</p>
-            {% else %}
-                <p>Nome do Escritório</p>
-                <p>Endereço do Escritório</p>
-                <p>Cidade - Estado, CEP</p>
-                <p>Telefone | Email</p>
-            {% endif %}
-        </div>
+    <div class="print-controls">
+        <a href="{% if pagamento.lancamento.processo %}{% url 'gestao:detalhe_processo' pk=pagamento.lancamento.processo.pk %}{% else %}{% url 'gestao:detalhe_servico' pk=pagamento.lancamento.servico.pk %}{% endif %}" class="btn btn-secondary shadow-sm">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+        <button class="btn btn-primary shadow-sm" onclick="window.print()">
+            <i class="bi bi-printer-fill me-2"></i>Imprimir Recibo
+        </button>
+    </div>
 
-        <div class="receipt-body">
+    <div class="receipt-container">
+        <header class="receipt-header">
+            <div class="header-logo">
+                {% if escritorio and escritorio.logo %}
+                    <img src="{{ escritorio.logo.url }}" alt="Logomarca do Escritório">
+                {% endif %}
+            </div>
+            <div class="header-info">
+                {% if escritorio %}
+                    <p><strong>{{ escritorio.nome_escritorio }}</strong></p>
+                    <p>{{ escritorio.logradouro }}, {{ escritorio.numero }} - {{ escritorio.bairro }}</p>
+                    <p>{{ escritorio.cidade }} - {{ escritorio.estado }}, CEP {{ escritorio.cep }}</p>
+                    <p><span id="telefone-contato">{{ escritorio.telefone_contato }}</span></p>
+                    <p>{{ escritorio.email_contato }}</p>
+                {% endif %}
+            </div>
+        </header>
+
+        <h2 class="receipt-title">RECIBO DE PAGAMENTO</h2>
+
+        <main class="receipt-body">
             <p id="receiptText" contenteditable="false">
-                Recebi de <strong>{{ cliente.nome_completo }}</strong>,
-                {% if cliente.tipo_pessoa == 'PF' %}portador(a) do CPF nº{% else %}inscrito(a) no CNPJ sob o nº{% endif %}
-                <strong>{{ cliente.cpf_cnpj }}</strong>,
+                Recebi de <strong>{{ pagamento.lancamento.cliente.nome_completo|default:'N/A' }}</strong>,
+                {% if pagamento.lancamento.cliente.tipo_pessoa == 'PF' %}portador(a) do CPF nº{% else %}inscrito(a) no CNPJ sob o nº{% endif %}
+                <strong>{{ pagamento.lancamento.cliente.cpf_cnpj|default:'N/A' }}</strong>,
                 a importância de <strong>R$ {{ pagamento.valor_pago|floatformat:2 }} ({{ valor_extenso }})</strong>,
                 referente ao pagamento de
-                <strong>{{ lancamento.descricao }}</strong>
-                {% if processo %}
-                    relacionado ao processo
-                    {% if processo.numero_processo %}
-                        nº <strong>{{ processo.numero_processo }}</strong>
+                <strong>
+                    {% if pagamento.lancamento.processo and pagamento.lancamento.processo.numero_processo %}
+                        honorários do processo nº {{ pagamento.lancamento.processo.numero_processo }}
+                    {% elif pagamento.lancamento.processo and pagamento.lancamento.processo.descricao_caso %}
+                        honorários referentes a "{{ pagamento.lancamento.processo.descricao_caso }}"
                     {% else %}
-                        "{{ processo.descricao_caso|default:'não informado' }}"
+                        {{ pagamento.lancamento.descricao|default:'serviços prestados' }}
                     {% endif %}
-                {% endif %}.
+                </strong>.
             </p>
             <p>
                 O presente pagamento foi efetuado em {{ pagamento.data_pagamento|date:"d/m/Y" }}
-                através de <strong>{{ pagamento.forma_pagamento|default:"meio não especificado" }}</strong>.
+                através de <strong>{{ pagamento.forma_pagamento|upper|default:"MEIO NÃO ESPECIFICADO" }}</strong>.
             </p>
             <p>
-                Dou, por isso, plena, rasa e geral quitação do valor acima especificado.
+                Dou, por isso, plena, rasa e geral quitação do valor acima especificado, para que produza seus devidos e legais efeitos.
             </p>
-        </div>
+        </main>
 
         <footer class="receipt-footer">
             <p>{{ escritorio.cidade }} - {{ escritorio.estado }}, {{ data_emissao_extenso }}.</p>
             <div class="signature-line"></div>
-            {% if emissor_nome %}<p class="mb-0"><strong>{{ emissor_nome }}</strong></p>{% endif %}
-            {% if emissor_oab %}<p>{{ emissor_oab }}</p>{% endif %}
+            {% if escritorio.nome_escritorio %}<p class="mb-0"><strong>{{ escritorio.nome_escritorio }}</strong></p>{% endif %}
+            {% if escritorio.cnpj %}<p>CNPJ: {{ escritorio.cnpj }}</p>{% endif %}
         </footer>
     </div>
 
-    <div class="print-button-container">
-        <button id="editButton" class="btn btn-info me-2" onclick="toggleEdit()">Editar Texto</button>
-        <button class="btn btn-primary" onclick="window.print()">Imprimir Recibo</button>
+    <div class="print-controls">
+        <button id="editButton" class="btn btn-info shadow-sm me-2" onclick="toggleEdit()">Editar Texto</button>
+        <button class="btn btn-primary shadow-sm" onclick="window.print()">
+            <i class="bi bi-printer-fill me-2"></i>Imprimir Recibo
+        </button>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
     <script>
         function toggleEdit() {
             const receiptText = document.getElementById('receiptText');
@@ -186,17 +181,26 @@
 
             if (receiptText.contentEditable === 'true') {
                 receiptText.contentEditable = 'false';
-                editButton.textContent = 'Editar Texto';
+                editButton.innerHTML = '<i class="bi bi-pencil-fill me-2"></i>Editar Texto';
                 editButton.classList.remove('btn-warning');
                 editButton.classList.add('btn-info');
             } else {
                 receiptText.contentEditable = 'true';
-                editButton.textContent = 'Concluir Edição';
+                editButton.innerHTML = '<i class="bi bi-check-lg me-2"></i>Concluir Edição';
                 editButton.classList.remove('btn-info');
                 editButton.classList.add('btn-warning');
-                receiptText.focus(); // Coloca o foco no texto para facilitar a edição
+                receiptText.focus();
             }
         }
+
+        $(document).ready(function(){
+            const phoneElement = $('#telefone-contato');
+            if (phoneElement.length && phoneElement.text()) {
+                let phone = phoneElement.text().replace(/\D/g, '');
+                let mask = (phone.length > 10) ? '(00) 00000-0000' : '(00) 0000-00009';
+                phoneElement.mask(mask);
+            }
+        });
     </script>
 </body>
 </html>

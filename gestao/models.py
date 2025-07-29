@@ -66,6 +66,11 @@ class Cliente(models.Model):
     class Meta:
         ordering = ['nome_completo']
 
+    def get_absolute_url(self):
+        # --- CORREÇÃO APLICADA ---
+        # Padronizado para 'detalhe_cliente'. Verifique se este é o nome da sua rota em urls.py
+        return reverse('gestao:detalhe_cliente', kwargs={'pk': self.pk})
+
     def __str__(self):
         return self.nome_completo
 
@@ -237,6 +242,7 @@ class Processo(models.Model):
         return f"Proc. {self.numero_processo or 'N/A'}"
 
     def get_absolute_url(self):
+        # Este método já parecia correto, mantido para consistência.
         return reverse('gestao:detalhe_processo', kwargs={'pk': self.pk})
 
     def get_polo_ativo_display(self):
@@ -245,14 +251,29 @@ class Processo(models.Model):
     def get_polo_passivo_display(self):
         return ", ".join([p.cliente.nome_completo for p in self.partes.filter(tipo_participacao='REU')]) or "N/A"
 
-    def get_cliente_principal_display(self):
+    def get_cliente_principal(self):
+        """
+        Retorna o objeto Cliente marcado como 'is_cliente_do_processo=True'
+        associado a este processo. Retorna None se não houver um.
+        Prioriza o campo is_cliente_do_processo. Se não houver, busca o primeiro autor.
+        """
+        # Tenta encontrar o cliente marcado explicitamente como principal
         cliente_principal = self.partes.filter(is_cliente_do_processo=True).first()
         if cliente_principal:
-            return cliente_principal.cliente.nome_completo
+            return cliente_principal.cliente
+        # Se não houver um marcado como principal, retorna o primeiro autor
         polo_ativo = self.partes.filter(tipo_participacao='AUTOR').first()
         if polo_ativo:
-            return polo_ativo.cliente.nome_completo
-        return "Cliente não definido"
+            return polo_ativo.cliente
+        return None
+
+    def get_cliente_principal_display(self):
+        """
+        Retorna o nome completo do cliente principal ou uma string padrão
+        se o cliente principal não estiver definido.
+        """
+        cliente = self.get_cliente_principal()  # Agora usa o método que retorna o objeto
+        return cliente.nome_completo if cliente else "Cliente não definido"
 
 
 class Servico(models.Model):
@@ -280,6 +301,7 @@ class Servico(models.Model):
         return f"{self.tipo_servico} - {self.cliente}"
 
     def get_absolute_url(self):
+        # Este método já parecia correto, mantido para consistência.
         return reverse('gestao:detalhe_servico', kwargs={'pk': self.pk})
 
 
@@ -534,34 +556,37 @@ class Pagamento(models.Model):
 # ==============================================================================
 
 class CalculoJudicial(models.Model):
-    """Armazena o resultado e os parâmetros de um cálculo judicial realizado."""
-    processo = models.ForeignKey(Processo, on_delete=models.CASCADE, related_name="calculos")
-    descricao = models.CharField(max_length=255, default="Cálculo Padrão")
-    responsavel = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    # Campos que já devem existir:
+    processo = models.ForeignKey('Processo', on_delete=models.CASCADE, related_name='calculos')
+    responsavel = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    memoria_calculo = models.JSONField(null=True, blank=True)
+    valor_corrigido = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    valor_final = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     data_calculo = models.DateTimeField(auto_now_add=True)
-    valor_original = models.DecimalField(max_digits=12, decimal_places=2)
-    data_inicio_correcao = models.DateField()
-    data_fim_correcao = models.DateField()
-    indice_correcao = models.CharField(max_length=10)
-    correcao_pro_rata = models.BooleanField(default=False)
-    juros_percentual = models.DecimalField(max_digits=7, decimal_places=4, null=True, blank=True)
-    juros_tipo = models.CharField(max_length=10, null=True, blank=True)
-    juros_periodo = models.CharField(max_length=10, null=True, blank=True)
-    juros_data_inicio = models.DateField(null=True, blank=True, verbose_name="Data de Início dos Juros")
-    juros_data_fim = models.DateField(null=True, blank=True, verbose_name="Data Final dos Juros")
-    multa_percentual = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-    multa_sobre_juros = models.BooleanField(default=False)
-    honorarios_percentual = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-    valor_corrigido = models.DecimalField(max_digits=15, decimal_places=2)
-    valor_final = models.DecimalField(max_digits=15, decimal_places=2)
-    memoria_calculo = models.JSONField()
-    history = HistoricalRecords()
 
-    class Meta:
-        ordering = ['-data_calculo']
+    # CAMPOS QUE VOCÊ PRECISA ADICIONAR (baseado nos erros e no formulário):
+    descricao = models.CharField(max_length=255, blank=True, null=True)
+    valor_original = models.DecimalField(max_digits=15, decimal_places=2)
+    data_inicio = models.DateField()
+    data_fim = models.DateField()
+    indice = models.CharField(max_length=50) # Ou um ForeignKey para um modelo de Índices, se existir
+    correcao_pro_rata = models.BooleanField(default=False)
+    juros_taxa = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    juros_periodo = models.CharField(max_length=20, default='MENSAL') # Ex: 'MENSAL', 'ANUAL'
+    juros_tipo = models.CharField(max_length=20, default='SIMPLES') # Ex: 'SIMPLES', 'COMPOSTO'
+    juros_data_inicio = models.DateField(null=True, blank=True)
+    juros_data_fim = models.DateField(null=True, blank=True)
+    multa_percentual = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True)
+    multa_sobre_juros = models.BooleanField(default=False)
+    honorarios_percentual = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True)
+    gerar_memorial = models.BooleanField(default=True)
 
     def __str__(self):
-        return f"{self.descricao} (R$ {self.valor_original})"
+        return self.descricao or f"Cálculo {self.pk} do processo {self.processo.numero_processo}"
+
+    class Meta:
+        verbose_name = "Cálculo Judicial"
+        verbose_name_plural = "Cálculos Judiciais"
 
 
 class EscritorioConfiguracao(models.Model):
