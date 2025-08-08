@@ -232,8 +232,9 @@ class PagamentoAdmin(admin.ModelAdmin):
 
 @admin.register(CalculoJudicial)
 class CalculoJudicialAdmin(admin.ModelAdmin):
-    list_display = ('descricao', 'processo', 'valor_final', 'responsavel', 'data_calculo')
-    readonly_fields = ('data_calculo', 'responsavel', 'valor_corrigido', 'valor_final', 'memoria_calculo')
+    # CORREÇÃO: Usando os novos nomes de campo corretos
+    list_display = ('descricao', 'processo', 'valor_final_calculado', 'responsavel', 'data_calculo')
+    readonly_fields = ('data_calculo', 'responsavel', 'valor_final_calculado', 'memoria_calculo_json')
     autocomplete_fields = ['processo', 'responsavel']
 
 

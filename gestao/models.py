@@ -13,6 +13,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.urls import reverse
 from simple_history.models import HistoricalRecords
+from .encoders import DecimalEncoder
 
 
 # ==============================================================================
@@ -556,37 +557,68 @@ class Pagamento(models.Model):
 # ==============================================================================
 
 class CalculoJudicial(models.Model):
-    # Campos que já devem existir:
+    """
+    Modelo container para um cálculo judicial completo, que pode consistir em múltiplas fases.
+    """
     processo = models.ForeignKey('Processo', on_delete=models.CASCADE, related_name='calculos')
+    descricao = models.CharField(max_length=255, verbose_name="Descrição do Cálculo")
+    valor_original = models.DecimalField(max_digits=15, decimal_places=2, verbose_name="Valor Original da Causa")
+
+    # --- CORREÇÃO APLICADA AQUI ---
+    # Adicionar default=None torna o manuseio de valores nulos mais explícito e robusto,
+    # resolvendo o erro 'InvalidOperation' com o SQLite.
+    valor_final_calculado = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        default=None,  # <-- Certifique-se que esta linha está aqui e o arquivo foi SALVO
+        verbose_name="Valor Final Calculado"
+    )
+
+    memoria_calculo_json = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name="Memória de Cálculo (JSON)",
+        encoder=DecimalEncoder
+    )
+
     responsavel = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
-    memoria_calculo = models.JSONField(null=True, blank=True)
-    valor_corrigido = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    valor_final = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     data_calculo = models.DateTimeField(auto_now_add=True)
-
-    # CAMPOS QUE VOCÊ PRECISA ADICIONAR (baseado nos erros e no formulário):
-    descricao = models.CharField(max_length=255, blank=True, null=True)
-    valor_original = models.DecimalField(max_digits=15, decimal_places=2)
-    data_inicio = models.DateField()
-    data_fim = models.DateField()
-    indice = models.CharField(max_length=50) # Ou um ForeignKey para um modelo de Índices, se existir
-    correcao_pro_rata = models.BooleanField(default=False)
-    juros_taxa = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    juros_periodo = models.CharField(max_length=20, default='MENSAL') # Ex: 'MENSAL', 'ANUAL'
-    juros_tipo = models.CharField(max_length=20, default='SIMPLES') # Ex: 'SIMPLES', 'COMPOSTO'
-    juros_data_inicio = models.DateField(null=True, blank=True)
-    juros_data_fim = models.DateField(null=True, blank=True)
-    multa_percentual = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True)
-    multa_sobre_juros = models.BooleanField(default=False)
-    honorarios_percentual = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True)
-    gerar_memorial = models.BooleanField(default=True)
-
-    def __str__(self):
-        return self.descricao or f"Cálculo {self.pk} do processo {self.processo.numero_processo}"
 
     class Meta:
         verbose_name = "Cálculo Judicial"
         verbose_name_plural = "Cálculos Judiciais"
+        ordering = ['-data_calculo']
+
+    def __str__(self):
+        return self.descricao or f"Cálculo {self.pk} do processo {self.processo.numero_processo}"
+
+
+class FaseCalculo(models.Model):
+    """
+    Representa uma fase (período) específica dentro de um Cálculo Judicial.
+    """
+    INDICE_CHOICES = [('IPCA', 'IPCA (IBGE)'), ('INPC', 'INPC (IBGE)'), ('IGP-M', 'IGP-M (FGV/BCB)'),
+                      ('IGP-DI', 'IGP-DI (FGV/BCB)'), ('SELIC', 'Taxa Selic (BCB)'), ('TR', 'Taxa Referencial (BCB)')]
+    JUROS_TIPO_CHOICES = [('SIMPLES', 'Simples'), ('COMPOSTO', 'Compostos')]
+
+    calculo_judicial = models.ForeignKey(CalculoJudicial, on_delete=models.CASCADE, related_name='fases')
+    ordem = models.PositiveIntegerField(default=1)
+    data_inicio = models.DateField(verbose_name="Data de Início da Fase")
+    data_fim = models.DateField(verbose_name="Data de Fim da Fase")
+    indice = models.CharField(max_length=50, choices=INDICE_CHOICES, verbose_name="Índice de Correção")
+    # --- AJUSTE DE CONSISTÊNCIA ---
+    juros_taxa = models.DecimalField(max_digits=7, decimal_places=2, default=0, verbose_name="Taxa de Juros Mensal (%)")
+    juros_tipo = models.CharField(max_length=20, choices=JUROS_TIPO_CHOICES, default='SIMPLES',
+                                  verbose_name="Tipo de Juros")
+    observacao = models.CharField(max_length=255, blank=True, null=True, verbose_name="Observação da Fase")
+
+    class Meta:
+        ordering = ['calculo_judicial', 'ordem']
+
+    def __str__(self):
+        return f"Fase {self.ordem} do Cálculo {self.calculo_judicial.id}"
 
 
 class EscritorioConfiguracao(models.Model):

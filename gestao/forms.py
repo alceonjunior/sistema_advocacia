@@ -17,6 +17,7 @@ from .models import (
     ModeloDocumento, Documento, ParteProcesso, Recurso, Incidente, EscritorioConfiguracao, AreaProcesso, UsuarioPerfil,
     LancamentoFinanceiro
 )
+from .models import CalculoJudicial, FaseCalculo
 
 # Ferramenta do Django para criar conjuntos de formulários (formsets) a partir de
 # um modelo, essencial para editar múltiplos objetos relacionados em uma única tela.
@@ -731,3 +732,61 @@ class DespesaRecorrenteVariavelForm(forms.Form):
                                widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}))
     data_vencimento = forms.DateField(label="Data de Vencimento",
                                       widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}))
+
+
+class CalculoJudicialForm(forms.ModelForm):
+    class Meta:
+        model = CalculoJudicial
+        # Inclua os campos que aparecem na seção "Dados Gerais"
+        fields = ['descricao', 'valor_original']
+
+        widgets = {
+            'descricao': forms.TextInput(
+                attrs={
+                    'class': 'form-control',  # Adiciona a classe do Bootstrap
+                }
+            ),
+            'valor_original': forms.TextInput(
+                attrs={
+                    'class': 'form-control',  # Adiciona a classe do Bootstrap
+                    'style': 'text-align: right;',  # Alinha o texto à direita para valores monetários
+                    'placeholder': '0,00'
+                }
+            ),
+        }
+
+        labels = {
+            'descricao': 'Descrição do Cálculo',
+            'valor_original': 'Valor a ser atualizado',  # Rótulo igual ao da imagem
+        }
+
+
+class FaseCalculoForm(forms.ModelForm):
+    """Formulário para uma única fase de cálculo."""
+    class Meta:
+        model = FaseCalculo
+        fields = ['ordem', 'data_inicio', 'data_fim', 'indice', 'juros_taxa', 'juros_tipo', 'observacao']
+        widgets = {
+            'ordem': forms.HiddenInput(),
+            'data_inicio': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+            'data_fim': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+            'indice': forms.Select(attrs={'class': 'form-select indice-select'}), # Classe para o JS
+            'juros_taxa': forms.NumberInput(attrs={'class': 'form-control juros-taxa', 'step': '0.0001'}),
+            'juros_tipo': forms.Select(attrs={'class': 'form-select juros-tipo'}),
+            'observacao': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ex: Correção até a citação'}),
+        }
+
+# Cria um FormSet para as fases, ligado ao cálculo principal
+FaseCalculoFormSet = inlineformset_factory(
+    CalculoJudicial,
+    FaseCalculo,
+    form=FaseCalculoForm,
+
+    # --- CORREÇÃO APLICADA AQUI ---
+    # Alterado de 1 para 0. Não cria um formulário em branco por padrão.
+    extra=0,
+
+    can_delete=True,
+    min_num=1,
+    validate_min=True,
+)

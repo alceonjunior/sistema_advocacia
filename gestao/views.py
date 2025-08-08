@@ -62,10 +62,10 @@ from .forms import (
     RecursoForm, ServicoConcluirForm, ServicoEditForm, ServicoForm,
     TipoAcaoForm, TipoServicoForm, UsuarioPerfilForm, GerarDocumentoForm,
     LancamentoFinanceiroForm, DespesaRecorrenteVariavelForm,
-    DespesaRecorrenteFixaForm, DespesaPontualForm, DespesaTipoForm,
+    DespesaRecorrenteFixaForm, DespesaPontualForm, DespesaTipoForm, CalculoJudicialForm, FaseCalculoFormSet,
 )
 from .models import (
-    AreaProcesso, CalculoJudicial, Cliente, Documento, EscritorioConfiguracao,
+    AreaProcesso, CalculoJudicial,FaseCalculo, Cliente, Documento, EscritorioConfiguracao,
     Incidente, LancamentoFinanceiro, ModeloDocumento, Movimentacao,
     MovimentacaoServico, Pagamento, Processo, Recurso, Servico, TipoAcao,
     TipoServico, UsuarioPerfil, ContratoHonorarios, ParteProcesso, TipoMovimentacao,
@@ -1941,62 +1941,70 @@ def imprimir_documento(request, pk):
 # ==============================================================================
 
 def realizar_calculo(request, processo_pk, calculo_pk=None):
+    """
+    View para criar, carregar, calcular e salvar um Cálculo Judicial por fases.
+    """
     processo = get_object_or_404(Processo, pk=processo_pk)
-    calculo_carregado = None
-    resultado_final = None
-    erro_final = None
-    form_data_for_display = {} # Nova variável para garantir a passagem dos dados
+    calculo_instance = None
+    if calculo_pk:
+        calculo_instance = get_object_or_404(CalculoJudicial, pk=calculo_pk)
+
+    # Variáveis para o contexto
+    resultado = None
+    calculos_salvos = processo.calculos.all().order_by('-data_calculo')
 
     if request.method == 'POST':
-        form = CalculoForm(request.POST)
-        if form.is_valid():
-            dados_calculo = form.cleaned_data
-            form_data_for_display = dados_calculo # Armazena os dados limpos para exibição
-            resultado, erro = _perform_calculation(dados_calculo)
+        # Instancia os formulários com os dados enviados
+        form = CalculoJudicialForm(request.POST, instance=calculo_instance)
+        formset = FaseCalculoFormSet(request.POST, instance=calculo_instance)
 
-            if resultado and not erro:
-                memoria_calculo_json = [
-                    {k: (v.isoformat() if isinstance(v, date) else str(v)) for k, v in linha.items()}
-                    for linha in resultado.get('memorial', [])
-                ]
-                novo_calculo = CalculoJudicial.objects.create(
-                    processo=processo, responsavel=request.user,
-                    memoria_calculo=memoria_calculo_json,
-                    valor_corrigido=resultado['resumo']['valor_corrigido_total'],
-                    valor_final=resultado['resumo']['valor_final'],
-                    **dados_calculo
-                )
-                return redirect('gestao:carregar_calculo', processo_pk=processo.pk, calculo_pk=novo_calculo.pk)
-            else:
-                erro_final = erro
-                resultado_final = resultado # Passa o resultado parcial mesmo com erro
-        else: # Formulário inválido
-            erro_final = "Formulário inválido. Verifique os campos."
-            # Usa request.POST para exibir os dados que o usuário tentou enviar
-            form_data_for_display = request.POST
-    else:  # Requisição GET
-        if calculo_pk:
-            calculo_carregado = get_object_or_404(CalculoJudicial, pk=calculo_pk, processo=processo)
-            # Pega todos os campos do modelo para inicializar o formulário e recalcular
-            form_data = {f.name: getattr(calculo_carregado, f.name) for f in CalculoJudicial._meta.fields if hasattr(calculo_carregado, f.name)}
-            form = CalculoForm(initial=form_data)
-            form_data_for_display = form_data # Armazena para exibição
-            resultado_final, erro_final = _perform_calculation(form_data)
-        else:
-            form = CalculoForm(initial=request.session.pop('form_initial_data', None))
-            # Não há form_data_for_display para um formulário novo (será tratado pelo 'if resultado' no template)
+        if form.is_valid() and formset.is_valid():
+            # Salva o formulário principal para obter uma instância do cálculo
+            calculo = form.save(commit=False)
+            calculo.processo = processo
+            calculo.responsavel = request.user
+            calculo.save()
+
+            # Associa o formset à instância salva e salva as fases
+            formset.instance = calculo
+            fases = formset.save()
+
+            # --- Lógica do Cálculo ---
+            try:
+                calculadora = CalculadoraMonetaria()
+                resultado_calculo = calculadora.calcular_fases(calculo.valor_original, fases)
+
+                # Salva o resultado no modelo
+                calculo.valor_final_calculado = resultado_calculo['resumo']['valor_final']
+                calculo.memoria_calculo_json = json.dumps(resultado_calculo)
+                calculo.save()
+
+                resultado = resultado_calculo  # Passa o resultado para o template
+
+                messages.success(request, 'Cálculo salvo e processado com sucesso!')
+            except Exception as e:
+                messages.error(request, f'Ocorreu um erro durante o cálculo: {e}')
+                resultado = None
+
+    else:  # Método GET
+        # Instancia os formulários para exibição (novo ou pré-preenchido)
+        form = CalculoJudicialForm(instance=calculo_instance)
+        formset = FaseCalculoFormSet(instance=calculo_instance)
+
+        # Se um cálculo existente foi carregado, mostra o resultado salvo
+        if calculo_instance and calculo_instance.memoria_calculo_json:
+            resultado = json.loads(json.dumps(calculo_instance.memoria_calculo_json))
 
     contexto = {
-        'titulo_pagina': 'Cálculo Judicial',
         'processo': processo,
-        'calculos_salvos': processo.calculos.all().order_by('-data_calculo'),
         'form': form,
-        'calculo_carregado': calculo_carregado,
-        'resultado': resultado_final,
-        'erro': erro_final,
-        'form_data': form_data_for_display, # Passa os dados para o template
+        'formset': formset,
+        'calculos_salvos': calculos_salvos,
+        'calculo_carregado': calculo_instance,
+        'resultado': resultado,
     }
     return render(request, 'gestao/calculo_judicial.html', contexto)
+
 
 @require_POST
 @login_required
