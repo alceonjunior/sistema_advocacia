@@ -37,6 +37,8 @@ INSTALLED_APPS = [
     'ckeditor',
     'ckeditor_uploader',
     'django_filters',
+    'widget_tweaks',  # <<< ADICIONE ESTA LINHA
+
 ]
 
 MIDDLEWARE = [

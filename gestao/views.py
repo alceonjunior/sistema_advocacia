@@ -20,6 +20,7 @@ import unicodedata
 
 # --- Third-Party Libraries ---
 from dateutil.relativedelta import relativedelta
+from django.forms import inlineformset_factory
 from unidecode import unidecode
 
 # --- Django Core ---
@@ -52,6 +53,7 @@ from django.views.decorators.http import require_POST
 # --- Local Application ---
 from . import models
 from .calculators import CalculadoraMonetaria
+from .encoders import DecimalEncoder
 from .filters import ClienteFilter, ProcessoFilter, ServicoFilter
 from .forms import (
     AreaProcessoForm, CalculoForm, ClienteForm, ClienteModalForm,
@@ -63,6 +65,7 @@ from .forms import (
     TipoAcaoForm, TipoServicoForm, UsuarioPerfilForm, GerarDocumentoForm,
     LancamentoFinanceiroForm, DespesaRecorrenteVariavelForm,
     DespesaRecorrenteFixaForm, DespesaPontualForm, DespesaTipoForm, CalculoJudicialForm, FaseCalculoFormSet,
+    FaseCalculoForm,
 )
 from .models import (
     AreaProcesso, CalculoJudicial,FaseCalculo, Cliente, Documento, EscritorioConfiguracao,
@@ -1940,60 +1943,159 @@ def imprimir_documento(request, pk):
 # SEÇÃO: CÁLCULO JUDICIAL
 # ==============================================================================
 
+# gestao/views.py
+
+# -*- coding: utf-8 -*-
+
+# ==============================================================================
+# IMPORTS
+# ==============================================================================
+# Otimização: Imports foram reorganizados por tipo (Standard Library, Third-Party, Django, Local App)
+# e duplicatas/redundâncias foram removidas para maior clareza e eficiência.
+
+# --- Standard Library ---
+import json
+import logging
+import locale
+import itertools
+import re
+import calendar
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+from operator import attrgetter
+import unicodedata
+
+# --- Third-Party Libraries ---
+from dateutil.relativedelta import relativedelta
+from django.forms import inlineformset_factory
+from unidecode import unidecode
+
+# --- Django Core ---
+from django.apps import apps
+from django.conf import settings
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth.models import Group, Permission, User
+from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ObjectDoesNotExist
+from django.core.paginator import Paginator
+from django.db import transaction
+from django.db.models import (
+    Q, Case, CharField, DateField, DecimalField, F, OuterRef, Subquery, Sum,
+    Value, When, Func, Count,
+)
+from django.db.models.functions import Coalesce
+from django.http import (
+    Http404, HttpResponse, HttpResponseBadRequest, JsonResponse, HttpResponseForbidden
+)
+from django.middleware.csrf import get_token
+from django.shortcuts import get_object_or_404, redirect, render
+from django.template import Context, Template
+from django.template.loader import render_to_string
+from django.urls import reverse
+from django.utils import timezone
+from django.views.decorators.http import require_POST
+
+# --- Local Application ---
+from . import models
+from .calculators import CalculadoraMonetaria
+from .encoders import DecimalEncoder
+from .filters import ClienteFilter, ProcessoFilter, ServicoFilter
+from .forms import (
+    AreaProcessoForm, CalculoForm, ClienteForm, ClienteModalForm,
+    ContratoHonorariosForm, CustomUserChangeForm, CustomUserCreationForm,
+    DocumentoForm, EscritorioConfiguracaoForm, IncidenteForm,
+    ModeloDocumentoForm, MovimentacaoForm, MovimentacaoServicoForm,
+    PagamentoForm, ParteProcessoFormSet, ProcessoCreateForm, ProcessoForm,
+    RecursoForm, ServicoConcluirForm, ServicoEditForm, ServicoForm,
+    TipoAcaoForm, TipoServicoForm, UsuarioPerfilForm, GerarDocumentoForm,
+    LancamentoFinanceiroForm, DespesaRecorrenteVariavelForm,
+    DespesaRecorrenteFixaForm, DespesaPontualForm, DespesaTipoForm, CalculoJudicialForm, FaseCalculoFormSet,
+    FaseCalculoForm,
+)
+from .models import (
+    AreaProcesso, CalculoJudicial,FaseCalculo, Cliente, Documento, EscritorioConfiguracao,
+    Incidente, LancamentoFinanceiro, ModeloDocumento, Movimentacao,
+    MovimentacaoServico, Pagamento, Processo, Recurso, Servico, TipoAcao,
+    TipoServico, UsuarioPerfil, ContratoHonorarios, ParteProcesso, TipoMovimentacao,
+)
+from .services import ServicoIndices
+from .nfse_service import NFSEService
+from .utils import data_por_extenso, valor_por_extenso
+
+# ... (O restante do arquivo views.py permanece o mesmo) ...
+
+# ==============================================================================
+# SEÇÃO: CÁLCULO JUDICIAL
+# ==============================================================================
+@login_required
 def realizar_calculo(request, processo_pk, calculo_pk=None):
     """
     View para criar, carregar, calcular e salvar um Cálculo Judicial por fases.
     """
     processo = get_object_or_404(Processo, pk=processo_pk)
-    calculo_instance = None
-    if calculo_pk:
-        calculo_instance = get_object_or_404(CalculoJudicial, pk=calculo_pk)
+    calculo_instance = get_object_or_404(CalculoJudicial, pk=calculo_pk) if calculo_pk else None
 
-    # Variáveis para o contexto
     resultado = None
     calculos_salvos = processo.calculos.all().order_by('-data_calculo')
 
+    # --- LÓGICA DE CONTROLE DO FORMSET (CORRIGIDA) ---
     if request.method == 'POST':
-        # Instancia os formulários com os dados enviados
         form = CalculoJudicialForm(request.POST, instance=calculo_instance)
-        formset = FaseCalculoFormSet(request.POST, instance=calculo_instance)
+        # Em requisições POST, SEMPRE usamos o formset padrão com extra=0 para não adicionar campos extras em caso de erro.
+        formset = FaseCalculoFormSet(request.POST, instance=calculo_instance, prefix='fases')
+    else:  # Método GET
+        form = CalculoJudicialForm(instance=calculo_instance)
+        # Se for um cálculo NOVO (GET), precisamos exibir UM formulário de fase em branco.
+        if calculo_instance is None:
+            # Criamos uma 'fábrica' de formsets localmente que adiciona o formulário extra.
+            FormSetParaNovoCalculo = inlineformset_factory(
+                CalculoJudicial, FaseCalculo, form=FaseCalculoForm,
+                extra=1, can_delete=True, min_num=1, validate_min=True
+            )
+            formset = FormSetParaNovoCalculo(instance=calculo_instance, prefix='fases')
+        else:
+            # Se estivermos carregando um cálculo existente, usamos o formset padrão (extra=0).
+            formset = FaseCalculoFormSet(instance=calculo_instance, prefix='fases')
 
+    # --- PROCESSAMENTO DO FORMULÁRIO ---
+    if request.method == 'POST':
         if form.is_valid() and formset.is_valid():
-            # Salva o formulário principal para obter uma instância do cálculo
-            calculo = form.save(commit=False)
-            calculo.processo = processo
-            calculo.responsavel = request.user
-            calculo.save()
-
-            # Associa o formset à instância salva e salva as fases
-            formset.instance = calculo
-            fases = formset.save()
-
-            # --- Lógica do Cálculo ---
-            try:
-                calculadora = CalculadoraMonetaria()
-                resultado_calculo = calculadora.calcular_fases(calculo.valor_original, fases)
-
-                # Salva o resultado no modelo
-                calculo.valor_final_calculado = resultado_calculo['resumo']['valor_final']
-                calculo.memoria_calculo_json = json.dumps(resultado_calculo)
+            with transaction.atomic():
+                calculo = form.save(commit=False)
+                calculo.processo = processo
+                calculo.responsavel = request.user
                 calculo.save()
 
-                resultado = resultado_calculo  # Passa o resultado para o template
+                formset.instance = calculo
+                fases = formset.save()
 
-                messages.success(request, 'Cálculo salvo e processado com sucesso!')
-            except Exception as e:
-                messages.error(request, f'Ocorreu um erro durante o cálculo: {e}')
+                try:
+                    calculadora = CalculadoraMonetaria()
+                    resultado_calculo = calculadora.calcular_fases(calculo.valor_original, fases)
+
+                    calculo.valor_final_calculado = resultado_calculo['resumo']['valor_final']
+                    calculo.memoria_calculo_json = json.dumps(resultado_calculo, cls=DecimalEncoder)
+                    calculo.save()
+
+                    messages.success(request, 'Cálculo salvo e processado com sucesso!')
+                    return redirect('gestao:carregar_calculo', processo_pk=processo.pk, calculo_pk=calculo.pk)
+                except Exception as e:
+                    logger.error(f"Erro na execução do cálculo para o ID {calculo.pk}: {e}", exc_info=True)
+                    messages.error(request, f'Ocorreu um erro durante o cálculo: {e}')
+        else:
+            messages.error(request, 'Por favor, corrija os erros indicados no formulário para continuar.')
+
+    # Carrega o resultado salvo se estiver visualizando um cálculo existente
+    if calculo_instance and calculo_instance.memoria_calculo_json:
+        if isinstance(calculo_instance.memoria_calculo_json, str):
+            try:
+                resultado = json.loads(calculo_instance.memoria_calculo_json)
+            except (json.JSONDecodeError, TypeError):
                 resultado = None
-
-    else:  # Método GET
-        # Instancia os formulários para exibição (novo ou pré-preenchido)
-        form = CalculoJudicialForm(instance=calculo_instance)
-        formset = FaseCalculoFormSet(instance=calculo_instance)
-
-        # Se um cálculo existente foi carregado, mostra o resultado salvo
-        if calculo_instance and calculo_instance.memoria_calculo_json:
-            resultado = json.loads(json.dumps(calculo_instance.memoria_calculo_json))
+        else:
+            resultado = calculo_instance.memoria_calculo_json
 
     contexto = {
         'processo': processo,

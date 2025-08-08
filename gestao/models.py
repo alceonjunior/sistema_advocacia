@@ -564,18 +564,18 @@ class CalculoJudicial(models.Model):
     descricao = models.CharField(max_length=255, verbose_name="Descrição do Cálculo")
     valor_original = models.DecimalField(max_digits=15, decimal_places=2, verbose_name="Valor Original da Causa")
 
-    # --- CORREÇÃO APLICADA AQUI ---
-    # Adicionar default=None torna o manuseio de valores nulos mais explícito e robusto,
-    # resolvendo o erro 'InvalidOperation' com o SQLite.
     valor_final_calculado = models.DecimalField(
         max_digits=15,
         decimal_places=2,
         null=True,
         blank=True,
-        default=None,  # <-- Certifique-se que esta linha está aqui e o arquivo foi SALVO
+        default=None,
         verbose_name="Valor Final Calculado"
     )
 
+    # --- CORREÇÃO APLICADA AQUI ---
+    # Adicionamos o 'encoder=DecimalEncoder' para que o Django saiba como
+    # salvar os números decimais do resultado do cálculo no banco de dados.
     memoria_calculo_json = models.JSONField(
         null=True,
         blank=True,
@@ -585,6 +585,7 @@ class CalculoJudicial(models.Model):
 
     responsavel = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     data_calculo = models.DateTimeField(auto_now_add=True)
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = "Cálculo Judicial"

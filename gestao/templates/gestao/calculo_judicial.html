@@ -1,185 +1,235 @@
 {% extends 'gestao/base.html' %}
 {% load static humanize %}
+{% load widget_tweaks %}
 
 {% block title %}Cálculos Judiciais por Fases - Processo {{ processo.numero_processo }}{% endblock %}
 
 {% block styles %}
 {{ block.super }}
 <style>
-    .fase-card {
-        border-left: 4px solid var(--bs-primary);
-        transition: box-shadow 0.2s ease;
+    /* Estilos para a nova interface Mestre-Detalhe */
+    .master-detail-grid {
+        display: grid;
+        grid-template-columns: 40% 1fr; /* Coluna da lista com 40%, editor com o resto */
+        gap: 1.5rem;
+    }
+    .fase-list .list-group-item {
+        cursor: pointer;
+        transition: background-color 0.2s ease-in-out, border-left-color 0.2s ease-in-out;
+        border-left: 4px solid transparent;
+        padding: 0.75rem 1rem;
+    }
+    .fase-list .list-group-item.active {
+        background-color: var(--bs-primary-bg-subtle) !important;
+        border-left-color: var(--bs-primary) !important;
+        font-weight: bold;
+    }
+    .fase-list .list-group-item.has-error {
+        border-left-color: var(--bs-danger) !important;
+    }
+    .fase-list .list-group-item.has-error:not(.active) {
+        background-color: var(--bs-danger-bg-subtle);
+    }
+    .fase-list .list-group-item:hover:not(.active) {
         background-color: #f8f9fa;
     }
-    .fase-card:hover {
-        box-shadow: 0 .25rem .75rem rgba(0,0,0,.08);
+    .fase-editor-form-container {
+        position: sticky;
+        top: 20px;
     }
-    #fases-container .fase-card + .fase-card {
-        margin-top: 1.5rem;
+    .formset-hidden-container, .empty-form-template {
+        display: none;
     }
-    .empty-form { display: none; }
+    .editor-field-error {
+        font-size: 0.875em;
+        color: var(--bs-danger);
+        margin-top: 0.25rem;
+    }
+    .fase-editor-body .form-label {
+        margin-bottom: 0.25rem;
+        font-weight: 500;
+    }
+    .fase-editor-body .mb-3 {
+        margin-bottom: 1rem !important;
+    }
 
-    /* Estilos para impressão */
+    /* Estilos de impressão */
     @media print {
-        body * {
-            visibility: hidden;
-        }
-        .printable-area, .printable-area * {
-            visibility: visible;
-        }
-        .printable-area {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-        }
-        .card {
-            box-shadow: none !important;
-            border: 1px solid #dee2e6 !important;
-        }
+        body * { visibility: hidden; }
+        .printable-area, .printable-area * { visibility: visible; }
+        .printable-area { position: absolute; left: 0; top: 0; width: 100%; }
+        .card { box-shadow: none !important; border: 1px solid #dee2e6 !important; }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4 d-print-none">
-    <div>
-        <h1 class="h2 d-flex align-items-center gap-2"><i class="bi bi-calculator-fill text-primary"></i> Cálculos Judiciais por Fases</h1>
-        <p class="text-muted mb-0"><strong>Processo:</strong> {{ processo }}</p>
+<form id="calculo-form" method="post" novalidate>
+    {% csrf_token %}
+    <div class="d-flex justify-content-between align-items-center mb-4 d-print-none">
+        <div>
+            <h1 class="h2 d-flex align-items-center gap-2"><i class="bi bi-calculator-fill text-primary"></i> Cálculos Judiciais por Fases</h1>
+            <p class="text-muted mb-0"><strong>Processo:</strong> {{ processo }}</p>
+        </div>
+        <div>
+            <a href="{% url 'gestao:detalhe_processo' pk=processo.pk %}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle"></i> Voltar</a>
+            {% if resultado %}<button type="button" onclick="window.print();" class="btn btn-info"><i class="bi bi-printer-fill"></i> Imprimir</button>{% endif %}
+            <button type="submit" class="btn btn-primary"><i class="bi bi-save-fill"></i> Salvar e Calcular</button>
+        </div>
     </div>
-    <div>
-        <a href="{% url 'gestao:detalhe_processo' pk=processo.pk %}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle"></i> Voltar</a>
 
-        {% if resultado %}
-        <button type="button" onclick="window.print();" class="btn btn-info"><i class="bi bi-printer-fill"></i> Imprimir</button>
-        {% endif %}
-
-        <button type="submit" form="calculo-form" class="btn btn-primary"><i class="bi bi-save-fill"></i> Salvar e Calcular</button>
-    </div>
-</div>
-
-<div class="row g-4">
-    <div class="col-lg-7 d-print-none">
-        <form id="calculo-form" method="post">
-            {% csrf_token %}
+    <div class="row g-4">
+        <div class="col-lg-8 d-print-none">
             <div class="card shadow-sm mb-4">
-                <div class="card-header"><h5 class="mb-0">Dados Gerais do Cálculo</h5></div>
-                <div class="card-body">
-                    {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
-                    {% if formset.non_form_errors %}<div class="alert alert-danger">{{ formset.non_form_errors }}</div>{% endif %}
+                <div class="card-header bg-light"><h5 class="mb-0">Dados Gerais do Cálculo</h5></div>
+                <div class="card-body p-4">
+                    {% if form.non_field_errors %}<div class="alert alert-danger p-2 small">{{ form.non_field_errors }}</div>{% endif %}
+                    {% if formset.non_form_errors %}<div class="alert alert-danger p-2 small">{{ formset.non_form_errors }}</div>{% endif %}
                     <div class="row g-3">
                         <div class="col-md-8">
                             <label for="{{ form.descricao.id_for_label }}" class="form-label">{{ form.descricao.label }}</label>
-                            {{ form.descricao }}
+                            {% render_field form.descricao class="form-control" %}
+                            <div class="text-danger small mt-1">{{ form.descricao.errors|striptags }}</div>
                         </div>
                         <div class="col-md-4">
                             <label for="{{ form.valor_original.id_for_label }}" class="form-label">{{ form.valor_original.label }}</label>
-                            {{ form.valor_original }}
+                            {% render_field form.valor_original class="form-control" %}
+                            <div class="text-danger small mt-1">{{ form.valor_original.errors|striptags }}</div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <h5 class="mt-4 mb-3">Fases do Cálculo</h5>
-            {{ formset.management_form }}
-            <div id="fases-container">
-                {% for form_fase in formset %}
-                <div class="card fase-card mb-3">
-                    <div class="card-body">
-                        {{ form_fase.id }}
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h6 class="mb-0 text-primary">Fase <span class="fase-numero">{{ forloop.counter }}</span></h6>
-                            {% if formset.can_delete %}
-                                <div class="form-check d-none">{{ form_fase.DELETE }}</div>
+            <div class="master-detail-grid">
+                <div class="fase-list-container">
+                    <h5 class="mb-3">Fases do Cálculo</h5>
+                    <div class="list-group fase-list" id="fases-list">
+                        {% for form_fase in formset %}
+                        <div class="list-group-item {% if form_fase.errors %}has-error{% endif %}" data-index="{{ forloop.counter0 }}">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong class="fase-list-title">Fase {{ forloop.counter }}: {{ form_fase.instance.observacao|default:"(sem observação)"|truncatechars:20 }}</strong>
+                                    <small class="d-block text-muted">{{ form_fase.instance.data_inicio|date:"d/m/y" }} a {{ form_fase.instance.data_fim|date:"d/m/y" }}</small>
+                                </div>
                                 <button type="button" class="btn btn-sm btn-outline-danger remove-fase-btn"><i class="bi bi-trash"></i></button>
-                            {% endif %}
+                            </div>
                         </div>
-                        <div class="row g-3">
-                            <div class="col-md-6">{{ form_fase.data_inicio.label_tag }}{{ form_fase.data_inicio }}</div>
-                            <div class="col-md-6">{{ form_fase.data_fim.label_tag }}{{ form_fase.data_fim }}</div>
-                            <div class="col-12">{{ form_fase.indice.label_tag }}{{ form_fase.indice }}</div>
-                            <div class="col-md-6 juros-fields">{{ form_fase.juros_taxa.label_tag }}{{ form_fase.juros_taxa }}</div>
-                            <div class="col-md-6 juros-fields">{{ form_fase.juros_tipo.label_tag }}{{ form_fase.juros_tipo }}</div>
-                            <div class="col-12">{{ form_fase.observacao.label_tag }}{{ form_fase.observacao }}</div>
-                            {{ form_fase.ordem }}
+                        {% endfor %}
+                    </div>
+                    <button type="button" id="add-fase-btn" class="btn btn-success mt-3 w-100"><i class="bi bi-plus-circle"></i> Adicionar Nova Fase</button>
+                </div>
+
+                <div class="fase-editor-form-container">
+                    <div class="card shadow-sm">
+                        <div class="card-header"><h5 class="mb-0" id="fase-editor-title">Selecione ou adicione uma fase</h5></div>
+                        <div class="card-body p-4" id="fase-editor-body" style="display: none;">
+                            <div class="mb-3">
+                                <label for="editor_observacao" class="form-label">{{ formset.empty_form.observacao.label }}</label>
+                                {% render_field formset.empty_form.observacao id="editor_observacao" class="form-control" %}
+                                <div class="editor-field-error" data-error-for="observacao"></div>
+                            </div>
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="editor_data_inicio" class="form-label">{{ formset.empty_form.data_inicio.label }}</label>
+                                    {% render_field formset.empty_form.data_inicio id="editor_data_inicio" class="form-control" type="date" %}
+                                    <div class="editor-field-error" data-error-for="data_inicio"></div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="editor_data_fim" class="form-label">{{ formset.empty_form.data_fim.label }}</label>
+                                    {% render_field formset.empty_form.data_fim id="editor_data_fim" class="form-control" type="date" %}
+                                    <div class="editor-field-error" data-error-for="data_fim"></div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="editor_indice" class="form-label">{{ formset.empty_form.indice.label }}</label>
+                                {% render_field formset.empty_form.indice id="editor_indice" class="form-select" %}
+                                <div class="editor-field-error" data-error-for="indice"></div>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6 mb-3">
+                                    <label for="editor_juros_taxa" class="form-label">{{ formset.empty_form.juros_taxa.label }}</label>
+                                    {% render_field formset.empty_form.juros_taxa id="editor_juros_taxa" class="form-control" step="0.01" %}
+                                    <div class="editor-field-error" data-error-for="juros_taxa"></div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="editor_juros_tipo" class="form-label">{{ formset.empty_form.juros_tipo.label }}</label>
+                                    {% render_field formset.empty_form.juros_tipo id="editor_juros_tipo" class="form-select" %}
+                                    <div class="editor-field-error" data-error-for="juros_tipo"></div>
+                                </div>
+                            </div>
                         </div>
-                        {% if form_fase.errors %}<div class="alert alert-danger p-2 small mt-2">{{ form_fase.errors }}</div>{% endif %}
+                        <div class="card-footer text-end" id="fase-editor-footer" style="display: none;">
+                            <button type="button" class="btn btn-primary" id="apply-fase-btn">Aplicar Alterações</button>
+                        </div>
                     </div>
                 </div>
+            </div>
+
+            <div class="formset-hidden-container">
+                {{ formset.management_form }}
+                {% for form_fase in formset %}
+                    <div class="fase-form-hidden" data-index="{{ forloop.counter0 }}">{{ form_fase.as_p }}</div>
                 {% endfor %}
+                <div class="empty-form-template">{{ formset.empty_form.as_p }}</div>
             </div>
+        </div>
 
-            <div class="mt-3">
-                <button type="button" id="add-fase-btn" class="btn btn-success"><i class="bi bi-plus-circle"></i> Adicionar Nova Fase</button>
-            </div>
-            <div class="empty-form">{{ formset.empty_form.as_p }}</div>
-        </form>
-    </div>
-
-    <div class="col-lg-5">
-        <div class="printable-area">
-            {% if resultado %}
-            <div class="card shadow-sm sticky-top mb-4" style="top: 20px;">
-                <div class="card-header bg-success-subtle text-success-emphasis"><h5 class="mb-0">Resumo do Cálculo</h5></div>
-                <div class="card-body">
-                    <div class="d-flex justify-content-between"><span>Valor Original:</span> <span>R$ {{ resultado.resumo.valor_original|intcomma }}</span></div>
-                    <hr>
-                    {% for fase_res in resultado.fases_resultados %}
-                        <div class="mb-3">
-                            <h6 class="text-primary">Fase {{ fase_res.ordem }}: {{ fase_res.observacao }}</h6>
-                            <table class="table table-sm">
-                                <tr><td>Valor Inicial da Fase</td><td class="text-end">R$ {{ fase_res.valor_inicial|intcomma }}</td></tr>
-                                {% for item_memoria in fase_res.memoria %}
-                                    <tr><td><small>↳ {{ item_memoria.descricao }}</small></td><td class="text-end"><small>(+) R$ {{ item_memoria.valor|intcomma }}</small></td></tr>
-                                {% endfor %}
-                                <tr class="fw-bold"><td>Subtotal da Fase</td><td class="text-end">R$ {{ fase_res.valor_final|intcomma }}</td></tr>
-                            </table>
+        <div class="col-lg-4">
+            <div class="printable-area">
+                {% if resultado %}
+                    <div class="card shadow-sm sticky-top mb-4" style="top: 20px;">
+                        <div class="card-header bg-success-subtle text-success-emphasis"><h5 class="mb-0">Resumo do Cálculo</h5></div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between"><span>Valor Original:</span> <span>R$ {{ resultado.resumo.valor_original|intcomma }}</span></div>
+                            <hr>
+                            {% for fase_res in resultado.fases_resultados %}
+                                <div class="mb-3">
+                                    <h6 class="text-primary">Fase {{ fase_res.ordem }}: {{ fase_res.observacao }}</h6>
+                                    <table class="table table-sm table-borderless">
+                                        <tbody>
+                                            <tr><td>Valor Inicial da Fase</td><td class="text-end">R$ {{ fase_res.valor_inicial|intcomma }}</td></tr>
+                                            {% for item_memoria in fase_res.memoria %}
+                                                <tr><td><small class="ps-2">↳ {{ item_memoria.descricao }}</small></td><td class="text-end"><small>(+) R$ {{ item_memoria.valor|intcomma }}</small></td></tr>
+                                            {% endfor %}
+                                            <tr class="fw-bold border-top"><td >Subtotal da Fase</td><td class="text-end">R$ {{ fase_res.valor_final|intcomma }}</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% endfor %}
+                            <hr>
+                            <div class="d-flex justify-content-between fs-4 fw-bold text-success">
+                                <span>VALOR FINAL TOTAL:</span>
+                                <span>R$ {{ resultado.resumo.valor_final|intcomma }}</span>
+                            </div>
                         </div>
+                    </div>
+                {% else %}
+                    <div class="card shadow-sm d-print-none">
+                        <div class="card-body text-center p-5 text-muted">
+                            <i class="bi bi-file-earmark-binary fs-1"></i>
+                            <h5 class="mt-3">Nenhum Resultado</h5>
+                            <p>Salve um cálculo para ver o resumo detalhado aqui.</p>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+            <div class="card shadow-sm mt-4 d-print-none">
+                <div class="card-header bg-light"><h5 class="mb-0"><i class="bi bi-clock-history"></i> Histórico de Cálculos</h5></div>
+                <div class="list-group list-group-flush">
+                    <a href="{% url 'gestao:pagina_de_calculos' processo_pk=processo.pk %}" class="list-group-item list-group-item-action {% if not calculo_carregado %}active{% endif %}">
+                        <i class="bi bi-plus-circle-fill me-2"></i><strong>Novo Cálculo</strong>
+                    </a>
+                    {% for calculo in calculos_salvos %}
+                    <a href="{% url 'gestao:carregar_calculo' processo_pk=processo.pk calculo_pk=calculo.pk %}" class="list-group-item list-group-item-action {% if calculo_carregado and calculo_carregado.pk == calculo.pk %}active{% endif %}">
+                        <p class="mb-1 fw-bold text-truncate">{{ calculo.descricao }}</p>
+                        <small>R$ {% if calculo.valor_final_calculado is not None %}{{ calculo.valor_final_calculado|floatformat:2|intcomma }}{% else %}Pendente{% endif %} <span class="text-muted">· {{ calculo.data_calculo|date:"d/m/y" }}</span></small>
+                    </a>
                     {% endfor %}
-                    <hr>
-                    <div class="d-flex justify-content-between fs-4 fw-bold text-success">
-                        <span>VALOR FINAL TOTAL:</span>
-                        <span>R$ {{ resultado.resumo.valor_final|intcomma }}</span>
-                    </div>
                 </div>
-            </div>
-            {% else %}
-            <div class="card shadow-sm d-print-none">
-                <div class="card-body text-center p-5 text-muted">
-                    <i class="bi bi-file-earmark-binary fs-1"></i>
-                    <h5 class="mt-3">Nenhum Resultado</h5>
-                    <p>Salve um cálculo para ver o resumo detalhado aqui.</p>
-                </div>
-            </div>
-            {% endif %}
-        </div>
-
-        <div class="card shadow-sm mt-4 d-print-none">
-            <div class="card-header bg-light">
-                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Histórico de Cálculos</h5>
-            </div>
-            <div class="list-group list-group-flush">
-                <a href="{% url 'gestao:pagina_de_calculos' processo_pk=processo.pk %}" class="list-group-item list-group-item-action {% if not calculo_carregado %}active{% endif %}">
-                    <i class="bi bi-plus-circle-fill me-2"></i><strong>Novo Cálculo</strong>
-                </a>
-                {% for calculo in calculos_salvos %}
-                <a href="{% url 'gestao:carregar_calculo' processo_pk=processo.pk calculo_pk=calculo.pk %}" class="list-group-item list-group-item-action {% if calculo_carregado and calculo_carregado.pk == calculo.pk %}active{% endif %}">
-                    <p class="mb-1 fw-bold text-truncate">{{ calculo.descricao }}</p>
-                    <small>
-                        R$
-                        {% if calculo.valor_final_calculado is not None %}
-                            {{ calculo.valor_final_calculado|floatformat:2|intcomma }}
-                        {% else %}
-                            Pendente
-                        {% endif %}
-                        <span class="text-muted">· {{ calculo.data_calculo|date:"d/m/y" }}</span>
-                    </small>
-                </a>
-                {% endfor %}
             </div>
         </div>
     </div>
-</div>
+</form>
 {% endblock %}
 
 {% block javascript %}
@@ -188,112 +238,151 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Aplica a máscara monetária ao campo de valor original
     $('#id_valor_original').mask('000.000.000.000.000,00', {reverse: true});
 
-    const fasesContainer = document.getElementById('fases-container');
-    const addFaseBtn = document.getElementById('add-fase-btn');
-    const totalFormsInput = document.querySelector('#id_fases-TOTAL_FORMS');
-    const emptyFormTemplate = document.querySelector('.empty-form').innerHTML;
+    const mainForm = document.getElementById('calculo-form');
+    const formsetContainer = document.querySelector('.formset-hidden-container');
+    const fasesList = document.getElementById('fases-list');
+    const editorTitle = document.getElementById('fase-editor-title');
+    const editorBody = document.getElementById('fase-editor-body');
+    const editorFooter = document.getElementById('fase-editor-footer');
+    let activeFaseIndex = null;
 
-    function updateFaseNumbersAndOrder() {
-        const faseCards = fasesContainer.querySelectorAll('.fase-card:not([style*="display: none"])');
-        faseCards.forEach((card, index) => {
-            card.querySelector('.fase-numero').textContent = index + 1;
-            const ordemInput = card.querySelector('input[name$="-ordem"]');
-            if (ordemInput) {
-                ordemInput.value = index + 1;
+    const editorFields = {
+        observacao: editorBody.querySelector('#editor_observacao'), data_inicio: editorBody.querySelector('#editor_data_inicio'),
+        data_fim: editorBody.querySelector('#editor_data_fim'), indice: editorBody.querySelector('#editor_indice'),
+        juros_taxa: editorBody.querySelector('#editor_juros_taxa'), juros_tipo: editorBody.querySelector('#editor_juros_tipo'),
+    };
+
+    function syncEditorToHidden(index) {
+        if (index === null) return;
+        const hiddenForm = formsetContainer.querySelector(`.fase-form-hidden[data-index="${index}"]`);
+        if (!hiddenForm) return;
+        for (const key in editorFields) {
+            const hiddenField = hiddenForm.querySelector(`[name$="-${key}"]`);
+            if (hiddenField && editorFields[key]) {
+                hiddenField.value = editorFields[key].value;
             }
-        });
-    }
-
-    function handleIndiceChange(selectElement) {
-        const faseCard = selectElement.closest('.fase-card');
-        const jurosFields = faseCard.querySelectorAll('.juros-fields');
-        if (selectElement.value === 'SELIC') {
-            jurosFields.forEach(field => $(field).slideUp());
-        } else {
-            jurosFields.forEach(field => $(field).slideDown());
         }
     }
 
-    fasesContainer.addEventListener('change', function(e) {
-        if (e.target && e.target.classList.contains('indice-select')) {
-            handleIndiceChange(e.target);
-        }
-    });
+    function syncHiddenToEditor(index) {
+        const hiddenForm = formsetContainer.querySelector(`.fase-form-hidden[data-index="${index}"]`);
+        if (!hiddenForm) return;
 
-    addFaseBtn.addEventListener('click', function() {
-        let formIndex = parseInt(totalFormsInput.value);
-        const newFormHtml = emptyFormTemplate.replace(/__prefix__/g, formIndex).replace(/<p>/g, '<div>').replace(/<\/p>/g, '</div>');
-
-        const newCard = document.createElement('div');
-        newCard.className = 'card fase-card mb-3';
-        newCard.innerHTML = `
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="mb-0 text-primary">Fase <span class="fase-numero"></span></h6>
-                    <button type="button" class="btn btn-sm btn-outline-danger remove-fase-btn"><i class="bi bi-trash"></i></button>
-                </div>
-            </div>`;
-
-        const cardBody = newCard.querySelector('.card-body');
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = newFormHtml;
-        const fields = Array.from(tempDiv.children);
-
-        let rowHtml = '<div class="row g-3">';
-        fields.forEach(field => {
-            let colClass = 'col-12';
-            const label = field.querySelector('label');
-            if(label) {
-                const labelFor = label.getAttribute('for');
-                if (labelFor.includes('data_inicio') || labelFor.includes('data_fim')) colClass = 'col-md-6';
-                if (labelFor.includes('juros_taxa') || labelFor.includes('juros_tipo')) colClass = 'col-md-6 juros-fields';
+        editorBody.querySelectorAll('.editor-field-error').forEach(el => el.textContent = '');
+        for (const key in editorFields) {
+            const hiddenField = hiddenForm.querySelector(`[name$="-${key}"]`);
+            if (hiddenField && editorFields[key]) {
+                editorFields[key].value = hiddenField.value;
+                const errorList = hiddenField.parentElement.querySelector('.errorlist');
+                if (errorList) {
+                    const errorDiv = editorBody.querySelector(`[data-error-for="${key}"]`);
+                    if (errorDiv) errorDiv.textContent = errorList.innerText;
+                }
             }
-            rowHtml += `<div class="${colClass}">${field.innerHTML}</div>`;
-        });
-        rowHtml += '</div>';
+        }
+    }
 
-        cardBody.insertAdjacentHTML('beforeend', rowHtml);
+    function updateListItem(index) {
+        const listItem = fasesList.querySelector(`.list-group-item[data-index="${index}"]`);
+        if (!listItem) return;
+        const obs = editorFields.observacao.value;
+        const dataInicio = editorFields.data_inicio.value;
+        const dataFim = editorFields.data_fim.value;
+        const formatDisplayDate = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/D';
+        listItem.querySelector('.fase-list-title').textContent = `Fase ${parseInt(index) + 1}: ${obs || '(sem observação)'}`.substring(0, 35);
+        listItem.querySelector('small').textContent = `${formatDisplayDate(dataInicio)} a ${formatDisplayDate(dataFim)}`;
+    }
 
-        fasesContainer.appendChild(newCard);
+    function activateFase(index) {
+        if (activeFaseIndex !== null) {
+            syncEditorToHidden(activeFaseIndex);
+            updateListItem(activeFaseIndex);
+        }
+        activeFaseIndex = index;
+        fasesList.querySelectorAll('.list-group-item').forEach(item => item.classList.remove('active'));
+        fasesList.querySelector(`[data-index="${index}"]`).classList.add('active');
+        syncHiddenToEditor(index);
+        editorTitle.textContent = `Editando Fase ${index + 1}`;
+        editorBody.style.display = 'block';
+        editorFooter.style.display = 'block';
+    }
+
+    function hideEditor() {
+        if (activeFaseIndex !== null) {
+            syncEditorToHidden(activeFaseIndex);
+            updateListItem(activeFaseIndex);
+        }
+        activeFaseIndex = null;
+        editorBody.style.display = 'none';
+        editorFooter.style.display = 'none';
+        editorTitle.textContent = 'Selecione ou adicione uma fase';
+        fasesList.querySelectorAll('.list-group-item').forEach(item => item.classList.remove('active'));
+    }
+
+    document.getElementById('add-fase-btn').addEventListener('click', function() {
+        const totalFormsInput = document.querySelector('#id_fases-TOTAL_FORMS');
+        const formIndex = parseInt(totalFormsInput.value);
+        const emptyFormTemplate = document.querySelector('.empty-form-template').innerHTML;
+        const newFormHtml = emptyFormTemplate.replace(/__prefix__/g, formIndex);
+        const newFormDiv = document.createElement('div');
+        newFormDiv.className = 'fase-form-hidden';
+        newFormDiv.dataset.index = formIndex;
+        newFormDiv.innerHTML = newFormHtml;
+        formsetContainer.appendChild(newFormDiv);
+        const newListItem = document.createElement('div');
+        newListItem.className = 'list-group-item';
+        newListItem.dataset.index = formIndex;
+        newListItem.innerHTML = `<div class="d-flex justify-content-between align-items-center"><div><strong class="fase-list-title">Nova Fase ${formIndex + 1}</strong><small class="d-block text-muted">Preencha os dados</small></div><button type="button" class="btn btn-sm btn-outline-danger remove-fase-btn"><i class="bi bi-trash"></i></button></div>`;
+        fasesList.appendChild(newListItem);
         totalFormsInput.value = formIndex + 1;
-        updateFaseNumbersAndOrder();
-
-        const newSelect = newCard.querySelector('.indice-select');
-        if(newSelect) handleIndiceChange(newSelect);
+        activateFase(formIndex);
     });
 
-    fasesContainer.addEventListener('click', function(e) {
+    document.getElementById('apply-fase-btn').addEventListener('click', hideEditor);
+
+    fasesList.addEventListener('click', function(e) {
+        const listItem = e.target.closest('.list-group-item');
+        if (!listItem) return;
         const removeBtn = e.target.closest('.remove-fase-btn');
         if (removeBtn) {
-            const cardToRemove = removeBtn.closest('.fase-card');
-
-            const visibleForms = cardToRemove.parentElement.querySelectorAll('.fase-card:not([style*="display: none"])');
-
-            if (visibleForms.length <= 1) {
+            e.stopPropagation();
+            if (fasesList.querySelectorAll('.list-group-item:not([style*="display: none"])').length <= 1) {
                 alert('O cálculo deve ter pelo menos uma fase.');
                 return;
             }
-
-            const deleteInput = cardToRemove.querySelector('input[name$="-DELETE"]');
+            const indexToRemove = parseInt(listItem.dataset.index);
+            const formDivToRemove = formsetContainer.querySelector(`.fase-form-hidden[data-index="${indexToRemove}"]`);
+            const deleteInput = formDivToRemove.querySelector('input[name$="-DELETE"]');
             if (deleteInput) {
                 deleteInput.checked = true;
-                $(cardToRemove).slideUp(() => {
-                    updateFaseNumbersAndOrder();
-                });
+                listItem.style.display = 'none';
             } else {
-                $(cardToRemove).slideUp(() => {
-                    cardToRemove.remove();
-                    updateFaseNumbersAndOrder();
-                });
+                formDivToRemove.remove();
+                listItem.remove();
             }
+            if (activeFaseIndex === indexToRemove) {
+                hideEditor();
+            }
+        } else {
+            activateFase(parseInt(listItem.dataset.index));
         }
     });
 
-    fasesContainer.querySelectorAll('.indice-select').forEach(handleIndiceChange);
-    updateFaseNumbersAndOrder();
+    mainForm.addEventListener('submit', function() {
+        hideEditor();
+    });
+
+    // Inicialização da UI
+    const firstError = fasesList.querySelector('.has-error');
+    if (firstError) {
+        activateFase(parseInt(firstError.dataset.index));
+    } else if (fasesList.children.length > 0) {
+        activateFase(0);
+    } else {
+        hideEditor();
+    }
 });
 </script>
 {% endblock %}

@@ -770,7 +770,7 @@ class FaseCalculoForm(forms.ModelForm):
             'ordem': forms.HiddenInput(),
             'data_inicio': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
             'data_fim': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
-            'indice': forms.Select(attrs={'class': 'form-select indice-select'}), # Classe para o JS
+            'indice': forms.Select(attrs={'class': 'form-select indice-select'}),
             'juros_taxa': forms.NumberInput(attrs={'class': 'form-control juros-taxa', 'step': '0.0001'}),
             'juros_tipo': forms.Select(attrs={'class': 'form-select juros-tipo'}),
             'observacao': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ex: Correção até a citação'}),
@@ -781,11 +781,10 @@ FaseCalculoFormSet = inlineformset_factory(
     CalculoJudicial,
     FaseCalculo,
     form=FaseCalculoForm,
-
-    # --- CORREÇÃO APLICADA AQUI ---
-    # Alterado de 1 para 0. Não cria um formulário em branco por padrão.
+    # --- CORREÇÃO APLICADA ---
+    # extra=0 garante que o formset nunca adicione um formulário em branco por padrão.
+    # A view será responsável por essa lógica.
     extra=0,
-
     can_delete=True,
     min_num=1,
     validate_min=True,
