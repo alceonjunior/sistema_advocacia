@@ -1,0 +1,20 @@
+{% comment %} Componente para um único item de lista de Tipo de Ação {% endcomment %}
+<li class="list-group-item d-flex justify-content-between align-items-center" data-pk="{{ item.pk }}">
+    <div class="item-display">
+        <span class="item-display-name">{{ item.nome }}</span>
+    </div>
+    <div class="item-edit" style="display: none;">
+        <form class="form-edit-item d-flex flex-wrap align-items-center gap-2" method="post" action="{% url 'gestao:editar_cadastro_auxiliar_ajax' modelo=modelo pk=item.pk %}" novalidate>
+            {% csrf_token %}
+            <div class="flex-grow-1">{{ form.area }}</div>
+            <div class="flex-grow-1">{{ form.nome }}</div>
+            <button type="submit" class="btn btn-sm btn-success btn-save-edit" title="Salvar"><i class="bi bi-check-lg"></i></button>
+            <button type="button" class="btn btn-sm btn-secondary btn-cancel-edit" title="Cancelar"><i class="bi bi-x-lg"></i></button>
+            <div class="ajax-error text-danger small w-100 mt-1" role="alert" aria-live="assertive"></div>
+        </form>
+    </div>
+    <div class="item-actions">
+        <button type="button" class="btn btn-sm btn-outline-primary py-0 px-1 btn-edit-item" title="Editar"><i class="bi bi-pencil-fill"></i></button>
+        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1 btn-delete-item" title="Excluir" data-url="{% url 'gestao:excluir_cadastro_auxiliar_ajax' modelo=modelo pk=item.pk %}"><i class="bi bi-trash-fill"></i></button>
+    </div>
+</li>

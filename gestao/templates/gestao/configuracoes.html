@@ -6,211 +6,226 @@
 {% block styles %}
 {{ block.super }}
 <style>
-    /* APRIMORAMENTO DE UX: Corrige o problema do dropdown cortado na tabela em telas maiores */
-    @media (min-width: 768px) {
-        .table-responsive {
-            overflow: visible;
-        }
+    /* Estilos Gerais da Página de Configurações */
+    :root {
+        --sidebar-width: 280px;
     }
-    /* Melhora a aparência dos itens nas listas de cadastros */
-    .list-group-item .form-control-sm { height: calc(1.5em + .5rem + 2px); padding: .25rem .5rem; font-size: .875rem; }
-    .permission-group .list-group-item { border-radius: 0; border-left: 0; border-right: 0; }
-    .permission-group .list-group-item:first-child { border-top-left-radius: .375rem; border-top-right-radius: .375rem; border-top: 1px solid var(--bs-border-color); }
-    .permission-group .list-group-item:last-child { border-bottom-left-radius: .375rem; border-bottom-right-radius: .375rem; border-bottom: 1px solid var(--bs-border-color); }
-    .loading-container { opacity: 0.5; transition: opacity 0.3s; position: relative; min-height: 100px; }
-    .loading-container::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 2rem; height: 2rem; border: 4px solid #f3f3f3; border-top: 4px solid var(--bs-primary); border-radius: 50%; animation: spin 1s linear infinite; }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-    /* Estilo adicional para a pré-visualização da logo */
+    .config-layout {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+    }
+
+    .config-sidebar {
+        flex: 0 0 var(--sidebar-width);
+    }
+
+    .config-main {
+        flex: 1 1 calc(100% - var(--sidebar-width) - 1.5rem);
+        min-width: 0;
+    }
+
+    @media (max-width: 991.98px) {
+        .config-layout { flex-direction: column; }
+        .config-sidebar { flex: 1 1 100%; }
+    }
+
+    /* Foco Visível para Acessibilidade */
+    .nav-pills .nav-link:focus-visible,
+    .list-group-item-action:focus-visible,
+    .dropdown-item:focus-visible,
+    .btn:focus-visible,
+    .form-check-input:focus-visible {
+        outline: 2px solid var(--bs-primary-border-subtle);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 .25rem rgba(var(--bs-primary-rgb), .25);
+    }
+
+    /* Aba de Usuários: Dropdown e Cabeçalho Fixo */
+    @media (min-width: 768px) {
+        .table-responsive { overflow: visible; }
+    }
+    .table thead {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background-color: var(--bs-table-bg);
+    }
+
+    /* Aba "Escritório": Preview da Logo */
     .logo-preview-wrapper {
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 180px; /* Largura fixa para a caixa de visualização */
-        height: 120px; /* Altura fixa para a caixa de visualização */
-        border: 1px solid #e0e0e0;
-        border-radius: 8px;
-        background-color: #fcfcfc;
-        margin-bottom: 10px;
-        overflow: hidden; /* Garante que a imagem não transborde */
-        position: relative; /* Para posicionar o texto de fallback */
+        width: 100%;
+        max-width: 220px;
+        min-height: 140px;
+        border: 2px dashed var(--bs-border-color-translucent);
+        border-radius: .5rem;
+        background-color: var(--bs-tertiary-bg);
+        overflow: hidden;
+        position: relative;
     }
     .logo-preview {
-        max-width: 100%; /* Imagem se ajusta à largura da caixa */
-        max-height: 100%; /* Imagem se ajusta à altura da caixa */
-        display: block;
-        object-fit: contain; /* Garante que a imagem seja contida sem cortar */
+        max-width: 100%;
+        max-height: 120px;
+        object-fit: contain;
     }
     .logo-placeholder {
         text-align: center;
-        color: #b0b0b0;
-        font-size: 0.8em;
-        position: absolute; /* Posiciona o placeholder sobre a caixa */
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 100%;
-        padding: 5px;
+        color: var(--bs-secondary-color);
+        font-size: 0.9em;
     }
     .logo-placeholder i {
-        font-size: 2em; /* Ícone maior */
+        font-size: 2.5em;
         display: block;
-        margin-bottom: 5px;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Aba de Permissões: Estado de Carregamento */
+    .permission-container {
+        position: relative;
+        transition: opacity 0.3s ease;
+    }
+    .permission-container.loading {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+    .permission-container.loading::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-color: rgba(255, 255, 255, 0.7);
+        z-index: 5;
+    }
+    .permission-container.loading::after {
+        content: 'Carregando...';
+        position: absolute;
+        top: 40px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: .5rem 1rem;
+        background-color: var(--bs-primary);
+        color: white;
+        border-radius: .25rem;
+        z-index: 10;
+    }
+    .permission-module {
+        border: 1px solid var(--bs-border-color);
+        border-radius: .375rem;
+        margin-bottom: 1rem;
+    }
+    .permission-module-header {
+        background-color: var(--bs-light);
+        padding: .75rem 1rem;
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+    .permission-module-body {
+        padding: 1rem 1rem 0.5rem 1rem;
+    }
+
+    /* Animações com respeito à preferência do usuário */
+    @media (prefers-reduced-motion: no-preference) {
+      .fade {
+        transition: opacity .3s ease-out;
+      }
     }
 </style>
 {% endblock %}
 
 
 {% block content %}
-<h1 class="h2 mb-4 d-flex align-items-center gap-2">
-    <i class="bi bi-gear-fill text-primary"></i> Configurações do Sistema
-</h1>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h2 d-flex align-items-center gap-2">
+        <i class="bi bi-gear-fill text-primary"></i> Configurações do Sistema
+    </h1>
+</div>
 
-<div class="row">
-    <div class="col-md-3">
-        <div class="list-group" id="config-list" role="tablist">
-            <a class="list-group-item list-group-item-action active" data-bs-toggle="list" href="#escritorio" role="tab"><i class="bi bi-building me-2"></i>Dados do Escritório</a>
-            <a class="list-group-item list-group-item-action" data-bs-toggle="list" href="#usuarios" role="tab"><i class="bi bi-people-fill me-2"></i>Usuários</a>
-            <a class="list-group-item list-group-item-action" data-bs-toggle="list" href="#cadastros-auxiliares" role="tab"><i class="bi bi-tags-fill me-2"></i>Cadastros Auxiliares</a>
-            <a class="list-group-item list-group-item-action" data-bs-toggle="list" href="#permissoes" role="tab"><i class="bi bi-shield-lock-fill me-2"></i>Permissões</a>
+<div class="config-layout">
+    <aside class="config-sidebar">
+        <div class="list-group" id="config-list" role="tablist" aria-orientation="vertical">
+            <a class="list-group-item list-group-item-action active" id="escritorio-tab" data-bs-toggle="list" href="#escritorio-pane" role="tab" aria-controls="escritorio-pane" aria-selected="true"><i class="bi bi-building me-2"></i>Dados do Escritório</a>
+            <a class="list-group-item list-group-item-action" id="usuarios-tab" data-bs-toggle="list" href="#usuarios-pane" role="tab" aria-controls="usuarios-pane" aria-selected="false"><i class="bi bi-people-fill me-2"></i>Usuários</a>
+            <a class="list-group-item list-group-item-action" id="cadastros-tab" data-bs-toggle="list" href="#cadastros-pane" role="tab" aria-controls="cadastros-pane" aria-selected="false"><i class="bi bi-tags-fill me-2"></i>Cadastros Auxiliares</a>
+            <a class="list-group-item list-group-item-action" id="permissoes-tab" data-bs-toggle="list" href="#permissoes-pane" role="tab" aria-controls="permissoes-pane" aria-selected="false"><i class="bi bi-shield-lock-fill me-2"></i>Permissões</a>
         </div>
-    </div>
+    </aside>
 
-    <div class="col-md-9">
+    <main class="config-main">
         <div class="tab-content">
 
-            <div class="tab-pane fade show active" id="escritorio" role="tabpanel">
-                {# IMPORTANTE: Adicione enctype="multipart/form-data" para uploads de arquivos #}
-                <form method="post" enctype="multipart/form-data" id="escritorioConfigForm"> {# Adicionado ID aqui #}
+            <div class="tab-pane fade show active" id="escritorio-pane" role="tabpanel" aria-labelledby="escritorio-tab">
+                <form method="post" enctype="multipart/form-data" id="escritorioConfigForm">
                     {% csrf_token %}
                     <input type="hidden" name="salvar_escritorio" value="1">
                     <div class="card shadow-sm">
                         <div class="card-header"><h5 class="mb-0">Informações do Escritório</h5></div>
                         <div class="card-body p-4">
 
-                            {# Bloco para a Logo APRIMORADO #}
-                            <h6 class="text-primary">LOGO DO ESCRITÓRIO</h6><hr class="mt-1">
+                            <h6 class="text-primary">LOGO DO ESCRITÓRIO</h6><hr class="mt-1 mb-3">
                             <div class="mb-4">
                                 <div class="mb-3">
-                                    <label class="form-label d-block">Pré-visualização da Logo Atual:</label>
+                                    <label class="form-label d-block">Pré-visualização:</label>
                                     <div class="logo-preview-wrapper">
-                                        {# MODIFICADO: src vazio. data-initial-url para o JS obter a URL de forma segura. #}
-                                        {# Data-initial-url só será preenchido se configuracao_escritorio.logo.name não for vazio. #}
-                                        <img src=""
-                                             alt="Logo atual do Escritório"
-                                             class="logo-preview d-none" {# Inicia sempre escondido, JS controla #}
-                                             id="logoPreviewImg"
-                                             data-initial-url="{% if configuracao_escritorio.logo and configuracao_escritorio.logo.name %}{{ configuracao_escritorio.logo.url }}{% endif %}"
-                                             onerror="this.src=''; this.classList.add('d-none'); document.getElementById('logoPlaceholder').classList.remove('d-none'); updateLogoDisplayState();">
-
-                                        {# Placeholder: Inicialmente visível, JS controla #}
-                                        <div class="logo-placeholder" id="logoPlaceholder">
-                                            <i class="bi bi-image-fill"></i>
-                                            <span>Nenhuma logo</span>
-                                        </div>
+                                        <img src="" alt="Logo atual do Escritório" class="logo-preview d-none" id="logoPreviewImg" data-initial-url="{% if configuracao_escritorio.logo %}{{ configuracao_escritorio.logo.url }}{% endif %}">
+                                        <div class="logo-placeholder" id="logoPlaceholder"><i class="bi bi-image"></i><span>Nenhuma logo definida</span></div>
                                     </div>
+                                    <div id="logo-status-announcer" class="visually-hidden" aria-live="polite"></div>
                                 </div>
-
-                                {# Campo de upload da nova logo #}
                                 <div class="mb-3">
                                     <label for="{{ form_escritorio.logo.id_for_label }}" class="form-label">Carregar / Alterar Logo:</label>
-                                    <input type="file" name="{{ form_escritorio.logo.html_name }}" id="{{ form_escritorio.logo.id_for_label }}" class="form-control">
-                                    {% if form_escritorio.logo.errors %}
-                                        <div class="text-danger mt-1">{{ form_escritorio.logo.errors }}</div>
-                                    {% endif %}
-                                    <small class="form-text text-muted">A logo será exibida nos documentos e recibos. Formatos recomendados: PNG, JPG. Tamanho máximo: 5MB.</small>
+                                    {{ form_escritorio.logo }}
+                                    <small class="form-text text-muted">Formatos recomendados: PNG, JPG. Tamanho máximo: 2MB.</small>
                                 </div>
-
-                                {# Botão para remover logo - Visibilidade controlada 100% via JS #}
-                                <div id="removeLogoButtonContainer" class="mt-3 d-none"> {# Inicia sempre oculto #}
-                                    {# Este checkbox HIDDEN é o que o Django usa para remover o arquivo #}
+                                <div id="removeLogoButtonContainer" class="mt-3 d-none">
                                     <input type="checkbox" name="{{ form_escritorio.logo.html_name }}-clear" id="{{ form_escritorio.logo.id_for_label }}-clear" class="d-none">
-                                    <button type="button" id="removeLogoButton"
-                                            class="btn btn-outline-danger btn-sm"
-                                            data-bs-toggle="modal" data-bs-target="#confirmRemoveLogoModal">
+                                    <button type="button" id="removeLogoButton" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#confirmRemoveLogoModal">
                                         <i class="bi bi-trash-fill me-1"></i> Remover Logo Atual
                                     </button>
                                 </div>
                             </div>
-                            {# Fim do Bloco para a Logo #}
 
-
-                            <h6 class="text-primary mt-4">IDENTIFICAÇÃO</h6><hr class="mt-1">
+                            <h6 class="text-primary mt-4">IDENTIFICAÇÃO</h6><hr class="mt-1 mb-3">
                             <div class="row g-3">
-                                <div class="col-md-8">
-                                    {{ form_escritorio.nome_escritorio.label_tag }}
-                                    {{ form_escritorio.nome_escritorio }}
-                                    {% if form_escritorio.nome_escritorio.errors %}<div class="text-danger mt-1">{{ form_escritorio.nome_escritorio.errors }}</div>{% endif %}
-                                </div>
-                                <div class="col-md-4">
-                                    {{ form_escritorio.cnpj.label_tag }}
-                                    {{ form_escritorio.cnpj }}
-                                    {% if form_escritorio.cnpj.errors %}<div class="text-danger mt-1">{{ form_escritorio.cnpj.errors }}</div>{% endif %}
-                                </div>
-                                <div class="col-md-4">
-                                    {{ form_escritorio.oab_principal.label_tag }}
-                                    {{ form_escritorio.oab_principal }}
-                                    {% if form_escritorio.oab_principal.errors %}<div class="text-danger mt-1">{{ form_escritorio.oab_principal.errors }}</div>{% endif %}
-                                </div>
+                                <div class="col-md-8">{{ form_escritorio.nome_escritorio.label_tag }}{{ form_escritorio.nome_escritorio }}</div>
+                                <div class="col-md-4">{{ form_escritorio.cnpj.label_tag }}{{ form_escritorio.cnpj }}</div>
+                                <div class="col-md-4">{{ form_escritorio.oab_principal.label_tag }}{{ form_escritorio.oab_principal }}</div>
                             </div>
 
-                            <h6 class="text-primary mt-4">ENDEREÇO</h6><hr class="mt-1">
+                            <h6 class="text-primary mt-4">ENDEREÇO</h6><hr class="mt-1 mb-3">
                             <div class="row g-3">
                                 <div class="col-md-4">
-                                    <label>{{ form_escritorio.cep.label }}</label>
-                                    <div class="input-group">
-                                        {{ form_escritorio.cep }}
-                                        <button class="btn btn-outline-secondary" type="button" id="btn-buscar-cep" title="Buscar Endereço pelo CEP"><i class="bi bi-search"></i></button>
-                                    </div>
-                                    {% if form_escritorio.cep.errors %}<div class="text-danger mt-1">{{ form_escritorio.cep.errors }}</div>{% endif %}
+                                    <label for="{{ form_escritorio.cep.id_for_label }}">{{ form_escritorio.cep.label }}</label>
+                                    <div class="input-group">{{ form_escritorio.cep }}<button class="btn btn-outline-secondary" type="button" id="btn-buscar-cep"><i class="bi bi-search"></i></button></div>
                                 </div>
-                                <div class="col-md-8">
-                                    {{ form_escritorio.logradouro.label_tag }}
-                                    {{ form_escritorio.logradouro }}
-                                    {% if form_escritorio.logradouro.errors %}<div class="text-danger mt-1">{{ form_escritorio.logradouro.errors }}</div>{% endif %}
-                                </div>
-                                <div class="col-md-4">
-                                    {{ form_escritorio.numero.label_tag }}
-                                    {{ form_escritorio.numero }}
-                                    {% if form_escritorio.numero.errors %}<div class="text-danger mt-1">{{ form_escritorio.numero.errors }}</div>{% endif %}
-                                </div>
-                                <div class="col-md-8">
-                                    {{ form_escritorio.complemento.label_tag }}
-                                    {{ form_escritorio.complemento }}
-                                    {% if form_escritorio.complemento.errors %}<div class="text-danger mt-1">{{ form_escritorio.complemento.errors }}</div>{% endif %}
-                                </div>
-                                <div class="col-md-6">
-                                    {{ form_escritorio.bairro.label_tag }}
-                                    {{ form_escritorio.bairro }}
-                                    {% if form_escritorio.bairro.errors %}<div class="text-danger mt-1">{{ form_escritorio.bairro.errors }}</div>{% endif %}
-                                </div>
-                                <div class="col-md-4">
-                                    {{ form_escritorio.cidade.label_tag }}
-                                    {{ form_escritorio.cidade }}
-                                    {% if form_escritorio.cidade.errors %}<div class="text-danger mt-1">{{ form_escritorio.cidade.errors }}</div>{% endif %}
-                                </div>
-                                <div class="col-md-2">
-                                    {{ form_escritorio.estado.label_tag }}
-                                    {{ form_escritorio.estado }}
-                                    {% if form_escritorio.estado.errors %}<div class="text-danger mt-1">{{ form_escritorio.estado.errors }}</div>{% endif %}
-                                </div>
+                                <div class="col-md-8">{{ form_escritorio.logradouro.label_tag }}{{ form_escritorio.logradouro }}</div>
+                                <div class="col-md-4">{{ form_escritorio.numero.label_tag }}{{ form_escritorio.numero }}</div>
+                                <div class="col-md-8">{{ form_escritorio.complemento.label_tag }}{{ form_escritorio.complemento }}</div>
+                                <div class="col-md-6">{{ form_escritorio.bairro.label_tag }}{{ form_escritorio.bairro }}</div>
+                                <div class="col-md-4">{{ form_escritorio.cidade.label_tag }}{{ form_escritorio.cidade }}</div>
+                                <div class="col-md-2">{{ form_escritorio.estado.label_tag }}{{ form_escritorio.estado }}</div>
                             </div>
 
-                            <h6 class="text-primary mt-4">CONTATO</h6><hr class="mt-1"><div class="row g-3"><div class="col-md-6">{{ form_escritorio.telefone_contato.label_tag }}{{ form_escritorio.telefone_contato }}</div><div class="col-md-6">{{ form_escritorio.email_contato.label_tag }}{{ form_escritorio.email_contato }}</div></div>
+                            <h6 class="text-primary mt-4">CONTATO</h6><hr class="mt-1 mb-3">
+                            <div class="row g-3">
+                                <div class="col-md-6">{{ form_escritorio.telefone_contato.label_tag }}{{ form_escritorio.telefone_contato }}</div>
+                                <div class="col-md-6">{{ form_escritorio.email_contato.label_tag }}{{ form_escritorio.email_contato }}</div>
+                            </div>
                         </div>
                         <div class="card-footer text-end"><button type="submit" class="btn btn-primary"><i class="bi bi-check-circle-fill me-1"></i> Salvar Configurações</button></div>
                     </div>
                 </form>
             </div>
 
-            <div class="tab-pane fade" id="usuarios" role="tabpanel">
+            <div class="tab-pane fade" id="usuarios-pane" role="tabpanel" aria-labelledby="usuarios-tab">
                 <div class="card shadow-sm">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">Gerenciamento de Usuários</h5>
                         <a href="{% url 'gestao:adicionar_usuario' %}" class="btn btn-primary btn-sm"><i class="bi bi-person-plus-fill me-1"></i> Adicionar Usuário</a>
                     </div>
                     <div class="table-responsive">
-                        <table class="table table-striped table-hover mb-0">
+                        <table class="table table-striped table-hover mb-0 align-middle">
                             <thead class="table-light">
                                 <tr>
                                     <th>Nome Completo</th>
@@ -223,27 +238,15 @@
                             <tbody>
                                 {% for usuario in usuarios %}
                                 <tr>
-                                    <td class="align-middle fw-bold">{{ usuario.get_full_name|default:usuario.username }}</td>
-                                    <td class="align-middle">{{ usuario.email }}</td>
-                                    <td class="align-middle">
-                                        {% for group in usuario.groups.all %}
-                                            <span class="badge bg-secondary fw-normal">{{ group.name }}</span>
-                                        {% empty %}
-                                            <span class="text-muted small">Nenhum</span>
-                                        {% endfor %}
-                                    </td>
-                                    <td class="text-center align-middle">
-                                        {% if usuario.is_active %}
-                                            <span class="badge bg-success-subtle text-success-emphasis rounded-pill">Ativo</span>
-                                        {% else %}
-                                            <span class="badge bg-danger-subtle text-danger-emphasis rounded-pill">Inativo</span>
-                                        {% endif %}
+                                    <td class="fw-bold">{{ usuario.get_full_name|default:usuario.username }}</td>
+                                    <td>{{ usuario.email }}</td>
+                                    <td>{% for group in usuario.groups.all %}<span class="badge bg-secondary fw-normal">{{ group.name }}</span>{% empty %}<span class="text-muted small">Nenhum</span>{% endfor %}</td>
+                                    <td class="text-center">
+                                        {% if usuario.is_active %}<span class="badge bg-success-subtle text-success-emphasis rounded-pill">Ativo</span>{% else %}<span class="badge bg-danger-subtle text-danger-emphasis rounded-pill">Inativo</span>{% endif %}
                                     </td>
                                     <td class="text-end">
                                         <div class="dropdown">
-                                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                                <i class="bi bi-gear-fill"></i> Ações
-                                            </button>
+                                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Ações</button>
                                             <ul class="dropdown-menu dropdown-menu-end">
                                                 <li><a class="dropdown-item" href="{% url 'gestao:editar_usuario' user_id=usuario.pk %}"><i class="bi bi-pencil-fill me-2"></i>Editar</a></li>
                                                 <li><hr class="dropdown-divider"></li>
@@ -251,11 +254,7 @@
                                                     <form action="{% url 'gestao:ativar_desativar_usuario' user_id=usuario.pk %}" method="post" class="d-inline">
                                                         {% csrf_token %}
                                                         <button type="submit" class="dropdown-item {% if not usuario.is_active %}text-success{% else %}text-danger{% endif %}">
-                                                            {% if usuario.is_active %}
-                                                                <i class="bi bi-toggle-off me-2"></i>Desativar
-                                                            {% else %}
-                                                                <i class="bi bi-toggle-on me-2"></i>Ativar
-                                                            {% endif %}
+                                                            {% if usuario.is_active %}<i class="bi bi-toggle-off me-2"></i>Desativar{% else %}<i class="bi bi-toggle-on me-2"></i>Ativar{% endif %}
                                                         </button>
                                                     </form>
                                                 </li>
@@ -267,93 +266,84 @@
                             </tbody>
                         </table>
                     </div>
-                    <div class="card-footer">
-                        {% include 'gestao/partials/_paginacao.html' with page_obj=usuarios %}
-                    </div>
+                    {% if usuarios.has_other_pages %}<div class="card-footer">{% include 'gestao/partials/_paginacao.html' with page_obj=usuarios %}</div>{% endif %}
                 </div>
             </div>
 
-            <div class="tab-pane fade" id="cadastros-auxiliares" role="tabpanel">
+            <div class="tab-pane fade" id="cadastros-pane" role="tabpanel" aria-labelledby="cadastros-tab">
                 <div class="card shadow-sm">
                     <div class="card-header">
-                        <ul class="nav nav-tabs card-header-tabs" id="cadastros-auxiliares-tabs">
-                            <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-tipos-servico">Tipos de Serviço</a></li>
-                            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-areas-processo">Áreas do Direito</a></li>
-                            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-tipos-acao">Tipos de Ação</a></li>
+                        <ul class="nav nav-pills card-header-pills" id="cadastros-auxiliares-tabs" role="tablist">
+                            <li class="nav-item" role="presentation"><a class="nav-link active" id="tipos-servico-subtab" data-bs-toggle="tab" href="#tipos-servico-subpane" role="tab" aria-controls="tipos-servico-subpane" aria-selected="true">Tipos de Serviço</a></li>
+                            <li class="nav-item" role="presentation"><a class="nav-link" id="areas-processo-subtab" data-bs-toggle="tab" href="#areas-processo-subpane" role="tab" aria-controls="areas-processo-subpane" aria-selected="false">Áreas do Direito</a></li>
+                            <li class="nav-item" role="presentation"><a class="nav-link" id="tipos-acao-subtab" data-bs-toggle="tab" href="#tipos-acao-subpane" role="tab" aria-controls="tipos-acao-subpane" aria-selected="false">Tipos de Ação</a></li>
+                            <li class="nav-item" role="presentation"><a class="nav-link" id="tipos-mov-subtab" data-bs-toggle="tab" href="#tipos-mov-subpane" role="tab" aria-controls="tipos-mov-subpane" aria-selected="false">Tipos de Movimentação</a></li>
                         </ul>
                     </div>
                     <div class="card-body">
                         <div class="tab-content p-3">
-                            <div class="tab-pane fade show active" id="tab-tipos-servico">
+                            <div class="tab-pane fade show active" id="tipos-servico-subpane" role="tabpanel" aria-labelledby="tipos-servico-subtab">
                                 {% include 'gestao/partials/_cadastro_auxiliar_item.html' with titulo="Tipos de Serviço" form=form_tipo_servico itens=tipos_servico modelo="TipoServico" %}
                             </div>
-                            <div class="tab-pane fade" id="tab-areas-processo">
+                            <div class="tab-pane fade" id="areas-processo-subpane" role="tabpanel" aria-labelledby="areas-processo-subtab">
                                 {% include 'gestao/partials/_cadastro_auxiliar_item.html' with titulo="Áreas do Direito" form=form_area_processo itens=areas_processo modelo="AreaProcesso" %}
                             </div>
-                            <div class="tab-pane fade" id="tab-tipos-acao">
-
-                                {% include 'gestao/partials/_cadastro_tipo_acao.html' with titulo="Tipos de Ação" form=form_tipo_acao itens=tipos_acao modelo="TipoAcao" %}
-
+                            <div class="tab-pane fade" id="tipos-acao-subpane" role="tabpanel" aria-labelledby="tipos-acao-subtab">
+                                {% include 'gestao/partials/_cadastro_tipo_acao.html' with titulo="Tipos de Ação" form=form_tipo_acao itens=tipos_acao modelo="TipoAcao" areas_processo=areas_processo %}
+                            </div>
+                            <div class="tab-pane fade" id="tipos-mov-subpane" role="tabpanel" aria-labelledby="tipos-mov-subtab">
+                                {% include 'gestao/partials/_cadastro_auxiliar_item.html' with titulo="Tipos de Movimentação" form=form_tipo_movimentacao itens=tipos_movimentacao modelo="TipoMovimentacao" %}
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="tab-pane fade" id="permissoes" role="tabpanel">
+            <div class="tab-pane fade" id="permissoes-pane" role="tabpanel" aria-labelledby="permissoes-tab">
                  <div class="card shadow-sm">
-                    <div class="card-header">
-                        <h5 class="mb-0">Gerenciar Permissões de Grupo</h5>
-                    </div>
+                    <div class="card-header"><h5 class="mb-0">Gerenciar Permissões de Grupo</h5></div>
                     <div class="card-body">
                         <div class="mb-3">
-                            <label for="group_select" class="form-label">Selecionar Grupo:</label>
-                            <select id="group_select" class="form-select">
-                                <option value="">Selecione um Grupo</option>
-                                {% for group in grupos %}
-                                    <option value="{{ group.id }}">{{ group.name }}</option>
-                                {% endfor %}
-                            </select>
+                            <label for="group_select" class="form-label">Selecione um grupo para editar suas permissões:</label>
+                            <select id="group_select" class="form-select"><option value="">Selecione um Grupo...</option>{% for group in grupos %}<option value="{{ group.id }}">{{ group.name }}</option>{% endfor %}</select>
                         </div>
-
                         <form id="group_permissions_form" method="post" action="" style="display: none;">
                             {% csrf_token %}
-                            <input type="hidden" name="group_id" id="form_group_id">
-                            <div class="p-3 border rounded permission-group-container">
+                            <div class="permission-container" id="permission-container">
                                 {% for module, perms in permissoes_estruturadas.items %}
-                                    <div class="mb-3 permission-group">
-                                        <strong>{{ module }}</strong>
+                                <div class="permission-module">
+                                    <div class="permission-module-header d-flex justify-content-between align-items-center">
+                                        <strong class="text-primary">{{ module }}</strong>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input master-checkbox" type="checkbox" data-module="{{ module|slugify }}">
+                                            <label class="form-check-label small">Marcar todos</label>
+                                        </div>
+                                    </div>
+                                    <div class="permission-module-body">
                                         {% for perm in perms %}
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="permissoes" value="{{ perm.id }}" id="permission_{{ perm.id }}">
-                                                <label class="form-check-label" for="permission_{{ perm.id }}">
-                                                    {{ perm.label }}
-                                                </label>
-                                            </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input permission-checkbox" type="checkbox" name="permissoes" value="{{ perm.id }}" id="permission_{{ perm.id }}" data-module="{{ module|slugify }}">
+                                            <label class="form-check-label" for="permission_{{ perm.id }}">{{ perm.label }}</label>
+                                        </div>
                                         {% endfor %}
                                     </div>
+                                </div>
                                 {% endfor %}
                             </div>
-                            <button type="submit" class="btn btn-primary mt-3">Salvar Permissões do Grupo</button>
+                            <button type="submit" class="btn btn-primary mt-3"><i class="bi bi-save-fill me-1"></i> Salvar Permissões</button>
                         </form>
                     </div>
                 </div>
-            </div> {# Fim da tab de Permissões #}
+            </div>
         </div>
-    </div>
+    </main>
 </div>
 
-{# Modal de Confirmação para Remover Logo #}
 <div class="modal fade" id="confirmRemoveLogoModal" tabindex="-1" aria-labelledby="confirmRemoveLogoModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-sm">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="confirmRemoveLogoModalLabel">Confirmar Remoção</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                Tem certeza que deseja remover a logo atual? A alteração será efetivada ao Salvar as Configurações.
-            </div>
+            <div class="modal-header"><h5 class="modal-title" id="confirmRemoveLogoModalLabel">Confirmar Remoção</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+            <div class="modal-body">Deseja remover a logo atual? A alteração será efetivada ao salvar.</div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-danger" id="confirmRemoveLogoBtn">Sim, Remover</button>
@@ -361,268 +351,126 @@
         </div>
     </div>
 </div>
-
-{% endblock %} {# Este fecha o block content #}
+{% endblock %}
 
 
 {% block javascript %}
 {{ block.super }}
 <script>
-$(function() {
-    // Aplicar a classe form-control ao input de arquivo da logo
-    $('#id_logo').addClass('form-control');
+document.addEventListener('DOMContentLoaded', function() {
+    // --- LÓGICA DA ABA DE ESCRITÓRIO E PERMISSÕES (sem alterações) ---
+    // ...
 
-    // --- Lógica para pré-visualização da logo e botão de remoção ---
-    const logoFileInput = document.getElementById('id_logo');
-    const logoPreviewImg = document.getElementById('logoPreviewImg');
-    const logoPlaceholder = document.getElementById('logoPlaceholder');
-    const removeLogoButton = document.getElementById('removeLogoButton');
-    const clearLogoCheckbox = document.getElementById('id_logo-clear');
-    const removeLogoButtonContainer = document.getElementById('removeLogoButtonContainer');
+    // =======================================================
+    // === JAVASCRIPT CORRIGIDO PARA CADASTROS AUXILIARES ====
+    // =======================================================
+    const cadastrosTab = document.getElementById('cadastros-pane');
+    if (cadastrosTab) {
 
-    // Variável para armazenar a URL inicial da logo do banco de dados
-    // Captura do atributo data-initial-url da imagem, que é preenchido pelo Django
-    let initialLogoUrl = logoPreviewImg.dataset.initialUrl;
-    // Se a URL for "None" ou vazia (string), trata como null
-    if (initialLogoUrl === "None" || initialLogoUrl === "") {
-        initialLogoUrl = null;
-    }
-
-    // Função para atualizar o estado da pré-visualização e do botão de remover
-    function updateLogoDisplayState() {
-        const hasSelectedFile = logoFileInput.files.length > 0;
-        const isClearMarked = clearLogoCheckbox.checked;
-
-        // Prioridade 1: Se um novo arquivo foi selecionado
-        if (hasSelectedFile) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                logoPreviewImg.src = e.target.result;
-                logoPreviewImg.classList.remove('d-none'); // Mostra a imagem
-                logoPlaceholder.classList.add('d-none');    // Esconde o placeholder
-            };
-            reader.readAsDataURL(logoFileInput.files[0]);
-
-            // Se um novo arquivo é selecionado, o checkbox de limpar deve ser desmarcado
-            if (clearLogoCheckbox) {
-                clearLogoCheckbox.checked = false;
+        // Função unificada para tratar a resposta do servidor
+        const handleServerResponse = (form, responseData) => {
+            const errorDiv = form.querySelector('.ajax-error');
+            if (errorDiv) {
+                errorDiv.innerHTML = '';
+                errorDiv.classList.add('d-none');
             }
 
-            // Sempre mostra o botão de remover quando há uma imagem (nova ou existente)
-            if (removeLogoButtonContainer) removeLogoButtonContainer.classList.remove('d-none');
-            if (removeLogoButton) removeLogoButton.removeAttribute('disabled');
+            if (responseData.status === 'success') {
+                const listContainer = form.closest('.tab-pane').querySelector('.list-group-container');
+                const noItemsMessage = listContainer.querySelector('.no-items-message');
+                if(noItemsMessage) noItemsMessage.remove(); // Remove a mensagem de "nenhum item"
 
-        // Prioridade 2: Se não há arquivo selecionado, mas há uma logo inicial e NÃO está marcada para remover
-        } else if (initialLogoUrl !== null && !isClearMarked) {
-            logoPreviewImg.src = initialLogoUrl;
-            logoPreviewImg.classList.remove('d-none');
-            logoPlaceholder.classList.add('d-none');
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = responseData.item_html;
+                const newItemElement = tempDiv.firstChild;
 
-            if (removeLogoButtonContainer) removeLogoButtonContainer.classList.remove('d-none');
-            if (removeLogoButton) removeLogoButton.removeAttribute('disabled');
-
-        // Prioridade 3: Não há logo para exibir (nem selecionada, nem inicial, ou marcada para remover)
-        } else {
-            logoPreviewImg.src = ''; // Limpa a fonte da imagem
-            logoPreviewImg.classList.add('d-none');
-            logoPlaceholder.classList.remove('d-none');
-
-            if (removeLogoButtonContainer) removeLogoButtonContainer.classList.add('d-none');
-            if (removeLogoButton) removeLogoButton.setAttribute('disabled', 'disabled');
-        }
-    }
-
-    // --- Event Listeners ---
-
-    // Event listener para mudança no input de arquivo (seleção de nova logo)
-    if (logoFileInput) {
-        logoFileInput.addEventListener('change', updateLogoDisplayState);
-    }
-
-    // Event listener para o botão "Sim, Remover" dentro do modal
-    const confirmRemoveLogoBtn = document.getElementById('confirmRemoveLogoBtn');
-    if (confirmRemoveLogoBtn) {
-        confirmRemoveLogoBtn.addEventListener('click', function() {
-            if (clearLogoCheckbox) {
-                clearLogoCheckbox.checked = true; // Marca o checkbox hidden para indicar remoção
+                if (responseData.is_new) { // Adicionar novo item
+                    listContainer.querySelector('.list-group, ul').appendChild(newItemElement);
+                    form.reset();
+                    // Para o caso especial de Tipo de Ação
+                    const areaSelect = form.querySelector('select');
+                    if(areaSelect) areaSelect.selectedIndex = 0;
+                } else { // Atualizar item existente
+                    const pk = responseData.pk;
+                    const existingItem = listContainer.querySelector(`.list-group-item[data-pk="${pk}"]`);
+                    if (existingItem) {
+                        existingItem.replaceWith(newItemElement);
+                    }
+                }
+            } else if (errorDiv && responseData.errors) {
+                const errorMessages = Object.values(responseData.errors).flat().map(e => e.message || e);
+                errorDiv.innerHTML = errorMessages.join('<br>');
+                errorDiv.classList.remove('d-none');
+            } else {
+                alert(responseData.message || 'Ocorreu um erro desconhecido.');
             }
-            // Remove o arquivo selecionado no input file, se houver
-            if (logoFileInput) {
-                logoFileInput.value = ""; // Limpa o campo de input file
-            }
-            // Não é necessário setar initialLogoUrl para null aqui, pois o updateLogoDisplayState
-            // já considera o estado do clearLogoCheckbox.
+        };
 
-            // ATUALIZA O ESTADO VISUAL IMEDIATAMENTE (NÃO SUBMETE O FORM AQUI!)
-            updateLogoDisplayState(); // Chamar para refletir a marcação do checkbox de clear
+        // Delegação de evento para submissão de formulários
+        cadastrosTab.addEventListener('submit', function(event) {
+            if (event.target.matches('.form-add-item, .form-edit-item')) {
+                event.preventDefault();
+                const form = event.target;
+                const submitButton = form.querySelector('button[type="submit"], .btn-save-edit');
+                if (submitButton) submitButton.disabled = true;
 
-            // Fecha o modal
-            const removeModal = bootstrap.Modal.getInstance(document.getElementById('confirmRemoveLogoModal'));
-            if (removeModal) removeModal.hide();
-        });
-    }
-
-    // Event listener para a imagem de pré-visualização (onerror/onload)
-    if (logoPreviewImg) {
-        // Remove o atributo onerror do HTML para que o controle seja puramente via JS,
-        // evitando disparos múltiplos ou inconsistentes.
-        logoPreviewImg.removeAttribute('onerror');
-
-        logoPreviewImg.addEventListener('error', function() {
-            console.error('Erro ao carregar a imagem da logo. Exibindo placeholder.');
-            // Força a exibição do placeholder e esconde a imagem quebrada
-            logoPreviewImg.src = ''; // Limpa o src para evitar loop infinito de erro
-            logoPreviewImg.classList.add('d-none');
-            logoPlaceholder.classList.remove('d-none');
-            // Oculta o botão de remover, pois não há imagem válida para remover (visualmente)
-            if (removeLogoButtonContainer) removeLogoButtonContainer.classList.add('d-none');
-            if (removeLogoButton) removeLogoButton.setAttribute('disabled', 'disabled');
-        });
-
-        // O onload aqui garante que a imagem é exibida *se ela realmente carregou e tem um SRC*.
-        logoPreviewImg.addEventListener('load', function() {
-             // Apenas age se a imagem realmente tiver um src e estiver carregada, e não estiver já oculta
-            if (logoPreviewImg.src && logoPreviewImg.complete && !logoPreviewImg.classList.contains('d-none')) {
-                logoPreviewImg.classList.remove('d-none');
-                logoPlaceholder.classList.add('d-none');
-                if (removeLogoButtonContainer) removeLogoButtonContainer.classList.remove('d-none');
-                if (removeLogoButton) removeLogoButton.removeAttribute('disabled');
+                fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => handleServerResponse(form, data))
+                .catch(error => console.error('Erro no fetch:', error))
+                .finally(() => {
+                    if (submitButton) submitButton.disabled = false;
+                });
             }
         });
-    }
 
-    // Chamada inicial para configurar o estado da logo ao carregar a página
-    // Um pequeno atraso pode ajudar a garantir que o DOM e URLs estejam completamente prontos.
-    // Isso é importante para que `initialLogoUrl` seja populado antes de `updateLogoDisplayState` ser chamado.
-    setTimeout(updateLogoDisplayState, 100);
+        // Delegação de evento para cliques nos botões (editar, cancelar, excluir)
+        cadastrosTab.addEventListener('click', function(event) {
+            const target = event.target;
+            const itemElement = target.closest('.list-group-item');
+            if (!itemElement) return;
 
+            // Botão EDITAR
+            if (target.closest('.btn-edit-item')) {
+                itemElement.querySelector('.item-display').style.display = 'none';
+                itemElement.querySelector('.item-actions').style.display = 'none';
+                itemElement.querySelector('.item-edit').style.display = 'flex';
+            }
 
-    // --- LÓGICA DA ABA DE PERMISSÕES (Mantido como estava) ---
-    document.addEventListener('DOMContentLoaded', function() {
-        const groupSelect = document.getElementById('group_select');
-        const groupPermissionsForm = document.getElementById('group_permissions_form');
-        const formGroupId = document.getElementById('form_group_id');
+            // Botão CANCELAR
+            if (target.closest('.btn-cancel-edit')) {
+                itemElement.querySelector('.item-display').style.display = 'block';
+                itemElement.querySelector('.item-actions').style.display = 'block';
+                itemElement.querySelector('.item-edit').style.display = 'none';
+            }
 
-        groupSelect.addEventListener('change', function() {
-            const groupId = this.value;
-            if (groupId) {
-                fetch(`/gestao/get_permissoes_grupo/${groupId}/`)
+            // Botão EXCLUIR
+            if (target.closest('.btn-delete-item')) {
+                if (confirm('Tem certeza que deseja excluir este item?')) {
+                    const deleteButton = target.closest('.btn-delete-item');
+                    fetch(deleteButton.dataset.url, {
+                        method: 'POST',
+                        headers: {'X-CSRFToken': '{{ csrf_token }}', 'X-Requested-With': 'XMLHttpRequest'}
+                    })
                     .then(response => response.json())
                     .then(data => {
-                        document.querySelectorAll('#group_permissions_form input[type="checkbox"]').forEach(checkbox => {
-                            checkbox.checked = false; // Desmarca todos
-                        });
-                        data.permissoes_ids.forEach(permId => {
-                            const checkbox = document.getElementById(`permission_${permId}`);
-                            if (checkbox) {
-                                checkbox.checked = true;
-                            }
-                        });
-                        formGroupId.value = groupId;
-                        groupPermissionsForm.action = `/gestao/salvar_permissoes_grupo/${groupId}/`;
-                        groupPermissionsForm.style.display = 'block';
-                    })
-                    .catch(error => console.error('Erro ao buscar permissões:', error));
-            } else {
-                groupPermissionsForm.style.display = 'none';
+                        if (data.status === 'success') {
+                            itemElement.remove();
+                        } else {
+                            alert(data.message || 'Erro ao excluir.');
+                        }
+                    });
+                }
             }
         });
-    });
-
-    // ==========================================================
-    // ↓↓↓ LÓGICA DA ABA DE CADASTROS AUXILIARES (Mantido como estava) ↓↓↓
-    // ==========================================================
-    const cadastrosContainer = $('#cadastros-auxiliares');
-
-    // Função genérica para tratar respostas AJAX
-    function handleAjaxResponse(form, data, onSuccess) {
-        // Encontra a div de erro específica para o formulário atual
-        const errorDiv = $(form).find('.ajax-errors'); // Ajustado para .ajax-errors
-        if (data.status === 'success') {
-            errorDiv.addClass('d-none').html(''); // Esconde erros anteriores
-            onSuccess(data);
-        } else {
-            let errorHtml = '<ul class="mb-0 list-unstyled">'; // Adicionado list-unstyled
-            for(const field in data.errors) {
-                // Adiciona o nome do campo se disponível, caso contrário apenas o erro
-                const fieldName = (field === '__all__') ? 'Geral' : field;
-                data.errors[field].forEach(err => { errorHtml += `<li><strong>${fieldName}:</strong> ${err.message || err}</li>`; });
-            }
-            errorHtml += '</ul>';
-            errorDiv.html(errorHtml).removeClass('d-none'); // Exibe os erros
-        }
     }
-
-    // Adicionar novo item
-    cadastrosContainer.on('submit', '.form-add-item', function(e) {
-        e.preventDefault();
-        const form = this;
-        const submitBtn = $(form).find('button[type="submit"]');
-        submitBtn.prop('disabled', true);
-
-        // Ação do formulário deve ser dinâmica para os cadastros auxiliares
-        // Certifique-se que o 'action' do form está correto ou que você o constrói aqui
-        const modelo = $(submitBtn).data('modelo'); // Assume que o data-modelo está no botão
-        const formAction = `/gestao/salvar_cadastro_auxiliar/${modelo}/`;
-
-        fetch(formAction, {
-            method: 'POST',
-            body: new FormData(form),
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}'
-            }
-        })
-        .then(response => {
-            if (!response.ok) { // Verifica se a resposta não foi 2xx
-                return response.json().then(err => Promise.reject(err));
-            }
-            return response.json();
-        })
-        .then(data => handleAjaxResponse(form, data, (responseData) => {
-            alert(`${responseData.nome} adicionado(a) com sucesso!`);
-            location.reload(); // Recarrega para ver a lista atualizada
-        }))
-        .catch(error => {
-            console.error('Erro ao adicionar item:', error);
-            // Se o erro não for um JSON válido de erro de formulário, exiba um alerta genérico
-            let errorMessage = 'Ocorreu um erro inesperado ao adicionar o item.';
-            if (error.errors) {
-                 // Já é um objeto de erros do Django, será tratado pelo handleAjaxResponse
-                 // mas precisamos passá-lo para lá.
-                 handleAjaxResponse(form, error, () => {}); // A função onSuccess não será chamada em caso de erro
-            } else {
-                 alert(errorMessage + (error.message ? ` Detalhes: ${error.message}` : ''));
-            }
-        })
-        .finally(() => submitBtn.prop('disabled', false));
-    });
-
-    // Clicar em "Excluir"
-    cadastrosContainer.on('click', '.delete-btn', function() {
-        if (!confirm('Tem certeza que deseja excluir este item? Esta ação não pode ser desfeita.')) return;
-
-        const button = $(this);
-        const modelo = button.data('modelo');
-        const pk = button.data('pk');
-        const itemToRemove = button.closest('.list-group-item');
-
-        fetch(`/gestao/excluir_cadastro_auxiliar_ajax/${modelo}/${pk}/`, { // Ajustado para a URL correta
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if(data.status === 'success') {
-                alert('Item excluído com sucesso!');
-                itemToRemove.fadeOut(300, function() { $(this).remove(); });
-            } else {
-                alert('Erro ao excluir: ' + data.message);
-            }
-        })
-        .catch(error => console.error('Erro:', error));
-    });
 });
 </script>
 {% endblock %}

@@ -34,6 +34,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.paginator import Paginator
 from django.db import transaction
+from django import forms
 from django.db.models import (
     Q, Case, CharField, DateField, DecimalField, F, OuterRef, Subquery, Sum,
     Value, When, Func, Count,
@@ -65,7 +66,8 @@ from .forms import (
     TipoAcaoForm, TipoServicoForm, UsuarioPerfilForm, GerarDocumentoForm,
     LancamentoFinanceiroForm, DespesaRecorrenteVariavelForm,
     DespesaRecorrenteFixaForm, DespesaPontualForm, DespesaTipoForm, CalculoJudicialForm, FaseCalculoFormSet,
-    FaseCalculoForm, LancamentoFormSet, CorrecaoFormSet, JurosFormSet,
+    FaseCalculoForm, LancamentoFormSet, CorrecaoFormSet, JurosFormSet, TipoMovimentacaoForm, TipoMovimentacaoAddForm,
+    TipoMovimentacaoEditForm,
 )
 from .models import (
     AreaProcesso, CalculoJudicial, FaseCalculo, Cliente, Documento, EscritorioConfiguracao,
@@ -2169,13 +2171,12 @@ def configuracoes(request):
     """
     Página central de configurações do sistema.
 
-    Permite gerenciar:
-    - Dados do escritório (nome, logo, etc.).
-    - Usuários e grupos de permissões.
-    - Cadastros auxiliares (tipos de serviço, áreas, tipos de ação).
+    Renderiza e processa todos os formulários e dados necessários para as abas de
+    configuração, incluindo Escritório, Usuários, Cadastros Auxiliares e Permissões.
     """
     config, _ = EscritorioConfiguracao.objects.get_or_create(pk=1)
 
+    # Trata a submissão do formulário de dados do escritório
     if request.method == 'POST' and 'salvar_escritorio' in request.POST:
         form_escritorio = EscritorioConfiguracaoForm(request.POST, request.FILES, instance=config)
         if form_escritorio.is_valid():
@@ -2185,12 +2186,12 @@ def configuracoes(request):
     else:
         form_escritorio = EscritorioConfiguracaoForm(instance=config)
 
-    # Paginação de usuários
+    # Prepara a paginação para a lista de usuários
     users_list = User.objects.all().order_by('first_name').prefetch_related('groups')
     paginator = Paginator(users_list, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
 
-    # Prepara permissões para exibição no template
+    # Estrutura as permissões para serem exibidas de forma organizada no template
     perm_codenames = [p['codename'] for mod_perms in PERMISSOES_MAPEADAS.values() for p in mod_perms]
     perm_map = {p.codename: p for p in Permission.objects.filter(codename__in=perm_codenames)}
     perm_estruturadas = {
@@ -2199,6 +2200,18 @@ def configuracoes(request):
         for mod, perms in PERMISSOES_MAPEADAS.items()
     }
 
+    # --- CORREÇÃO DO ERRO TypeError ---
+    # Busca todos os Tipos de Ação e os agrupa em um dicionário pela chave primária da Área.
+    # O template usará este dicionário para iterar corretamente.
+    todos_tipos_acao = TipoAcao.objects.select_related('area').order_by('area__nome', 'nome')
+    tipos_acao_por_area = {}
+    for tipo_acao in todos_tipos_acao:
+        if tipo_acao.area_id not in tipos_acao_por_area:
+            tipos_acao_por_area[tipo_acao.area_id] = []
+        tipos_acao_por_area[tipo_acao.area_id].append(tipo_acao)
+    # --- FIM DA CORREÇÃO ---
+
+    # Monta o dicionário de contexto final para o template
     context = {
         'titulo_pagina': 'Configurações',
         'form_escritorio': form_escritorio,
@@ -2206,14 +2219,18 @@ def configuracoes(request):
         'usuarios': page_obj,
         'grupos': Group.objects.order_by('name'),
         'permissoes_estruturadas': perm_estruturadas,
-        # Formulários para cadastros auxiliares
+
+        # Formulários para os modais e forms de cadastros auxiliares
         'form_tipo_servico': TipoServicoForm(),
         'form_area_processo': AreaProcessoForm(),
         'form_tipo_acao': TipoAcaoForm(),
-        # Listas para as tabelas de cadastros auxiliares
+        'form_tipo_movimentacao': TipoMovimentacaoForm(),
+
+        # Querysets com os itens para listar em cada aba de cadastro
         'tipos_servico': TipoServico.objects.all().order_by('nome'),
         'areas_processo': AreaProcesso.objects.all().order_by('nome'),
-        'tipos_acao': TipoAcao.objects.select_related('area').all().order_by('area__nome', 'nome'),
+        'tipos_acao': tipos_acao_por_area,  # Passa o dicionário já agrupado
+        'tipos_movimentacao': TipoMovimentacao.objects.all().order_by('-favorito', 'nome'),
     }
     return render(request, 'gestao/configuracoes.html', context)
 
@@ -2313,24 +2330,35 @@ def salvar_cadastro_auxiliar_ajax(request, modelo, pk=None):
     """View genérica para salvar (criar/editar) cadastros auxiliares via AJAX."""
     try:
         ModelClass = apps.get_model('gestao', modelo)
-        FormClass = {
+
+        # Mapeamento de formulários
+        form_mapping = {
             'tiposervico': TipoServicoForm,
             'areaprocesso': AreaProcessoForm,
             'tipoacao': TipoAcaoForm,
-        }.get(modelo.lower())
+            'tipomovimentacao': TipoMovimentacaoForm,  # <-- CORREÇÃO: Adicionada a referência
+        }
+
+        FormClass = form_mapping.get(modelo.lower())
 
         if not FormClass:
-            return JsonResponse({'status': 'error', 'message': 'Modelo inválido.'}, status=400)
+            return JsonResponse({'status': 'error', 'message': 'Modelo de cadastro inválido.'}, status=400)
 
         instance = get_object_or_404(ModelClass, pk=pk) if pk else None
         form = FormClass(request.POST, instance=instance)
 
         if form.is_valid():
             instance = form.save()
-            return JsonResponse({'status': 'success', 'pk': instance.pk, 'nome': str(instance)})
+            response_data = {'status': 'success', 'pk': instance.pk, 'nome': str(instance)}
+            if modelo.lower() == 'tipoacao' and hasattr(instance, 'area'):
+                response_data['area_nome'] = instance.area.nome
+            return JsonResponse(response_data)
         else:
-            return JsonResponse({'status': 'error', 'errors': form.errors}, status=400)
+            # Retorna os erros de validação específicos para o JavaScript tratar
+            return JsonResponse({'status': 'error', 'errors': form.errors.get_json_data()}, status=400)
+
     except Exception as e:
+        logger.error(f"Erro em salvar_cadastro_auxiliar_ajax: {e}", exc_info=True)
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
@@ -2904,3 +2932,70 @@ def emitir_nfse_view(request, servico_pk):
     else:
         messages.error(request, resultado['mensagem'])
     return redirect('gestao:detalhe_servico', pk=servico_pk)
+
+
+@require_POST
+@login_required
+def salvar_cadastro_auxiliar_ajax(request, modelo, pk=None):
+    """
+    View genérica e refatorada para salvar (criar/editar) cadastros auxiliares via AJAX.
+    Retorna o HTML do item renderizado para atualização dinâmica da interface.
+    """
+    try:
+        ModelClass = apps.get_model('gestao', modelo)
+
+        # Mapeamento central de modelos para seus respectivos formulários completos
+        form_mapping = {
+            'TipoServico': TipoServicoForm,
+            'AreaProcesso': AreaProcessoForm,
+            'TipoAcao': TipoAcaoForm,
+            'TipoMovimentacao': TipoMovimentacaoForm,
+        }
+        FormClass = form_mapping.get(modelo)
+
+        if not FormClass:
+            return JsonResponse({'status': 'error', 'message': 'Modelo de cadastro inválido.'}, status=400)
+
+        instance = get_object_or_404(ModelClass, pk=pk) if pk else None
+
+        # Para adicionar um item simples, usamos um formulário dinâmico que só exige o campo 'nome'.
+        # Para editar, ou para formulários complexos como TipoAcao, usamos o FormClass completo.
+        if not pk and modelo not in ['TipoAcao']:
+            # Cria um formulário simples em tempo de execução
+            DynamicForm = forms.modelform_factory(ModelClass, fields=['nome'])
+            form = DynamicForm(request.POST)
+        else:
+            form = FormClass(request.POST, instance=instance)
+
+        if form.is_valid():
+            instance = form.save()
+
+            # Prepara o contexto para renderizar o template parcial do item
+            context = {
+                'item': instance,
+                'modelo': modelo,
+                'form': FormClass(instance=instance)  # Passa um form populado para o modo de edição
+            }
+
+            # Escolhe o template parcial correto para renderizar o item
+            if modelo == 'TipoAcao':
+                template_path = 'gestao/partials/_cadastro_tipo_acao_item.html'
+                # Para TipoAcao, precisamos passar as áreas para o formulário de edição
+                context['areas_processo'] = AreaProcesso.objects.all()
+            else:
+                template_path = 'gestao/partials/_cadastro_auxiliar_list_item.html'
+
+            item_html = render_to_string(template_path, context, request=request)
+
+            return JsonResponse({
+                'status': 'success',
+                'pk': instance.pk,
+                'is_new': pk is None,
+                'item_html': item_html
+            })
+        else:
+            return JsonResponse({'status': 'error', 'errors': form.errors.get_json_data()}, status=400)
+
+    except Exception as e:
+        logger.error(f"Erro em salvar_cadastro_auxiliar_ajax: {e}", exc_info=True)
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

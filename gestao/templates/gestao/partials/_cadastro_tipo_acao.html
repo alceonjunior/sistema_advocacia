@@ -1,61 +1,33 @@
-{% comment %}
-Este template é dedicado ao cadastro de Tipos de Ação, com um layout aprimorado
-para lidar com os dois campos relacionados (Área e Nome).
-{% endcomment %}
-
+{% load gestao_extras %}
 <h5 class="mb-3">{{ titulo }}</h5>
-
-<form class="form-add-item mb-4 p-3 border rounded bg-light" method="post" action="{% url 'gestao:salvar_cadastro_auxiliar_ajax' modelo=modelo %}">
+<form class="form-add-item mb-4 p-3 border rounded bg-light" method="post" action="{% url 'gestao:salvar_cadastro_auxiliar_ajax' modelo=modelo %}" novalidate>
     {% csrf_token %}
     <div class="row g-3 align-items-end">
         <div class="col-md-5">
-            <label class="form-label fw-bold"><span class="badge bg-primary rounded-pill me-1">1</span> Selecione a Área do Direito</label>
+            <label class="form-label fw-bold">Área do Direito</label>
             {{ form.area }}
         </div>
         <div class="col-md-5">
-            <label class="form-label fw-bold"><span class="badge bg-primary rounded-pill me-1">2</span> Digite o Nome da Ação</label>
+            <label class="form-label fw-bold">Nome da Ação</label>
             {{ form.nome }}
         </div>
         <div class="col-md-2">
             <button class="btn btn-primary w-100" type="submit"><i class="bi bi-plus-circle me-1"></i> Adicionar</button>
         </div>
     </div>
-    <div class="ajax-error alert alert-danger d-none mt-2 p-2 small"></div>
+    <div class="ajax-error alert alert-danger d-none mt-2 p-2 small" role="alert" aria-live="polite"></div>
 </form>
-
 <div class="list-group-container">
-    {% for item in itens %}
-        {# Agrupa os itens pela Área do Direito usando a tag 'ifchanged' #}
-        {% ifchanged item.area.nome %}
-            {% if not forloop.first %}
-                </ul>
-            {% endif %}
-            <h6 class="mt-4 text-muted border-bottom pb-1">{{ item.area.nome }}</h6>
+    {% for area in areas_processo %}
+        {% with tipos_na_area=itens|get_item:area.pk %}
+        {% if tipos_na_area %}
+            <h6 class="mt-4 text-muted border-bottom pb-1">{{ area.nome }}</h6>
             <ul class="list-group list-group-flush">
-        {% endifchanged %}
-
-        <li class="list-group-item d-flex justify-content-between align-items-center" data-pk="{{ item.pk }}">
-            <div class="item-display">
-                <span class="item-display-name">{{ item.nome }}</span>
-            </div>
-            <div class="item-edit" style="display: none;">
-                <form class="form-edit-item d-flex gap-2" method="post" action="{% url 'gestao:editar_cadastro_auxiliar_ajax' modelo=modelo pk=item.pk %}">
-                    {% csrf_token %}
-                    <input type="text" name="nome" value="{{ item.nome }}" class="form-control form-control-sm">
-                    <button type="button" class="btn btn-sm btn-success btn-save-edit" title="Salvar"><i class="bi bi-check-lg"></i></button>
-                    <button type="button" class="btn btn-sm btn-secondary btn-cancel-edit" title="Cancelar"><i class="bi bi-x-lg"></i></button>
-                </form>
-            </div>
-            <div>
-                <button class="btn btn-sm btn-outline-primary py-0 px-1 btn-edit-item" title="Editar"><i class="bi bi-pencil-fill"></i></button>
-                <button class="btn btn-sm btn-outline-danger py-0 px-1 btn-delete-item" title="Excluir" data-url="{% url 'gestao:excluir_cadastro_auxiliar_ajax' modelo=modelo pk=item.pk %}"><i class="bi bi-trash-fill"></i></button>
-            </div>
-        </li>
-
-        {% if forloop.last %}
+                {% for item in tipos_na_area %}
+                    {% include 'gestao/partials/_cadastro_tipo_acao_item.html' with item=item modelo=modelo form=form %}
+                {% endfor %}
             </ul>
         {% endif %}
-    {% empty %}
-        <div class="list-group-item text-muted text-center">Nenhum tipo de ação cadastrado.</div>
+        {% endwith %}
     {% endfor %}
 </div>

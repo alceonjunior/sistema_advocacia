@@ -829,3 +829,45 @@ FaseCalculoFormSet = inlineformset_factory(
     min_num=1,
     validate_min=True,
 )
+
+
+class TipoMovimentacaoForm(forms.ModelForm):
+    """Formulário para adicionar e editar Tipos de Movimentação."""
+    class Meta:
+        model = TipoMovimentacao
+        fields = ['nome', 'sugestao_dias_prazo', 'tipo_contagem_prazo', 'favorito']
+        widgets = {
+            'nome': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'placeholder': 'Ex: Audiência de Conciliação'}),
+            'sugestao_dias_prazo': forms.NumberInput(attrs={'class': 'form-control form-control-sm'}),
+            'tipo_contagem_prazo': forms.Select(attrs={'class': 'form-select form-select-sm'}),
+            'favorito': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+        labels = {
+            'sugestao_dias_prazo': 'Sugestão de Dias',
+            'tipo_contagem_prazo': 'Contagem',
+            'favorito': 'Favorito?',
+        }
+
+
+
+
+class TipoMovimentacaoAddForm(forms.ModelForm):
+    class Meta:
+        model = TipoMovimentacao
+        fields = ['nome']
+        widgets = {
+            'nome': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nome do novo tipo de movimentação'})
+        }
+
+# Crie este novo formulário para a edição
+class TipoMovimentacaoEditForm(forms.ModelForm):
+    class Meta:
+        model = TipoMovimentacao
+        # Inclua todos os campos que devem ser editáveis
+        fields = ['nome', 'sugestao_dias_prazo', 'tipo_contagem_prazo', 'favorito']
+        widgets = {
+            'nome': forms.TextInput(attrs={'class': 'form-control form-control-sm'}),
+            'sugestao_dias_prazo': forms.NumberInput(attrs={'class': 'form-control form-control-sm'}),
+            'tipo_contagem_prazo': forms.Select(attrs={'class': 'form-select form-select-sm'}),
+            'favorito': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
