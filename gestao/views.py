@@ -2311,7 +2311,6 @@ def get_permissoes_grupo_ajax(request, group_id):
     permissoes_ids = list(grupo.permissions.values_list('id', flat=True))
     return JsonResponse({'permissoes_ids': permissoes_ids})
 
-
 @require_POST
 @login_required
 def salvar_permissoes_grupo(request, group_id):
@@ -2327,34 +2326,64 @@ def salvar_permissoes_grupo(request, group_id):
 @require_POST
 @login_required
 def salvar_cadastro_auxiliar_ajax(request, modelo, pk=None):
-    """View genérica para salvar (criar/editar) cadastros auxiliares via AJAX."""
+    """
+    View genérica e refatorada para salvar (criar/editar) cadastros auxiliares via AJAX.
+    Retorna o HTML do item renderizado para atualização dinâmica da interface.
+    """
     try:
         ModelClass = apps.get_model('gestao', modelo)
 
-        # Mapeamento de formulários
+        # Mapeamento central de modelos para seus respectivos formulários completos
         form_mapping = {
-            'tiposervico': TipoServicoForm,
-            'areaprocesso': AreaProcessoForm,
-            'tipoacao': TipoAcaoForm,
-            'tipomovimentacao': TipoMovimentacaoForm,  # <-- CORREÇÃO: Adicionada a referência
+            'TipoServico': TipoServicoForm,
+            'AreaProcesso': AreaProcessoForm,
+            'TipoAcao': TipoAcaoForm,
+            'TipoMovimentacao': TipoMovimentacaoForm,
         }
-
-        FormClass = form_mapping.get(modelo.lower())
+        FormClass = form_mapping.get(modelo)
 
         if not FormClass:
             return JsonResponse({'status': 'error', 'message': 'Modelo de cadastro inválido.'}, status=400)
 
         instance = get_object_or_404(ModelClass, pk=pk) if pk else None
-        form = FormClass(request.POST, instance=instance)
+
+        # Para adicionar um item simples, usamos um formulário dinâmico que só exige o campo 'nome'.
+        # Para editar, ou para formulários complexos como TipoAcao, usamos o FormClass completo.
+        if not pk and modelo not in ['TipoAcao', 'TipoMovimentacao']:
+            # Cria um formulário simples em tempo de execução
+            DynamicForm = forms.modelform_factory(ModelClass, fields=['nome'])
+            form = DynamicForm(request.POST)
+        else:
+            form = FormClass(request.POST, instance=instance)
 
         if form.is_valid():
             instance = form.save()
-            response_data = {'status': 'success', 'pk': instance.pk, 'nome': str(instance)}
-            if modelo.lower() == 'tipoacao' and hasattr(instance, 'area'):
-                response_data['area_nome'] = instance.area.nome
-            return JsonResponse(response_data)
+
+            # Prepara o contexto para renderizar o template parcial do item
+            context = {
+                'item': instance,
+                'modelo': modelo,
+                'form': FormClass(instance=instance)  # Passa um form populado para o modo de edição
+            }
+
+            # Escolhe o template parcial correto para renderizar o item
+            if modelo == 'TipoAcao':
+                template_path = 'gestao/partials/_cadastro_tipo_acao_item.html'
+                context['areas_processo'] = AreaProcesso.objects.all()
+            elif modelo == 'TipoMovimentacao':
+                template_path = 'gestao/partials/_cadastro_tipo_movimentacao_item.html'
+            else:
+                template_path = 'gestao/partials/_cadastro_auxiliar_list_item.html'
+
+            item_html = render_to_string(template_path, context, request=request)
+
+            return JsonResponse({
+                'status': 'success',
+                'pk': instance.pk,
+                'is_new': pk is None,
+                'item_html': item_html
+            })
         else:
-            # Retorna os erros de validação específicos para o JavaScript tratar
             return JsonResponse({'status': 'error', 'errors': form.errors.get_json_data()}, status=400)
 
     except Exception as e:

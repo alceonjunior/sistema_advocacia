@@ -1,3 +1,4 @@
+{# alceonjunior/sistema_advocacia/alceonjunior-sistema_advocacia-0c3a4ac427b496a4ce8c807f83646315111139bd/gestao/templates/gestao/configuracoes.html #}
 {% extends 'gestao/base.html' %}
 {% load static %}
 
@@ -292,7 +293,7 @@
                                 {% include 'gestao/partials/_cadastro_tipo_acao.html' with titulo="Tipos de Ação" form=form_tipo_acao itens=tipos_acao modelo="TipoAcao" areas_processo=areas_processo %}
                             </div>
                             <div class="tab-pane fade" id="tipos-mov-subpane" role="tabpanel" aria-labelledby="tipos-mov-subtab">
-                                {% include 'gestao/partials/_cadastro_auxiliar_item.html' with titulo="Tipos de Movimentação" form=form_tipo_movimentacao itens=tipos_movimentacao modelo="TipoMovimentacao" %}
+                                {% include 'gestao/partials/_cadastro_tipo_movimentacao.html' with titulo="Tipos de Movimentação" form=form_tipo_movimentacao itens=tipos_movimentacao modelo="TipoMovimentacao" %}
                             </div>
                         </div>
                     </div>
@@ -378,21 +379,21 @@ document.addEventListener('DOMContentLoaded', function() {
             if (responseData.status === 'success') {
                 const listContainer = form.closest('.tab-pane').querySelector('.list-group-container');
                 const noItemsMessage = listContainer.querySelector('.no-items-message');
-                if(noItemsMessage) noItemsMessage.remove(); // Remove a mensagem de "nenhum item"
+                if(noItemsMessage) noItemsMessage.remove();
 
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = responseData.item_html;
                 const newItemElement = tempDiv.firstChild;
 
                 if (responseData.is_new) { // Adicionar novo item
-                    listContainer.querySelector('.list-group, ul').appendChild(newItemElement);
+                    const targetList = listContainer.querySelector('.list-group, ul');
+                    if(targetList) targetList.appendChild(newItemElement);
                     form.reset();
-                    // Para o caso especial de Tipo de Ação
                     const areaSelect = form.querySelector('select');
                     if(areaSelect) areaSelect.selectedIndex = 0;
                 } else { // Atualizar item existente
                     const pk = responseData.pk;
-                    const existingItem = listContainer.querySelector(`.list-group-item[data-pk="${pk}"]`);
+                    const existingItem = listContainer.querySelector(`[data-pk="${pk}"]`);
                     if (existingItem) {
                         existingItem.replaceWith(newItemElement);
                     }
@@ -437,21 +438,18 @@ document.addEventListener('DOMContentLoaded', function() {
             const itemElement = target.closest('.list-group-item');
             if (!itemElement) return;
 
-            // Botão EDITAR
             if (target.closest('.btn-edit-item')) {
                 itemElement.querySelector('.item-display').style.display = 'none';
                 itemElement.querySelector('.item-actions').style.display = 'none';
                 itemElement.querySelector('.item-edit').style.display = 'flex';
             }
 
-            // Botão CANCELAR
             if (target.closest('.btn-cancel-edit')) {
                 itemElement.querySelector('.item-display').style.display = 'block';
                 itemElement.querySelector('.item-actions').style.display = 'block';
                 itemElement.querySelector('.item-edit').style.display = 'none';
             }
 
-            // Botão EXCLUIR
             if (target.closest('.btn-delete-item')) {
                 if (confirm('Tem certeza que deseja excluir este item?')) {
                     const deleteButton = target.closest('.btn-delete-item');

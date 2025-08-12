@@ -1,3 +1,4 @@
+{# alceonjunior/sistema_advocacia/alceonjunior-sistema_advocacia-0c3a4ac427b496a4ce8c807f83646315111139bd/gestao/templates/gestao/partials/_cadastro_tipo_acao.html #}
 {% load gestao_extras %}
 <h5 class="mb-3">{{ titulo }}</h5>
 <form class="form-add-item mb-4 p-3 border rounded bg-light" method="post" action="{% url 'gestao:salvar_cadastro_auxiliar_ajax' modelo=modelo %}" novalidate>
@@ -18,16 +19,14 @@
     <div class="ajax-error alert alert-danger d-none mt-2 p-2 small" role="alert" aria-live="polite"></div>
 </form>
 <div class="list-group-container">
-    {% for area in areas_processo %}
-        {% with tipos_na_area=itens|get_item:area.pk %}
+    {% for area_id, tipos_na_area in itens.items %}
         {% if tipos_na_area %}
-            <h6 class="mt-4 text-muted border-bottom pb-1">{{ area.nome }}</h6>
+            <h6 class="mt-4 text-muted border-bottom pb-1">{{ tipos_na_area.0.area.nome }}</h6>
             <ul class="list-group list-group-flush">
                 {% for item in tipos_na_area %}
-                    {% include 'gestao/partials/_cadastro_tipo_acao_item.html' with item=item modelo=modelo form=form %}
+                    {% include 'gestao/partials/_cadastro_tipo_acao_item.html' with item=item modelo=modelo form=form_tipo_acao %}
                 {% endfor %}
             </ul>
         {% endif %}
-        {% endwith %}
     {% endfor %}
 </div>

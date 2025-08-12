@@ -1,0 +1,24 @@
+{# alceonjunior/sistema_advocacia/alceonjunior-sistema_advocacia-0c3a4ac427b496a4ce8c807f83646315111139bd/gestao/templates/gestao/partials/_cadastro_tipo_movimentacao.html #}
+<h5 class="mb-3">{{ titulo }}</h5>
+<form class="form-add-item mb-4 p-3 border rounded bg-light" method="post" action="{% url 'gestao:salvar_cadastro_auxiliar_ajax' modelo=modelo %}" novalidate>
+    {% csrf_token %}
+    <div class="row g-2 align-items-end">
+        <div class="col-md-5">{{ form.nome.label_tag }}{{ form.nome }}</div>
+        <div class="col-md-2">{{ form.sugestao_dias_prazo.label_tag }}{{ form.sugestao_dias_prazo }}</div>
+        <div class="col-md-3">{{ form.tipo_contagem_prazo.label_tag }}{{ form.tipo_contagem_prazo }}</div>
+        <div class="col-md-2 d-flex align-items-center pb-2">
+            <div class="form-check form-switch">{{ form.favorito }}{{ form.favorito.label_tag }}</div>
+        </div>
+    </div>
+    <div class="d-flex justify-content-end mt-2">
+        <button class="btn btn-primary" type="submit"><i class="bi bi-plus-circle me-1"></i> Adicionar</button>
+    </div>
+    <div class="ajax-error alert alert-danger d-none mt-2 p-2 small" role="alert" aria-live="polite"></div>
+</form>
+<div class="list-group list-group-container">
+    {% for item in itens %}
+        {% include 'gestao/partials/_cadastro_tipo_movimentacao_item.html' with item=item modelo=modelo form=form %}
+    {% empty %}
+        <div class="list-group-item text-muted text-center no-items-message">Nenhum item cadastrado.</div>
+    {% endfor %}
+</div>
