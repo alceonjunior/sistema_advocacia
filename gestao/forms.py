@@ -15,7 +15,7 @@ from .models import (
     Processo, Cliente, TipoAcao, Movimentacao, TipoMovimentacao,
     Pagamento, Servico, TipoServico, MovimentacaoServico, ContratoHonorarios,
     ModeloDocumento, Documento, ParteProcesso, Recurso, Incidente, EscritorioConfiguracao, AreaProcesso, UsuarioPerfil,
-    LancamentoFinanceiro
+    LancamentoFinanceiro, CalculoJudicial, CalculoLancamento, CalculoCorrecao, CalculoJuros
 )
 from .models import CalculoJudicial, FaseCalculo
 
@@ -735,30 +735,70 @@ class DespesaRecorrenteVariavelForm(forms.Form):
 
 
 class CalculoJudicialForm(forms.ModelForm):
+    valor_base = forms.DecimalField(
+        label="Valor Base (se não houver lançamentos)",
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '0,00'})
+    )
     class Meta:
         model = CalculoJudicial
-        # Inclua os campos que aparecem na seção "Dados Gerais"
-        fields = ['descricao', 'valor_original']
-
+        fields = ['descricao', 'data_inicial_global', 'data_final_global', 'pro_rata', 'mostrar_memoria']
         widgets = {
-            'descricao': forms.TextInput(
-                attrs={
-                    'class': 'form-control',  # Adiciona a classe do Bootstrap
-                }
-            ),
-            'valor_original': forms.TextInput(
-                attrs={
-                    'class': 'form-control',  # Adiciona a classe do Bootstrap
-                    'style': 'text-align: right;',  # Alinha o texto à direita para valores monetários
-                    'placeholder': '0,00'
-                }
-            ),
+            'descricao': forms.TextInput(attrs={'class': 'form-control'}),
+            'data_inicial_global': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'data_final_global': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'pro_rata': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'mostrar_memoria': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
-        labels = {
-            'descricao': 'Descrição do Cálculo',
-            'valor_original': 'Valor a ser atualizado',  # Rótulo igual ao da imagem
+class LancamentoForm(forms.ModelForm):
+    class Meta:
+        model = CalculoLancamento
+        fields = ['tipo', 'descricao', 'valor']
+        widgets = {
+            'tipo': forms.Select(attrs={'class': 'form-select'}),
+            'descricao': forms.TextInput(attrs={'class': 'form-control'}),
+            'valor': forms.TextInput(attrs={'class': 'form-control'}),
         }
+
+class CorrecaoForm(forms.ModelForm):
+    class Meta:
+        model = CalculoCorrecao
+        fields = ['indice', 'data_inicio', 'data_fim', 'aplicar_em']
+        widgets = {
+            'indice': forms.Select(attrs={'class': 'form-select'}),
+            'data_inicio': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'data_fim': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'aplicar_em': forms.Select(attrs={'class': 'form-select aplicar-a-select'}),
+        }
+
+class JurosForm(forms.ModelForm):
+    class Meta:
+        model = CalculoJuros
+        fields = ['tipo', 'taxa', 'periodicidade', 'capitalizacao', 'data_inicio', 'data_fim', 'aplicar_em']
+        widgets = {
+            'tipo': forms.Select(attrs={'class': 'form-select'}),
+            'taxa': forms.TextInput(attrs={'class': 'form-control'}),
+            'periodicidade': forms.Select(attrs={'class': 'form-select'}),
+            'capitalizacao': forms.Select(attrs={'class': 'form-select'}),
+            'data_inicio': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'data_fim': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'aplicar_em': forms.Select(attrs={'class': 'form-select aplicar-a-select'}),
+        }
+
+# Formsets
+LancamentoFormSet = inlineformset_factory(
+    CalculoJudicial, CalculoLancamento, form=LancamentoForm,
+    extra=0, can_delete=True, min_num=0
+)
+CorrecaoFormSet = inlineformset_factory(
+    CalculoJudicial, CalculoCorrecao, form=CorrecaoForm,
+    extra=0, can_delete=True, min_num=0
+)
+JurosFormSet = inlineformset_factory(
+    CalculoJudicial, CalculoJuros, form=JurosForm,
+    extra=0, can_delete=True, min_num=0
+)
 
 
 class FaseCalculoForm(forms.ModelForm):

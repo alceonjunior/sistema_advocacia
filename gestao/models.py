@@ -558,30 +558,24 @@ class Pagamento(models.Model):
 
 class CalculoJudicial(models.Model):
     """
-    Modelo container para um cálculo judicial completo, que pode consistir em múltiplas fases.
+    Modelo container para um cálculo judicial completo, que pode consistir em múltiplos
+    lançamentos, regras de correção e regras de juros.
     """
-    processo = models.ForeignKey('Processo', on_delete=models.CASCADE, related_name='calculos')
+    processo = models.ForeignKey(Processo, on_delete=models.CASCADE, related_name='calculos')
     descricao = models.CharField(max_length=255, verbose_name="Descrição do Cálculo")
-    valor_original = models.DecimalField(max_digits=15, decimal_places=2, verbose_name="Valor Original da Causa")
 
-    valor_final_calculado = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        default=None,
-        verbose_name="Valor Final Calculado"
-    )
+    # AJUSTE APLICADO AQUI: Tornando os campos opcionais
+    data_inicial_global = models.DateField(verbose_name="Data Inicial Global", null=True, blank=True)
+    data_final_global = models.DateField(verbose_name="Data Final Global", null=True, blank=True)
 
-    # --- CORREÇÃO APLICADA AQUI ---
-    # Adicionamos o 'encoder=DecimalEncoder' para que o Django saiba como
-    # salvar os números decimais do resultado do cálculo no banco de dados.
-    memoria_calculo_json = models.JSONField(
-        null=True,
-        blank=True,
-        verbose_name="Memória de Cálculo (JSON)",
-        encoder=DecimalEncoder
-    )
+    pro_rata = models.BooleanField(default=True, verbose_name="Calcular Correção Pro Rata")
+    mostrar_memoria = models.BooleanField(default=True, verbose_name="Mostrar Memória de Cálculo")
+
+    valor_final_calculado = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True,
+                                                verbose_name="Valor Final Calculado")
+    memoria_calculo_json = models.JSONField(null=True, blank=True, verbose_name="Memória de Cálculo (JSON)",
+                                            encoder=DecimalEncoder)
+    teste = models.CharField(max_length=10, null=True, blank=True)
 
     responsavel = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     data_calculo = models.DateTimeField(auto_now_add=True)
@@ -594,6 +588,58 @@ class CalculoJudicial(models.Model):
 
     def __str__(self):
         return self.descricao or f"Cálculo {self.pk} do processo {self.processo.numero_processo}"
+
+
+class CalculoLancamento(models.Model):
+    """Representa um lançamento (crédito ou débito) dentro de um cálculo judicial."""
+    TIPO_CHOICES = [('CREDITO', 'Crédito'), ('DEBITO', 'Débito')]
+
+    calculo = models.ForeignKey(CalculoJudicial, on_delete=models.CASCADE, related_name='lancamentos')
+    tipo = models.CharField(max_length=7, choices=TIPO_CHOICES)
+    descricao = models.CharField(max_length=255, blank=True, null=True)
+    valor = models.DecimalField(max_digits=15, decimal_places=2)
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return f"{self.get_tipo_display()}: {self.valor}"
+
+
+class CalculoCorrecao(models.Model):
+    """Representa uma regra de correção monetária aplicada a lançamentos."""
+    INDICE_CHOICES = [('IPCA', 'IPCA (IBGE)'), ('INPC', 'INPC (IBGE)'), ('IGP-M', 'IGP-M (FGV/BCB)'),
+                      ('IGP-DI', 'IGP-DI (FGV/BCB)'), ('SELIC', 'Taxa Selic (BCB)')]
+
+    calculo = models.ForeignKey(CalculoJudicial, on_delete=models.CASCADE, related_name='correcoes')
+    indice = models.CharField(max_length=50, choices=INDICE_CHOICES)
+    data_inicio = models.DateField()
+    data_fim = models.DateField(null=True, blank=True)
+    aplicar_em = models.CharField(max_length=255, default='todos',
+                                  help_text="'todos' ou IDs dos lançamentos separados por vírgula")
+
+    class Meta:
+        ordering = ['id']
+
+
+class CalculoJuros(models.Model):
+    """Representa uma regra de juros aplicada a lançamentos."""
+    TIPO_CHOICES = [('MORATORIO', 'Moratório'), ('REMUNERATORIO', 'Remuneratório')]
+    PERIODO_CHOICES = [('DIA', 'Ao Dia'), ('MES', 'Ao Mês'), ('ANO', 'Ao Ano')]
+    CAPITALIZACAO_CHOICES = [('SIMPLES', 'Simples'), ('COMPOSTO', 'Composto')]
+
+    calculo = models.ForeignKey(CalculoJudicial, on_delete=models.CASCADE, related_name='juros')
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    taxa = models.DecimalField(max_digits=7, decimal_places=4, verbose_name="Taxa (%)")
+    periodicidade = models.CharField(max_length=3, choices=PERIODO_CHOICES)
+    capitalizacao = models.CharField(max_length=8, choices=CAPITALIZACAO_CHOICES)
+    data_inicio = models.DateField()
+    data_fim = models.DateField(null=True, blank=True)
+    aplicar_em = models.CharField(max_length=255, default='todos',
+                                  help_text="'todos' ou IDs dos lançamentos separados por vírgula")
+
+    class Meta:
+        ordering = ['id']
 
 
 class FaseCalculo(models.Model):

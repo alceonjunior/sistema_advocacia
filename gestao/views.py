@@ -65,13 +65,13 @@ from .forms import (
     TipoAcaoForm, TipoServicoForm, UsuarioPerfilForm, GerarDocumentoForm,
     LancamentoFinanceiroForm, DespesaRecorrenteVariavelForm,
     DespesaRecorrenteFixaForm, DespesaPontualForm, DespesaTipoForm, CalculoJudicialForm, FaseCalculoFormSet,
-    FaseCalculoForm,
+    FaseCalculoForm, LancamentoFormSet, CorrecaoFormSet, JurosFormSet,
 )
 from .models import (
-    AreaProcesso, CalculoJudicial,FaseCalculo, Cliente, Documento, EscritorioConfiguracao,
+    AreaProcesso, CalculoJudicial, FaseCalculo, Cliente, Documento, EscritorioConfiguracao,
     Incidente, LancamentoFinanceiro, ModeloDocumento, Movimentacao,
     MovimentacaoServico, Pagamento, Processo, Recurso, Servico, TipoAcao,
-    TipoServico, UsuarioPerfil, ContratoHonorarios, ParteProcesso, TipoMovimentacao,
+    TipoServico, UsuarioPerfil, ContratoHonorarios, ParteProcesso, TipoMovimentacao, CalculoLancamento,
 )
 from .services import ServicoIndices
 from .nfse_service import NFSEService
@@ -2032,78 +2032,94 @@ from .utils import data_por_extenso, valor_por_extenso
 @login_required
 def realizar_calculo(request, processo_pk, calculo_pk=None):
     """
-    View para criar, carregar, calcular e salvar um Cálculo Judicial por fases.
+    View refatorada para criar, carregar, calcular e salvar um Cálculo Judicial.
+    Utiliza múltiplos formsets para lançamentos, correções e juros.
     """
     processo = get_object_or_404(Processo, pk=processo_pk)
     calculo_instance = get_object_or_404(CalculoJudicial, pk=calculo_pk) if calculo_pk else None
 
-    resultado = None
-    calculos_salvos = processo.calculos.all().order_by('-data_calculo')
+    lancamentos_existentes = []
+    if calculo_instance:
+        lancamentos_existentes = list(calculo_instance.lancamentos.values('id', 'descricao', 'valor'))
 
-    # --- LÓGICA DE CONTROLE DO FORMSET (CORRIGIDA) ---
     if request.method == 'POST':
         form = CalculoJudicialForm(request.POST, instance=calculo_instance)
-        # Em requisições POST, SEMPRE usamos o formset padrão com extra=0 para não adicionar campos extras em caso de erro.
-        formset = FaseCalculoFormSet(request.POST, instance=calculo_instance, prefix='fases')
-    else:  # Método GET
-        form = CalculoJudicialForm(instance=calculo_instance)
-        # Se for um cálculo NOVO (GET), precisamos exibir UM formulário de fase em branco.
-        if calculo_instance is None:
-            # Criamos uma 'fábrica' de formsets localmente que adiciona o formulário extra.
-            FormSetParaNovoCalculo = inlineformset_factory(
-                CalculoJudicial, FaseCalculo, form=FaseCalculoForm,
-                extra=1, can_delete=True, min_num=1, validate_min=True
-            )
-            formset = FormSetParaNovoCalculo(instance=calculo_instance, prefix='fases')
-        else:
-            # Se estivermos carregando um cálculo existente, usamos o formset padrão (extra=0).
-            formset = FaseCalculoFormSet(instance=calculo_instance, prefix='fases')
+        lancamento_formset = LancamentoFormSet(request.POST, instance=calculo_instance, prefix='lancamento')
+        correcao_formset = CorrecaoFormSet(request.POST, instance=calculo_instance, prefix='correcao')
+        juros_formset = JurosFormSet(request.POST, instance=calculo_instance, prefix='juros')
 
-    # --- PROCESSAMENTO DO FORMULÁRIO ---
-    if request.method == 'POST':
-        if form.is_valid() and formset.is_valid():
+        if form.is_valid() and lancamento_formset.is_valid() and correcao_formset.is_valid() and juros_formset.is_valid():
             with transaction.atomic():
-                calculo = form.save(commit=False)
-                calculo.processo = processo
-                calculo.responsavel = request.user
-                calculo.save()
+                calculo_principal = form.save(commit=False)
+                calculo_principal.processo = processo
+                calculo_principal.responsavel = request.user
 
-                formset.instance = calculo
-                fases = formset.save()
+                # Se não houver lançamentos, usa o valor_base para criar um
+                if not lancamento_formset.get_queryset().exists() and not any(
+                        f.cleaned_data for f in lancamento_formset if f.has_changed()):
+                    valor_base = form.cleaned_data.get('valor_base')
+                    if valor_base and valor_base > 0:
+                        calculo_principal.save()  # Salva primeiro para obter um PK
+                        CalculoLancamento.objects.create(
+                            calculo=calculo_principal,
+                            tipo='CREDITO',
+                            descricao='Valor Base Informado',
+                            valor=valor_base
+                        )
+                    else:  # Se não tem lançamentos nem valor base, o que calcular?
+                        form.add_error('valor_base',
+                                       'É necessário informar um Valor Base se não houver lançamentos detalhados.')
+                        # Força a saída do bloco 'with' e vai para a renderização de erro.
+                        raise transaction.TransactionManagementError()
 
-                try:
-                    calculadora = CalculadoraMonetaria()
-                    resultado_calculo = calculadora.calcular_fases(calculo.valor_original, fases)
+                if not hasattr(calculo_principal, 'pk') or not calculo_principal.pk:
+                    calculo_principal.save()
 
-                    calculo.valor_final_calculado = resultado_calculo['resumo']['valor_final']
-                    calculo.memoria_calculo_json = json.dumps(resultado_calculo, cls=DecimalEncoder)
-                    calculo.save()
+                lancamento_formset.instance = calculo_principal
+                lancamentos = lancamento_formset.save()
 
-                    messages.success(request, 'Cálculo salvo e processado com sucesso!')
-                    return redirect('gestao:carregar_calculo', processo_pk=processo.pk, calculo_pk=calculo.pk)
-                except Exception as e:
-                    logger.error(f"Erro na execução do cálculo para o ID {calculo.pk}: {e}", exc_info=True)
-                    messages.error(request, f'Ocorreu um erro durante o cálculo: {e}')
+                correcao_formset.instance = calculo_principal
+                correcoes = correcao_formset.save()
+
+                juros_formset.instance = calculo_principal
+                regras_juros = juros_formset.save()
+
+                # try:
+                #     # CHAMADA À CALCULADORA (a ser implementada ou ajustada)
+                #     calculadora = CalculadoraMonetaria()
+                #     resultado_calculo = calculadora.calcular_detalhado(
+                #         calculo_principal, lancamentos, correcoes, regras_juros
+                #     )
+
+                #     calculo_principal.valor_final_calculado = resultado_calculo['resumo']['valor_final']
+                #     calculo_principal.memoria_calculo_json = json.dumps(resultado_calculo, cls=DecimalEncoder)
+                #     calculo_principal.save()
+
+                messages.success(request,
+                                 'Cálculo salvo com sucesso! A funcionalidade de cálculo está em desenvolvimento.')
+                return redirect('gestao:realizar_calculo', processo_pk=processo.pk, calculo_pk=calculo_principal.pk)
+
+                # except Exception as e:
+                #     logger.error(f"Erro na execução do cálculo para o ID {calculo_principal.pk}: {e}", exc_info=True)
+                #     messages.error(request, f'Ocorreu um erro durante o cálculo: {e}')
         else:
-            messages.error(request, 'Por favor, corrija os erros indicados no formulário para continuar.')
+            messages.error(request, 'Por favor, corrija os erros indicados no formulário.')
 
-    # Carrega o resultado salvo se estiver visualizando um cálculo existente
-    if calculo_instance and calculo_instance.memoria_calculo_json:
-        if isinstance(calculo_instance.memoria_calculo_json, str):
-            try:
-                resultado = json.loads(calculo_instance.memoria_calculo_json)
-            except (json.JSONDecodeError, TypeError):
-                resultado = None
-        else:
-            resultado = calculo_instance.memoria_calculo_json
+    else:  # GET
+        form = CalculoJudicialForm(instance=calculo_instance)
+        lancamento_formset = LancamentoFormSet(instance=calculo_instance, prefix='lancamento')
+        correcao_formset = CorrecaoFormSet(instance=calculo_instance, prefix='correcao')
+        juros_formset = JurosFormSet(instance=calculo_instance, prefix='juros')
 
     contexto = {
         'processo': processo,
         'form': form,
-        'formset': formset,
-        'calculos_salvos': calculos_salvos,
+        'lancamento_formset': lancamento_formset,
+        'correcao_formset': correcao_formset,
+        'juros_formset': juros_formset,
+        'lancamentos_existentes': json.dumps(lancamentos_existentes),
         'calculo_carregado': calculo_instance,
-        'resultado': resultado,
+        # 'resultado': resultado, # A ser implementado com a calculadora
     }
     return render(request, 'gestao/calculo_judicial.html', contexto)
 

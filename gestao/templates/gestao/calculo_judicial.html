@@ -1,388 +1,529 @@
-{% extends 'gestao/base.html' %}
-{% load static humanize %}
+{% load static %}
+{% load humanize %}
 {% load widget_tweaks %}
 
-{% block title %}Cálculos Judiciais por Fases - Processo {{ processo.numero_processo }}{% endblock %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Módulo de Atualização de Valores - Processo {{ processo.numero_processo }}</title>
 
-{% block styles %}
-{{ block.super }}
-<style>
-    /* Estilos para a nova interface Mestre-Detalhe */
-    .master-detail-grid {
-        display: grid;
-        grid-template-columns: 40% 1fr; /* Coluna da lista com 40%, editor com o resto */
-        gap: 1.5rem;
-    }
-    .fase-list .list-group-item {
-        cursor: pointer;
-        transition: background-color 0.2s ease-in-out, border-left-color 0.2s ease-in-out;
-        border-left: 4px solid transparent;
-        padding: 0.75rem 1rem;
-    }
-    .fase-list .list-group-item.active {
-        background-color: var(--bs-primary-bg-subtle) !important;
-        border-left-color: var(--bs-primary) !important;
-        font-weight: bold;
-    }
-    .fase-list .list-group-item.has-error {
-        border-left-color: var(--bs-danger) !important;
-    }
-    .fase-list .list-group-item.has-error:not(.active) {
-        background-color: var(--bs-danger-bg-subtle);
-    }
-    .fase-list .list-group-item:hover:not(.active) {
-        background-color: #f8f9fa;
-    }
-    .fase-editor-form-container {
-        position: sticky;
-        top: 20px;
-    }
-    .formset-hidden-container, .empty-form-template {
-        display: none;
-    }
-    .editor-field-error {
-        font-size: 0.875em;
-        color: var(--bs-danger);
-        margin-top: 0.25rem;
-    }
-    .fase-editor-body .form-label {
-        margin-bottom: 0.25rem;
-        font-weight: 500;
-    }
-    .fase-editor-body .mb-3 {
-        margin-bottom: 1rem !important;
-    }
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
-    /* Estilos de impressão */
-    @media print {
-        body * { visibility: hidden; }
-        .printable-area, .printable-area * { visibility: visible; }
-        .printable-area { position: absolute; left: 0; top: 0; width: 100%; }
-        .card { box-shadow: none !important; border: 1px solid #dee2e6 !important; }
-    }
-</style>
-{% endblock %}
+    <style>
+        /* CSS Mínimo Embutido */
+        body {
+            background-color: #f4f7f6;
+            padding-bottom: 100px; /* Espaço para a barra de ações fixa */
+        }
+        .main-container {
+            max-width: 1600px;
+            margin: auto;
+        }
+        .card-header .bi {
+            color: var(--bs-primary);
+        }
+        .form-control.is-invalid, .form-select.is-invalid {
+            border-color: #dc3545;
+            background-image: none;
+        }
+        .invalid-feedback {
+            display: none;
+            width: 100%;
+            margin-top: .25rem;
+            font-size: .875em;
+            color: #dc3545;
+        }
+        .is-invalid ~ .invalid-feedback,
+        td > .errorlist {
+            display: block;
+            color: #dc3545;
+            font-size: .8em;
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+        .formset-row td {
+            vertical-align: middle;
+            padding-top: 0.75rem;
+            padding-bottom: 0.75rem;
+        }
+        .formset-row .form-control, .formset-row .form-select {
+            min-width: 120px;
+        }
+        .formset-row-add input, .formset-row-add select {
+            border-color: var(--bs-primary);
+        }
+        .formset-row-add button {
+            white-space: nowrap;
+        }
+        .action-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 1rem;
+            border-top: 1px solid #dee2e6;
+            z-index: 1020;
+            backdrop-filter: blur(5px);
+        }
+        .summary-value {
+            font-weight: 500;
+        }
+        .summary-value.positive { color: var(--bs-success); }
+        .summary-value.negative { color: var(--bs-danger); }
+        .summary-value.neutral { color: var(--bs-dark); }
+    </style>
+</head>
+<body>
+    <div class="container-fluid main-container p-3 p-md-4">
 
-{% block content %}
-<form id="calculo-form" method="post" novalidate>
-    {% csrf_token %}
-    <div class="d-flex justify-content-between align-items-center mb-4 d-print-none">
-        <div>
-            <h1 class="h2 d-flex align-items-center gap-2"><i class="bi bi-calculator-fill text-primary"></i> Cálculos Judiciais por Fases</h1>
-            <p class="text-muted mb-0"><strong>Processo:</strong> {{ processo }}</p>
-        </div>
-        <div>
-            <a href="{% url 'gestao:detalhe_processo' pk=processo.pk %}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle"></i> Voltar</a>
-            {% if resultado %}<button type="button" onclick="window.print();" class="btn btn-info"><i class="bi bi-printer-fill"></i> Imprimir</button>{% endif %}
-            <button type="submit" class="btn btn-primary"><i class="bi bi-save-fill"></i> Salvar e Calcular</button>
-        </div>
-    </div>
-
-    <div class="row g-4">
-        <div class="col-lg-8 d-print-none">
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-light"><h5 class="mb-0">Dados Gerais do Cálculo</h5></div>
-                <div class="card-body p-4">
-                    {% if form.non_field_errors %}<div class="alert alert-danger p-2 small">{{ form.non_field_errors }}</div>{% endif %}
-                    {% if formset.non_form_errors %}<div class="alert alert-danger p-2 small">{{ formset.non_form_errors }}</div>{% endif %}
-                    <div class="row g-3">
-                        <div class="col-md-8">
-                            <label for="{{ form.descricao.id_for_label }}" class="form-label">{{ form.descricao.label }}</label>
-                            {% render_field form.descricao class="form-control" %}
-                            <div class="text-danger small mt-1">{{ form.descricao.errors|striptags }}</div>
-                        </div>
-                        <div class="col-md-4">
-                            <label for="{{ form.valor_original.id_for_label }}" class="form-label">{{ form.valor_original.label }}</label>
-                            {% render_field form.valor_original class="form-control" %}
-                            <div class="text-danger small mt-1">{{ form.valor_original.errors|striptags }}</div>
-                        </div>
-                    </div>
-                </div>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h2 d-flex align-items-center gap-2 mb-0">
+                    <i class="bi bi-calculator-fill text-primary"></i> Módulo de Atualização de Valores
+                </h1>
+                <p class="text-muted mb-0"><strong>Processo:</strong> {{ processo }}</p>
             </div>
-
-            <div class="master-detail-grid">
-                <div class="fase-list-container">
-                    <h5 class="mb-3">Fases do Cálculo</h5>
-                    <div class="list-group fase-list" id="fases-list">
-                        {% for form_fase in formset %}
-                        <div class="list-group-item {% if form_fase.errors %}has-error{% endif %}" data-index="{{ forloop.counter0 }}">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong class="fase-list-title">Fase {{ forloop.counter }}: {{ form_fase.instance.observacao|default:"(sem observação)"|truncatechars:20 }}</strong>
-                                    <small class="d-block text-muted">{{ form_fase.instance.data_inicio|date:"d/m/y" }} a {{ form_fase.instance.data_fim|date:"d/m/y" }}</small>
-                                </div>
-                                <button type="button" class="btn btn-sm btn-outline-danger remove-fase-btn"><i class="bi bi-trash"></i></button>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    <button type="button" id="add-fase-btn" class="btn btn-success mt-3 w-100"><i class="bi bi-plus-circle"></i> Adicionar Nova Fase</button>
-                </div>
-
-                <div class="fase-editor-form-container">
-                    <div class="card shadow-sm">
-                        <div class="card-header"><h5 class="mb-0" id="fase-editor-title">Selecione ou adicione uma fase</h5></div>
-                        <div class="card-body p-4" id="fase-editor-body" style="display: none;">
-                            <div class="mb-3">
-                                <label for="editor_observacao" class="form-label">{{ formset.empty_form.observacao.label }}</label>
-                                {% render_field formset.empty_form.observacao id="editor_observacao" class="form-control" %}
-                                <div class="editor-field-error" data-error-for="observacao"></div>
-                            </div>
-                            <div class="row g-3 mb-3">
-                                <div class="col-md-6">
-                                    <label for="editor_data_inicio" class="form-label">{{ formset.empty_form.data_inicio.label }}</label>
-                                    {% render_field formset.empty_form.data_inicio id="editor_data_inicio" class="form-control" type="date" %}
-                                    <div class="editor-field-error" data-error-for="data_inicio"></div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="editor_data_fim" class="form-label">{{ formset.empty_form.data_fim.label }}</label>
-                                    {% render_field formset.empty_form.data_fim id="editor_data_fim" class="form-control" type="date" %}
-                                    <div class="editor-field-error" data-error-for="data_fim"></div>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="editor_indice" class="form-label">{{ formset.empty_form.indice.label }}</label>
-                                {% render_field formset.empty_form.indice id="editor_indice" class="form-select" %}
-                                <div class="editor-field-error" data-error-for="indice"></div>
-                            </div>
-                            <div class="row g-3">
-                                <div class="col-md-6 mb-3">
-                                    <label for="editor_juros_taxa" class="form-label">{{ formset.empty_form.juros_taxa.label }}</label>
-                                    {% render_field formset.empty_form.juros_taxa id="editor_juros_taxa" class="form-control" step="0.01" %}
-                                    <div class="editor-field-error" data-error-for="juros_taxa"></div>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="editor_juros_tipo" class="form-label">{{ formset.empty_form.juros_tipo.label }}</label>
-                                    {% render_field formset.empty_form.juros_tipo id="editor_juros_tipo" class="form-select" %}
-                                    <div class="editor-field-error" data-error-for="juros_tipo"></div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card-footer text-end" id="fase-editor-footer" style="display: none;">
-                            <button type="button" class="btn btn-primary" id="apply-fase-btn">Aplicar Alterações</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="formset-hidden-container">
-                {{ formset.management_form }}
-                {% for form_fase in formset %}
-                    <div class="fase-form-hidden" data-index="{{ forloop.counter0 }}">{{ form_fase.as_p }}</div>
-                {% endfor %}
-                <div class="empty-form-template">{{ formset.empty_form.as_p }}</div>
-            </div>
+             <a href="{% url 'gestao:detalhe_processo' pk=processo.pk %}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle"></i> Voltar ao Processo</a>
         </div>
 
-        <div class="col-lg-4">
-            <div class="printable-area">
-                {% if resultado %}
-                    <div class="card shadow-sm sticky-top mb-4" style="top: 20px;">
-                        <div class="card-header bg-success-subtle text-success-emphasis"><h5 class="mb-0">Resumo do Cálculo</h5></div>
+        {% if messages %}
+        <div class="messages-container mb-3">
+            {% for message in messages %}
+            <div class="alert alert-{% if message.tags %}{{ message.tags }}{% else %}info{% endif %} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <form id="calculationForm" method="post" action="" novalidate>
+            {% csrf_token %}
+
+            <div class="row g-4">
+                <div class="col-lg-8">
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header"><h5 class="mb-0"><i class="bi bi-calendar3-range me-2"></i>1. Dados Globais do Cálculo</h5></div>
                         <div class="card-body">
-                            <div class="d-flex justify-content-between"><span>Valor Original:</span> <span>R$ {{ resultado.resumo.valor_original|intcomma }}</span></div>
-                            <hr>
-                            {% for fase_res in resultado.fases_resultados %}
-                                <div class="mb-3">
-                                    <h6 class="text-primary">Fase {{ fase_res.ordem }}: {{ fase_res.observacao }}</h6>
-                                    <table class="table table-sm table-borderless">
-                                        <tbody>
-                                            <tr><td>Valor Inicial da Fase</td><td class="text-end">R$ {{ fase_res.valor_inicial|intcomma }}</td></tr>
-                                            {% for item_memoria in fase_res.memoria %}
-                                                <tr><td><small class="ps-2">↳ {{ item_memoria.descricao }}</small></td><td class="text-end"><small>(+) R$ {{ item_memoria.valor|intcomma }}</small></td></tr>
+                            {% if form.non_field_errors %}<div class="alert alert-danger p-2 small">{{ form.non_field_errors.as_text }}</div>{% endif %}
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label for="{{ form.descricao.id_for_label }}" class="form-label">Descrição do Cálculo</label>
+                                    {% render_field form.descricao class+="form-control" %}
+                                    <div class="invalid-feedback">{{ form.descricao.errors.as_text }}</div>
+                                </div>
+                                <div class="col-md-6" id="valor_base_container">
+                                    <label for="{{ form.valor_base.id_for_label }}" class="form-label">Valor Base (sem lançamentos)</label>
+                                    {% render_field form.valor_base class+="form-control" %}
+                                    <div class="invalid-feedback">{{ form.valor_base.errors.as_text }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="{{ form.data_inicial_global.id_for_label }}" class="form-label">Data Inicial Global</label>
+                                    {% render_field form.data_inicial_global class+="form-control" %}
+                                    <div class="invalid-feedback">{{ form.data_inicial_global.errors.as_text }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="{{ form.data_final_global.id_for_label }}" class="form-label">Data Final Global</label>
+                                    {% render_field form.data_final_global class+="form-control" %}
+                                    <div class="invalid-feedback">{{ form.data_final_global.errors.as_text }}</div>
+                                </div>
+                                <div class="col-12 mt-4 pt-3 border-top">
+                                    <div class="form-check form-switch">
+                                        {% render_field form.pro_rata class+="form-check-input" %}
+                                        <label class="form-check-label" for="{{ form.pro_rata.id_for_label }}">Calcular correção Pro Rata Die</label>
+                                        <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Calcula a correção proporcional aos dias do mês. Desmarque para usar o índice mensal completo."></i>
+                                    </div>
+                                    <div class="form-check form-switch">
+                                        {% render_field form.mostrar_memoria class+="form-check-input" %}
+                                        <label class="form-check-label" for="{{ form.mostrar_memoria.id_for_label }}">Mostrar memória de cálculo no resultado</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header"><h5 class="mb-0"><i class="bi bi-list-ol me-2"></i>2. Lançamentos (Créditos e Débitos)</h5></div>
+                        <div class="card-body">
+                            {{ lancamento_formset.management_form }}
+                            {% for error in lancamento_formset.non_form_errors %}<div class="alert alert-danger p-2 small">{{ error }}</div>{% endfor %}
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead><tr><th>#</th><th>Tipo</th><th>Descrição</th><th>Valor (R$)</th><th class="text-center">Ações</th></tr></thead>
+                                    <tbody id="lancamento-formset-body">
+                                        {% for form_item in lancamento_formset %}
+                                        <tr class="formset-row" id="lancamento-row-{{ forloop.counter0 }}">
+                                            <td><span class="row-counter">{{ forloop.counter }}</span>{{ form_item.id }}</td>
+                                            <td>{% render_field form_item.tipo class+="form-select form-select-sm" %}{{ form_item.tipo.errors }}</td>
+                                            <td>{% render_field form_item.descricao class+="form-control form-control-sm" %}{{ form_item.descricao.errors }}</td>
+                                            <td>{% render_field form_item.valor class+="form-control form-control-sm text-end" %}{{ form_item.valor.errors }}</td>
+                                            <td class="text-center">
+                                                {% if form_item.instance.pk %}{{ form_item.DELETE }}{% endif %}
+                                                <button type="button" class="btn btn-sm btn-outline-danger remove-row" title="Remover Lançamento"><i class="bi bi-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                    <tfoot>
+                                        <tr class="formset-row-add">
+                                            <td></td>
+                                            <td><select class="form-select form-select-sm" id="new-lancamento-tipo"><option value="CREDITO">Crédito</option><option value="DEBITO">Débito</option></select></td>
+                                            <td><input type="text" class="form-control form-control-sm" id="new-lancamento-descricao" placeholder="Descrição do Lançamento"></td>
+                                            <td><input type="text" class="form-control form-control-sm text-end" id="new-lancamento-valor" placeholder="0,00"></td>
+                                            <td class="text-center"><button type="button" class="btn btn-sm btn-primary add-row" data-formset="lancamento"><i class="bi bi-plus-circle me-1"></i>Incluir</button></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm">
+                        <div class="card-header">
+                            <ul class="nav nav-tabs card-header-tabs" id="rules-tab" role="tablist">
+                                <li class="nav-item" role="presentation"><button class="nav-link active" id="correcao-tab" data-bs-toggle="tab" data-bs-target="#correcao-pane" type="button" role="tab"><i class="bi bi-graph-up me-2"></i>Correção Monetária</button></li>
+                                <li class="nav-item" role="presentation"><button class="nav-link" id="juros-tab" data-bs-toggle="tab" data-bs-target="#juros-pane" type="button" role="tab"><i class="bi bi-percent me-2"></i>Taxas de Juros</button></li>
+                            </ul>
+                        </div>
+                        <div class="card-body tab-content p-0" id="rules-tab-content">
+                            <div class="tab-pane fade show active p-3" id="correcao-pane" role="tabpanel">
+                                {{ correcao_formset.management_form }}
+                                {% for error in correcao_formset.non_form_errors %}<div class="alert alert-danger p-2 small">{{ error }}</div>{% endfor %}
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead><tr><th>#</th><th>Índice</th><th>Início</th><th>Fim</th><th>Aplicar a</th><th class="text-center">Ações</th></tr></thead>
+                                        <tbody id="correcao-formset-body">
+                                            {% for form_item in correcao_formset %}
+                                            <tr class="formset-row" id="correcao-row-{{ forloop.counter0 }}">
+                                                <td><span class="row-counter">{{ forloop.counter }}</span>{{ form_item.id }}</td>
+                                                <td>{% render_field form_item.indice class+="form-select form-select-sm" %}{{ form_item.indice.errors }}</td>
+                                                <td>{% render_field form_item.data_inicio class+="form-control form-control-sm" %}{{ form_item.data_inicio.errors }}</td>
+                                                <td>{% render_field form_item.data_fim class+="form-control form-control-sm" %}{{ form_item.data_fim.errors }}</td>
+                                                <td>{% render_field form_item.aplicar_em class+="form-select form-select-sm aplicar-a-select" %}{{ form_item.aplicar_em.errors }}</td>
+                                                <td class="text-center">{% if form_item.instance.pk %}{{ form_item.DELETE }}{% endif %}<button type="button" class="btn btn-sm btn-outline-danger remove-row"><i class="bi bi-trash"></i></button></td>
+                                            </tr>
                                             {% endfor %}
-                                            <tr class="fw-bold border-top"><td >Subtotal da Fase</td><td class="text-end">R$ {{ fase_res.valor_final|intcomma }}</td></tr>
                                         </tbody>
+                                        <tfoot>
+                                            <tr class="formset-row-add">
+                                                <td></td>
+                                                <td><select class="form-select form-select-sm" id="new-correcao-indice"><option value="INPC">INPC</option><option value="IPCA">IPCA</option><option value="IGP-M">IGP-M</option><option value="IGP-DI">IGP-DI</option><option value="SELIC">SELIC</option></select></td>
+                                                <td><input type="date" class="form-control form-control-sm" id="new-correcao-data_inicio"></td>
+                                                <td><input type="date" class="form-control form-control-sm" id="new-correcao-data_fim"></td>
+                                                <td><select class="form-select form-select-sm aplicar-a-select" id="new-correcao-aplicar_em"></select></td>
+                                                <td class="text-center"><button type="button" class="btn btn-sm btn-primary add-row" data-formset="correcao"><i class="bi bi-plus-circle me-1"></i>Incluir</button></td>
+                                            </tr>
+                                        </tfoot>
                                     </table>
                                 </div>
-                            {% endfor %}
-                            <hr>
-                            <div class="d-flex justify-content-between fs-4 fw-bold text-success">
-                                <span>VALOR FINAL TOTAL:</span>
-                                <span>R$ {{ resultado.resumo.valor_final|intcomma }}</span>
+                            </div>
+                            <div class="tab-pane fade p-3" id="juros-pane" role="tabpanel">
+                                {{ juros_formset.management_form }}
+                                {% for error in juros_formset.non_form_errors %}<div class="alert alert-danger p-2 small">{{ error }}</div>{% endfor %}
+                                <div class="table-responsive">
+                                    <table class="table table-sm" style="min-width: 800px;">
+                                        <thead><tr><th>#</th><th>Tipo</th><th>Taxa %</th><th>Período</th><th>Capitalização</th><th>Início</th><th>Fim</th><th>Aplicar a</th><th class="text-center">Ações</th></tr></thead>
+                                        <tbody id="juros-formset-body">
+                                            {% for form_item in juros_formset %}
+                                            <tr class="formset-row" id="juros-row-{{ forloop.counter0 }}">
+                                                <td><span class="row-counter">{{ forloop.counter }}</span>{{ form_item.id }}</td>
+                                                <td>{% render_field form_item.tipo class+="form-select form-select-sm" %}{{ form_item.tipo.errors }}</td>
+                                                <td>{% render_field form_item.taxa class+="form-control form-control-sm text-end" %}{{ form_item.taxa.errors }}</td>
+                                                <td>{% render_field form_item.periodicidade class+="form-select form-select-sm" %}{{ form_item.periodicidade.errors }}</td>
+                                                <td>{% render_field form_item.capitalizacao class+="form-select form-select-sm" %}{{ form_item.capitalizacao.errors }}</td>
+                                                <td>{% render_field form_item.data_inicio class+="form-control form-control-sm" %}{{ form_item.data_inicio.errors }}</td>
+                                                <td>{% render_field form_item.data_fim class+="form-control form-control-sm" %}{{ form_item.data_fim.errors }}</td>
+                                                <td>{% render_field form_item.aplicar_em class+="form-select form-select-sm aplicar-a-select" %}{{ form_item.aplicar_em.errors }}</td>
+                                                <td class="text-center">{% if form_item.instance.pk %}{{ form_item.DELETE }}{% endif %}<button type="button" class="btn btn-sm btn-outline-danger remove-row"><i class="bi bi-trash"></i></button></td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr class="formset-row-add">
+                                                <td></td>
+                                                <td><select class="form-select form-select-sm" id="new-juros-tipo"><option value="MORATORIO">Moratório</option><option value="REMUNERATORIO">Remuneratório</option></select></td>
+                                                <td><input type="text" class="form-control form-control-sm text-end" id="new-juros-taxa" placeholder="1,00"></td>
+                                                <td><select class="form-select form-select-sm" id="new-juros-periodicidade"><option value="MES">Ao Mês</option><option value="DIA">Ao Dia</option><option value="ANO">Ao Ano</option></select></td>
+                                                <td><select class="form-select form-select-sm" id="new-juros-capitalizacao"><option value="SIMPLES">Simples</option><option value="COMPOSTO">Composto</option></select></td>
+                                                <td><input type="date" class="form-control form-control-sm" id="new-juros-data_inicio"></td>
+                                                <td><input type="date" class="form-control form-control-sm" id="new-juros-data_fim"></td>
+                                                <td><select class="form-select form-select-sm aplicar-a-select" id="new-juros-aplicar_em"></select></td>
+                                                <td class="text-center"><button type="button" class="btn btn-sm btn-primary add-row" data-formset="juros"><i class="bi bi-plus-circle me-1"></i>Incluir</button></td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
-                {% else %}
-                    <div class="card shadow-sm d-print-none">
-                        <div class="card-body text-center p-5 text-muted">
-                            <i class="bi bi-file-earmark-binary fs-1"></i>
-                            <h5 class="mt-3">Nenhum Resultado</h5>
-                            <p>Salve um cálculo para ver o resumo detalhado aqui.</p>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="card shadow-sm sticky-top" style="top: 20px;">
+                        <div class="card-header"><h5 class="mb-0"><i class="bi bi-file-earmark-spreadsheet me-2"></i>5. Resumo e Pré-visualização</h5></div>
+                        <div class="card-body">
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item d-flex justify-content-between align-items-center"><span>Total de Créditos</span><span class="summary-value positive" id="summary-creditos">R$ 0,00</span></li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center"><span>Total de Débitos</span><span class="summary-value negative" id="summary-debitos">R$ 0,00</span></li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center"><strong>Valor Líquido Base</strong><strong class="summary-value neutral" id="summary-liquido">R$ 0,00</strong></li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center"><span>Regras de Correção</span><span class="badge bg-secondary rounded-pill" id="summary-correcoes">0</span></li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center"><span>Regras de Juros</span><span class="badge bg-secondary rounded-pill" id="summary-juros">0</span></li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center pt-3"><h5 class="mb-0">Valor Final Estimado</h5><h5 class="mb-0 text-primary" id="summary-final">R$ 0,00</h5></li>
+                            </ul>
+                            <small class="form-text text-center d-block mt-2">O valor final é uma estimativa e pode variar do cálculo exato do servidor.</small>
                         </div>
                     </div>
-                {% endif %}
-            </div>
-            <div class="card shadow-sm mt-4 d-print-none">
-                <div class="card-header bg-light"><h5 class="mb-0"><i class="bi bi-clock-history"></i> Histórico de Cálculos</h5></div>
-                <div class="list-group list-group-flush">
-                    <a href="{% url 'gestao:pagina_de_calculos' processo_pk=processo.pk %}" class="list-group-item list-group-item-action {% if not calculo_carregado %}active{% endif %}">
-                        <i class="bi bi-plus-circle-fill me-2"></i><strong>Novo Cálculo</strong>
-                    </a>
-                    {% for calculo in calculos_salvos %}
-                    <a href="{% url 'gestao:carregar_calculo' processo_pk=processo.pk calculo_pk=calculo.pk %}" class="list-group-item list-group-item-action {% if calculo_carregado and calculo_carregado.pk == calculo.pk %}active{% endif %}">
-                        <p class="mb-1 fw-bold text-truncate">{{ calculo.descricao }}</p>
-                        <small>R$ {% if calculo.valor_final_calculado is not None %}{{ calculo.valor_final_calculado|floatformat:2|intcomma }}{% else %}Pendente{% endif %} <span class="text-muted">· {{ calculo.data_calculo|date:"d/m/y" }}</span></small>
-                    </a>
-                    {% endfor %}
                 </div>
             </div>
-        </div>
+
+            <div class="action-bar shadow-lg">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <button type="button" id="btn-preview" class="btn btn-outline-info"><i class="bi bi-eye me-1"></i> Atualizar Resumo</button>
+                        <button type="button" id="btn-clear" class="btn btn-outline-danger"><i class="bi bi-eraser me-1"></i> Limpar Formulário</button>
+                    </div>
+                    <button type="submit" id="btn-save" class="btn btn-success btn-lg">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none;"></span>
+                        <i class="bi bi-save me-1"></i>
+                        <span class="btn-text">Salvar Cálculo</span>
+                    </button>
+                </div>
+            </div>
+        </form>
     </div>
-</form>
-{% endblock %}
 
-{% block javascript %}
-{{ block.super }}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    $('#id_valor_original').mask('000.000.000.000.000,00', {reverse: true});
+    <template id="lancamento-template">
+        <tr class="formset-row" id="lancamento-row-__prefix__">
+            <td><span class="row-counter"></span><input type="hidden" name="lancamento-__prefix__-id" id="id_lancamento-__prefix__-id"></td>
+            <td><select name="lancamento-__prefix__-tipo" class="form-select form-select-sm" id="id_lancamento-__prefix__-tipo"><option value="CREDITO">Crédito</option><option value="DEBITO">Débito</option></select></td>
+            <td><input type="text" name="lancamento-__prefix__-descricao" class="form-control form-control-sm" id="id_lancamento-__prefix__-descricao"></td>
+            <td><input type="text" name="lancamento-__prefix__-valor" class="form-control form-control-sm text-end" id="id_lancamento-__prefix__-valor"></td>
+            <td class="text-center"><input type="checkbox" name="lancamento-__prefix__-DELETE" class="form-check-input d-none" id="id_lancamento-__prefix__-DELETE"><button type="button" class="btn btn-sm btn-outline-danger remove-row" title="Remover Lançamento"><i class="bi bi-trash"></i></button></td>
+        </tr>
+    </template>
+    <template id="correcao-template">
+        <tr class="formset-row" id="correcao-row-__prefix__">
+            <td><span class="row-counter"></span><input type="hidden" name="correcao-__prefix__-id" id="id_correcao-__prefix__-id"></td>
+            <td><select name="correcao-__prefix__-indice" class="form-select form-select-sm" id="id_correcao-__prefix__-indice"><option value="INPC">INPC</option><option value="IPCA">IPCA</option><option value="IGP-M">IGP-M</option><option value="IGP-DI">IGP-DI</option><option value="SELIC">SELIC</option></select></td>
+            <td><input type="date" name="correcao-__prefix__-data_inicio" class="form-control form-control-sm" id="id_correcao-__prefix__-data_inicio"></td>
+            <td><input type="date" name="correcao-__prefix__-data_fim" class="form-control form-control-sm" id="id_correcao-__prefix__-data_fim"></td>
+            <td><select name="correcao-__prefix__-aplicar_em" class="form-select form-select-sm aplicar-a-select" id="id_correcao-__prefix__-aplicar_em"></select></td>
+            <td class="text-center"><input type="checkbox" name="correcao-__prefix__-DELETE" class="form-check-input d-none" id="id_correcao-__prefix__-DELETE"><button type="button" class="btn btn-sm btn-outline-danger remove-row"><i class="bi bi-trash"></i></button></td>
+        </tr>
+    </template>
+    <template id="juros-template">
+         <tr class="formset-row" id="juros-row-__prefix__">
+            <td><span class="row-counter"></span><input type="hidden" name="juros-__prefix__-id" id="id_juros-__prefix__-id"></td>
+            <td><select name="juros-__prefix__-tipo" class="form-select form-select-sm" id="id_juros-__prefix__-tipo"><option value="MORATORIO">Moratório</option><option value="REMUNERATORIO">Remuneratório</option></select></td>
+            <td><input type="text" name="juros-__prefix__-taxa" class="form-control form-control-sm text-end" id="id_juros-__prefix__-taxa"></td>
+            <td><select name="juros-__prefix__-periodicidade" class="form-select form-select-sm" id="id_juros-__prefix__-periodicidade"><option value="MES">Ao Mês</option><option value="DIA">Ao Dia</option><option value="ANO">Ao Ano</option></select></td>
+            <td><select name="juros-__prefix__-capitalizacao" class="form-select form-select-sm" id="id_juros-__prefix__-capitalizacao"><option value="SIMPLES">Simples</option><option value="COMPOSTO">Composto</option></select></td>
+            <td><input type="date" name="juros-__prefix__-data_inicio" class="form-control form-control-sm" id="id_juros-__prefix__-data_inicio"></td>
+            <td><input type="date" name="juros-__prefix__-data_fim" class="form-control form-control-sm" id="id_juros-__prefix__-data_fim"></td>
+            <td><select name="juros-__prefix__-aplicar_em" class="form-select form-select-sm aplicar-a-select" id="id_juros-__prefix__-aplicar_em"></select></td>
+            <td class="text-center"><input type="checkbox" name="juros-__prefix__-DELETE" class="form-check-input d-none" id="id_juros-__prefix__-DELETE"><button type="button" class="btn btn-sm btn-outline-danger remove-row"><i class="bi bi-trash"></i></button></td>
+        </tr>
+    </template>
 
-    const mainForm = document.getElementById('calculo-form');
-    const formsetContainer = document.querySelector('.formset-hidden-container');
-    const fasesList = document.getElementById('fases-list');
-    const editorTitle = document.getElementById('fase-editor-title');
-    const editorBody = document.getElementById('fase-editor-body');
-    const editorFooter = document.getElementById('fase-editor-footer');
-    let activeFaseIndex = null;
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
 
-    const editorFields = {
-        observacao: editorBody.querySelector('#editor_observacao'), data_inicio: editorBody.querySelector('#editor_data_inicio'),
-        data_fim: editorBody.querySelector('#editor_data_fim'), indice: editorBody.querySelector('#editor_indice'),
-        juros_taxa: editorBody.querySelector('#editor_juros_taxa'), juros_tipo: editorBody.querySelector('#editor_juros_tipo'),
-    };
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('calculationForm');
+            const formsets = {
+                lancamento: { container: document.getElementById('lancamento-formset-body'), prefix: 'lancamento' },
+                correcao: { container: document.getElementById('correcao-formset-body'), prefix: 'correcao' },
+                juros: { container: document.getElementById('juros-formset-body'), prefix: 'juros' }
+            };
 
-    function syncEditorToHidden(index) {
-        if (index === null) return;
-        const hiddenForm = formsetContainer.querySelector(`.fase-form-hidden[data-index="${index}"]`);
-        if (!hiddenForm) return;
-        for (const key in editorFields) {
-            const hiddenField = hiddenForm.querySelector(`[name$="-${key}"]`);
-            if (hiddenField && editorFields[key]) {
-                hiddenField.value = editorFields[key].value;
-            }
-        }
-    }
+            const updateTotalForms = (fsName) => {
+                const { container, prefix } = formsets[fsName];
+                const totalFormsInput = document.querySelector(`#id_${prefix}-TOTAL_FORMS`);
+                if (totalFormsInput) totalFormsInput.value = container.children.length;
+            };
 
-    function syncHiddenToEditor(index) {
-        const hiddenForm = formsetContainer.querySelector(`.fase-form-hidden[data-index="${index}"]`);
-        if (!hiddenForm) return;
+            const reindexFormset = (fsName) => {
+                const { container, prefix } = formsets[fsName];
+                const rows = container.querySelectorAll('.formset-row');
+                rows.forEach((row, index) => {
+                    row.querySelector('.row-counter').textContent = index + 1;
+                    row.querySelectorAll('input, select').forEach(input => {
+                        for (const attr of ['name', 'id']) {
+                            const oldVal = input.getAttribute(attr);
+                            if (oldVal) {
+                                const newVal = oldVal.replace(new RegExp(`${prefix}-\\d+-`), `${prefix}-${index}-`);
+                                input.setAttribute(attr, newVal);
+                            }
+                        }
+                    });
+                });
+            };
 
-        editorBody.querySelectorAll('.editor-field-error').forEach(el => el.textContent = '');
-        for (const key in editorFields) {
-            const hiddenField = hiddenForm.querySelector(`[name$="-${key}"]`);
-            if (hiddenField && editorFields[key]) {
-                editorFields[key].value = hiddenField.value;
-                const errorList = hiddenField.parentElement.querySelector('.errorlist');
-                if (errorList) {
-                    const errorDiv = editorBody.querySelector(`[data-error-for="${key}"]`);
-                    if (errorDiv) errorDiv.textContent = errorList.innerText;
+            const syncAplicarAoLancamentoOptions = () => {
+                const lancamentoRows = formsets.lancamento.container.querySelectorAll('.formset-row');
+                const options = [{ value: 'todos', text: 'Todos os Lançamentos' }];
+
+                lancamentoRows.forEach((row, index) => {
+                    const rowId = row.querySelector('[name$="-id"]')?.value || `new_${index}`;
+                    const desc = row.querySelector(`[name$="descricao"]`).value || `Lançamento ${index + 1}`;
+                    options.push({ value: rowId, text: desc });
+                });
+
+                document.querySelectorAll('.aplicar-a-select').forEach(select => {
+                    const currentValue = select.value;
+                    select.innerHTML = '';
+                    options.forEach(opt => {
+                        const optionEl = document.createElement('option');
+                        optionEl.value = opt.value;
+                        optionEl.textContent = opt.text;
+                        select.appendChild(optionEl);
+                    });
+                    if (Array.from(select.options).some(opt => opt.value === currentValue)) {
+                        select.value = currentValue;
+                    } else {
+                        select.value = 'todos';
+                    }
+                });
+            };
+
+            const addRow = (fsName) => {
+                const { container, prefix } = formsets[fsName];
+                const totalFormsInput = document.querySelector(`#id_${prefix}-TOTAL_FORMS`);
+                const newIndex = parseInt(totalFormsInput.value);
+                const template = document.getElementById(`${fsName}-template`).innerHTML.replace(/__prefix__/g, newIndex);
+
+                container.insertAdjacentHTML('beforeend', template);
+                totalFormsInput.value = newIndex + 1;
+
+                const newRow = container.querySelector(`#${fsName}-row-${newIndex}`);
+                if (fsName === 'lancamento') {
+                    const tipoInput = document.getElementById('new-lancamento-tipo');
+                    const descInput = document.getElementById('new-lancamento-descricao');
+                    const valorInput = document.getElementById('new-lancamento-valor');
+                    newRow.querySelector(`[name$='tipo']`).value = tipoInput.value;
+                    newRow.querySelector(`[name$='descricao']`).value = descInput.value;
+                    newRow.querySelector(`[name$='valor']`).value = valorInput.value;
+                    descInput.value = ''; valorInput.value = ''; descInput.focus();
+                } else {
+                     const addRowControls = document.querySelector(`tfoot tr[class~="formset-row-add"]`);
+                     newRow.querySelectorAll('input, select').forEach(input => {
+                        const fieldName = input.name.split('-').pop();
+                        const sourceInput = document.getElementById(`new-${fsName}-${fieldName}`);
+                        if (sourceInput) input.value = sourceInput.value;
+                     });
                 }
-            }
-        }
-    }
+                reindexFormset(fsName);
+                if (fsName === 'lancamento') syncAplicarAoLancamentoOptions();
+                else syncAplicarAoLancamentoOptions();
+                updatePreview();
+            };
 
-    function updateListItem(index) {
-        const listItem = fasesList.querySelector(`.list-group-item[data-index="${index}"]`);
-        if (!listItem) return;
-        const obs = editorFields.observacao.value;
-        const dataInicio = editorFields.data_inicio.value;
-        const dataFim = editorFields.data_fim.value;
-        const formatDisplayDate = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/D';
-        listItem.querySelector('.fase-list-title').textContent = `Fase ${parseInt(index) + 1}: ${obs || '(sem observação)'}`.substring(0, 35);
-        listItem.querySelector('small').textContent = `${formatDisplayDate(dataInicio)} a ${formatDisplayDate(dataFim)}`;
-    }
+            const removeRow = (btn) => {
+                const row = btn.closest('.formset-row');
+                const formsetContainer = row.closest('tbody');
+                const fsName = formsetContainer.id.replace('-formset-body', '');
 
-    function activateFase(index) {
-        if (activeFaseIndex !== null) {
-            syncEditorToHidden(activeFaseIndex);
-            updateListItem(activeFaseIndex);
-        }
-        activeFaseIndex = index;
-        fasesList.querySelectorAll('.list-group-item').forEach(item => item.classList.remove('active'));
-        fasesList.querySelector(`[data-index="${index}"]`).classList.add('active');
-        syncHiddenToEditor(index);
-        editorTitle.textContent = `Editando Fase ${index + 1}`;
-        editorBody.style.display = 'block';
-        editorFooter.style.display = 'block';
-    }
+                const deleteInput = row.querySelector(`[name$='-DELETE']`);
+                if (deleteInput) {
+                    deleteInput.checked = true;
+                    row.classList.add('d-none');
+                } else {
+                    row.remove();
+                }
+                reindexFormset(fsName);
+                updateTotalForms(fsName); // Garante que o total de forms seja atualizado após a remoção
+                if (fsName === 'lancamento') syncAplicarAoLancamentoOptions();
+                updatePreview();
+            };
 
-    function hideEditor() {
-        if (activeFaseIndex !== null) {
-            syncEditorToHidden(activeFaseIndex);
-            updateListItem(activeFaseIndex);
-        }
-        activeFaseIndex = null;
-        editorBody.style.display = 'none';
-        editorFooter.style.display = 'none';
-        editorTitle.textContent = 'Selecione ou adicione uma fase';
-        fasesList.querySelectorAll('.list-group-item').forEach(item => item.classList.remove('active'));
-    }
+            const normalizeNumber = (value) => parseFloat(String(value).replace(/\./g, '').replace(',', '.')) || 0;
+            const formatCurrency = (value) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-    document.getElementById('add-fase-btn').addEventListener('click', function() {
-        const totalFormsInput = document.querySelector('#id_fases-TOTAL_FORMS');
-        const formIndex = parseInt(totalFormsInput.value);
-        const emptyFormTemplate = document.querySelector('.empty-form-template').innerHTML;
-        const newFormHtml = emptyFormTemplate.replace(/__prefix__/g, formIndex);
-        const newFormDiv = document.createElement('div');
-        newFormDiv.className = 'fase-form-hidden';
-        newFormDiv.dataset.index = formIndex;
-        newFormDiv.innerHTML = newFormHtml;
-        formsetContainer.appendChild(newFormDiv);
-        const newListItem = document.createElement('div');
-        newListItem.className = 'list-group-item';
-        newListItem.dataset.index = formIndex;
-        newListItem.innerHTML = `<div class="d-flex justify-content-between align-items-center"><div><strong class="fase-list-title">Nova Fase ${formIndex + 1}</strong><small class="d-block text-muted">Preencha os dados</small></div><button type="button" class="btn btn-sm btn-outline-danger remove-fase-btn"><i class="bi bi-trash"></i></button></div>`;
-        fasesList.appendChild(newListItem);
-        totalFormsInput.value = formIndex + 1;
-        activateFase(formIndex);
-    });
+            const updatePreview = () => {
+                let creditos = 0, debitos = 0;
+                formsets.lancamento.container.querySelectorAll('.formset-row:not(.d-none)').forEach(row => {
+                    const tipo = row.querySelector('[name$="tipo"]').value;
+                    const valor = normalizeNumber(row.querySelector('[name$="valor"]').value);
+                    if (tipo === 'CREDITO') creditos += valor; else debitos += valor;
+                });
 
-    document.getElementById('apply-fase-btn').addEventListener('click', hideEditor);
+                const liquido = creditos - debitos;
+                document.getElementById('summary-creditos').textContent = formatCurrency(creditos);
+                document.getElementById('summary-debitos').textContent = formatCurrency(debitos);
+                document.getElementById('summary-liquido').textContent = formatCurrency(liquido);
+                document.getElementById('summary-liquido').className = `summary-value ${liquido >= 0 ? 'positive' : 'negative'}`;
+                document.getElementById('summary-correcoes').textContent = formsets.correcao.container.querySelectorAll('.formset-row:not(.d-none)').length;
+                document.getElementById('summary-juros').textContent = formsets.juros.container.querySelectorAll('.formset-row:not(.d-none)').length;
 
-    fasesList.addEventListener('click', function(e) {
-        const listItem = e.target.closest('.list-group-item');
-        if (!listItem) return;
-        const removeBtn = e.target.closest('.remove-fase-btn');
-        if (removeBtn) {
-            e.stopPropagation();
-            if (fasesList.querySelectorAll('.list-group-item:not([style*="display: none"])').length <= 1) {
-                alert('O cálculo deve ter pelo menos uma fase.');
-                return;
-            }
-            const indexToRemove = parseInt(listItem.dataset.index);
-            const formDivToRemove = formsetContainer.querySelector(`.fase-form-hidden[data-index="${indexToRemove}"]`);
-            const deleteInput = formDivToRemove.querySelector('input[name$="-DELETE"]');
-            if (deleteInput) {
-                deleteInput.checked = true;
-                listItem.style.display = 'none';
-            } else {
-                formDivToRemove.remove();
-                listItem.remove();
-            }
-            if (activeFaseIndex === indexToRemove) {
-                hideEditor();
-            }
-        } else {
-            activateFase(parseInt(listItem.dataset.index));
-        }
-    });
+                const valorBaseInput = document.getElementById('id_valor_base');
+                valorBaseInput.disabled = (creditos > 0 || debitos > 0);
+                if (valorBaseInput.disabled) valorBaseInput.value = '';
+            };
 
-    mainForm.addEventListener('submit', function() {
-        hideEditor();
-    });
+            const validateForm = () => {
+                let isValid = true;
+                form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+                const checkRequired = (input) => { if (!input.value.trim()) { input.classList.add('is-invalid'); isValid = false; } };
+                const checkNumber = (input) => { if (normalizeNumber(input.value) <= 0) { input.classList.add('is-invalid'); isValid = false; } };
 
-    // Inicialização da UI
-    const firstError = fasesList.querySelector('.has-error');
-    if (firstError) {
-        activateFase(parseInt(firstError.dataset.index));
-    } else if (fasesList.children.length > 0) {
-        activateFase(0);
-    } else {
-        hideEditor();
-    }
-});
-</script>
-{% endblock %}
+                formsets.lancamento.container.querySelectorAll('.formset-row:not(.d-none)').forEach(row => checkNumber(row.querySelector('[name$="valor"]')));
+                ['correcao', 'juros'].forEach(fsName => {
+                    formsets[fsName].container.querySelectorAll('.formset-row:not(.d-none)').forEach(row => {
+                        checkRequired(row.querySelector('[name$="data_inicio"]'));
+                        if (fsName === 'juros') checkNumber(row.querySelector('[name$="taxa"]'));
+                    });
+                });
+                return isValid;
+            };
+
+            const lockActions = (isSaving) => {
+                const btnSave = document.getElementById('btn-save');
+                btnSave.disabled = isSaving;
+                btnSave.querySelector('.spinner-border').style.display = isSaving ? 'inline-block' : 'none';
+                btnSave.querySelector('.btn-text').textContent = isSaving ? 'Salvando...' : 'Salvar Cálculo';
+            };
+
+            // Event Listeners
+            form.addEventListener('click', (e) => {
+                const addBtn = e.target.closest('.add-row');
+                const removeBtn = e.target.closest('.remove-row');
+                if (addBtn) addRow(addBtn.dataset.formset);
+                if (removeBtn) removeRow(removeBtn);
+            });
+            form.addEventListener('input', updatePreview);
+            document.getElementById('btn-clear').addEventListener('click', () => {
+                if (confirm('Tem certeza?')) {
+                    form.reset();
+                    Object.values(formsets).forEach(({container}) => container.innerHTML = '');
+                    Object.keys(formsets).forEach(reindexFormset);
+                    syncAplicarAoLancamentoOptions(); updatePreview();
+                }
+            });
+            document.getElementById('btn-preview').addEventListener('click', updatePreview);
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                form.querySelectorAll('input[type="text"][name$="-valor"], input[type="text"][name$="-taxa"]').forEach(input => {
+                    input.value = normalizeNumber(input.value);
+                });
+                if (validateForm()) {
+                    lockActions(true);
+                    form.submit();
+                } else {
+                    alert('Existem erros no formulário. Corrija os campos em vermelho.');
+                }
+            });
+
+            // Initial setup
+            Object.keys(formsets).forEach(reindexFormset);
+            syncAplicarAoLancamentoOptions();
+            updatePreview();
+            new bootstrap.Tooltip(document.body, { selector: '[data-bs-toggle="tooltip"]' });
+        });
+    </script>
+</body>
+</html>
