@@ -4,7 +4,8 @@
 {% block title %}{{ titulo_pagina|default:"Calculadora Judicial" }}{% endblock %}
 
 {% block extra_css %}
-    <link rel="stylesheet" href="{% static 'css/calculo.css' %}">
+    {# Caminho corrigido para incluir o namespace do app 'gestao' #}
+    <link rel="stylesheet" href="{% static 'gestao/css/calculo.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -40,7 +41,9 @@
 
     <div class="wizard-actions shadow-lg">
         <button id="btn-prev" class="btn btn-secondary" disabled><i class="bi bi-arrow-left"></i> Anterior</button>
-        <div><button id="btn-save-draft" class="btn btn-outline-primary"><i class="bi bi-save"></i> Salvar Rascunho</button></div>
+        <div>
+            <button id="btn-save-draft" class="btn btn-outline-primary"><i class="bi bi-save"></i> Salvar Rascunho</button>
+        </div>
         <div>
             <button id="btn-next" class="btn btn-primary">Próximo <i class="bi bi-arrow-right"></i></button>
             <button id="btn-calcular" class="btn btn-success d-none"><i class="bi bi-check2-circle"></i> Calcular e Ver Resultado</button>
@@ -53,11 +56,13 @@
 
 {% block extra_js %}
 <script>
+    // Disponibiliza variáveis do Django para o nosso script principal
     const csrfToken = "{{ csrf_token }}";
     const simularApiUrl = "{% url 'gestao:api_simular_calculo' %}";
     const exportPdfUrl  = "{% url 'gestao:exportar_calculo_pdf' %}";
     const initialData = JSON.parse('{{ initial_data_json|escapejs|default:"{}" }}');
     const indiceOptions = JSON.parse('{{ indice_options_json|escapejs|default:"[]" }}');
 </script>
-<script src="{% static 'js/calculo_wizard.js' %}"></script>
+{# Caminho corrigido para incluir o namespace do app 'gestao' #}
+<script src="{% static 'gestao/js/calculo_wizard.js' %}"></script>
 {% endblock %}

@@ -152,9 +152,6 @@ STATIC_URL = 'static/'
 
 # ADICIONE ESTA LINHA:
 # Diz ao Django para procurar uma pasta 'static' na raiz do projeto
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',
-]
 
 # LINHA OPCIONAL, MAS BOA PRÁTICA PARA PRODUÇÃO
 STATIC_ROOT = BASE_DIR / 'staticfiles'

@@ -3,18 +3,13 @@
  * Gerencia a navegação, validação, manipulação de parcelas e faixas,
  * comunicação com a API de cálculo e renderização dos resultados.
  *
- * Versão: 1.0.0 - Integral e Funcional
+ * Versão: 1.1.0 - Integral e Funcional
  * Autor: Gemini Senior Dev
  */
 (() => {
     // Garante que o script só execute após o carregamento completo do DOM
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", initialize);
-    } else {
-        initialize();
-    }
+    document.addEventListener("DOMContentLoaded", () => {
 
-    function initialize() {
         const Wizard = {
             elements: {
                 wizard: document.getElementById('calculadora-wizard'),
@@ -222,6 +217,15 @@
 
                     if (tipo === 'sucessiva') {
                         const periodo = document.getElementById('replicacao-periodo').value;
+                        let lastDate = new Date(sourceData.data_evento + 'T12:00:00Z');
+
+                        if (periodo === 'mensal') {
+                            lastDate.setMonth(lastDate.getMonth() + i);
+                        } else if (periodo === 'anual') {
+                            lastDate.setFullYear(lastDate.getFullYear() + i);
+                        }
+                        newData.data_evento = lastDate.toISOString().split('T')[0];
+
                         newData.faixas.forEach(faixa => {
                             let dtInicio = new Date(faixa.data_inicio + 'T12:00:00Z');
                             let dtFim = new Date(faixa.data_fim + 'T12:00:00Z');
@@ -345,6 +349,8 @@
                     `;
                 });
 
+                html += `<div class="mt-4"><h5 class="mb-3">Memória de Cálculo Detalhada (Texto)</h5><pre class="bg-light p-3 rounded small"><code>${data.memoria_texto}</code></pre></div>`;
+
                 this.elements.resultadoContainer.innerHTML = html;
             },
 
@@ -379,6 +385,8 @@
                 this.elements.btnPrev.addEventListener('click', () => this.showStep(this.state.currentStep - 1));
                 this.elements.btnCalc.addEventListener('click', () => this.simulateCalculation());
 
+                document.getElementById('btn-confirmar-replicacao')?.addEventListener('click', () => this.handleReplication());
+
                 this.elements.wizard.addEventListener('click', (e) => {
                     const target = e.target;
                     const btnAddParcela = target.closest('#btn-add-parcela');
@@ -409,17 +417,19 @@
 
                 this.elements.wizard.addEventListener('input', (e) => {
                     const parcelaCard = e.target.closest('.parcela-card');
-                    if (!parcelaCard) return;
-                    const id = parcelaCard.dataset.parcelaId;
-                    const sidebarItem = this.elements.parcelasSidebar.querySelector(`[data-target-parcela-id="${id}"]`);
-                    if (sidebarItem) {
-                        if (e.target.matches('.parcela-descricao')) {
-                            sidebarItem.querySelector('.parcela-title').textContent = e.target.value || `Parcela ${id}`;
-                        }
-                        if (e.target.matches('.parcela-valor')) {
-                            sidebarItem.querySelector('.parcela-valor-original').textContent = this.utils.formatCurrency(e.target.value);
+                    if (parcelaCard) {
+                        const id = parcelaCard.dataset.parcelaId;
+                        const sidebarItem = this.elements.parcelasSidebar.querySelector(`[data-target-parcela-id="${id}"]`);
+                        if (sidebarItem) {
+                            if (e.target.matches('.parcela-descricao')) {
+                                sidebarItem.querySelector('.parcela-title').textContent = e.target.value || `Parcela ${id}`;
+                            }
+                            if (e.target.matches('.parcela-valor')) {
+                                sidebarItem.querySelector('.parcela-valor-original').textContent = this.utils.formatCurrency(e.target.value);
+                            }
                         }
                     }
+
                     if (e.target.matches('.faixa-selic-exclusiva')) {
                         const faixaRow = e.target.closest('.faixa-row');
                         const jurosTipo = faixaRow.querySelector('.faixa-juros-tipo');
@@ -440,11 +450,9 @@
                         e.target.value = this.utils.formatCurrency(e.target.value, false);
                     }
                 }, true);
-
-                document.getElementById('btn-confirmar-replicacao')?.addEventListener('click', () => this.handleReplication());
             },
         };
 
         Wizard.init();
-    }
+    });
 })();
