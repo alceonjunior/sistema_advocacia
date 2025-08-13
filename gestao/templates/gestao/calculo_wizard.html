@@ -1,56 +1,94 @@
 {% extends 'gestao/base.html' %}
 {% load static %}
 
-{% block title %}{{ titulo_pagina|default:"Calculadora Judicial" }}{% endblock %}
+{% block title %}Calculadora Judicial{% endblock %}
 
 {% block extra_css %}
-    {# Este caminho está CORRETO para a sua estrutura de pastas gestao/static/gestao/ #}
     <link rel="stylesheet" href="{% static 'gestao/css/calculo.css' %}">
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4 mb-5 pb-5" id="calculadora-wizard">
+<div class="container-fluid mt-4 mb-5" id="calculadora-container">
 
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h1 class="h2 d-flex align-items-center gap-2 mb-0">
                 <i class="bi bi-calculator-fill text-primary"></i>
-                {{ titulo_pagina|default:"Calculadora Judicial Completa" }}
+                Calculadora Judicial
             </h1>
             {% if processo %}<p class="text-muted mb-0"><strong>Processo:</strong> {{ processo }}</p>{% endif %}
         </div>
         <div>
-            <a href="#" class="btn btn-link btn-sm"><i class="bi bi-question-circle"></i> Como utilizar a calculadora?</a>
+            <a href="#" class="btn btn-link btn-sm"><i class="bi bi-question-circle"></i> Como utilizar?</a>
             {% if processo %}<a href="{% url 'gestao:detalhe_processo' pk=processo.pk %}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle"></i> Voltar ao Processo</a>{% endif %}
         </div>
     </div>
 
-    <ul class="nav nav-pills nav-fill mb-4" id="wizard-stepper">
-        <li class="nav-item"><a class="nav-link active" href="#" data-step="1"><span class="badge rounded-pill me-2">1</span>Dados Básicos</a></li>
-        <li class="nav-item"><a class="nav-link" href="#" data-step="2"><span class="badge rounded-pill me-2">2</span>Parcelas e Índices</a></li>
-        <li class="nav-item"><a class="nav-link" href="#" data-step="3"><span class="badge rounded-pill me-2">3</span>Itens Extras</a></li>
-        <li class="nav-item"><a class="nav-link" href="#" data-step="4"><span class="badge rounded-pill me-2">4</span>Resultado do Cálculo</a></li>
-    </ul>
+    <div class="accordion" id="calculadora-accordion">
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="heading-basicos">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-basicos" aria-expanded="true" aria-controls="collapse-basicos">
+                    <strong>1. Dados de Identificação do Cálculo</strong>
+                </button>
+            </h2>
+            <div id="collapse-basicos" class="accordion-collapse collapse show" aria-labelledby="heading-basicos">
+                <div class="accordion-body">
+                    {% include 'gestao/partials/calculo/_step1_basicos.html' %}
+                </div>
+            </div>
+        </div>
 
-    <div class="wizard-content">
-        <div class="wizard-step" data-step="1">{% include 'gestao/partials/calculo/_step1_basicos.html' %}</div>
-        <div class="wizard-step d-none" data-step="2">{% include 'gestao/partials/calculo/_step2_parcelas.html' %}</div>
-        <div class="wizard-step d-none" data-step="3">{% include 'gestao/partials/calculo/_step3_extras.html' %}</div>
-        <div class="wizard-step d-none" data-step="4">{% include 'gestao/partials/calculo/_step4_resultado.html' %}</div>
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="heading-parcelas">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-parcelas" aria-expanded="false" aria-controls="collapse-parcelas">
+                    <strong>2. Parcelas e Índices de Correção</strong>
+                </button>
+            </h2>
+            <div id="collapse-parcelas" class="accordion-collapse collapse" aria-labelledby="heading-parcelas">
+                <div class="accordion-body">
+                    {% include 'gestao/partials/calculo/_step2_parcelas.html' %}
+                </div>
+            </div>
+        </div>
+
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="heading-extras">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-extras" aria-expanded="false" aria-controls="collapse-extras">
+                    <strong>3. Itens Extras (Custas, Honorários, etc.)</strong>
+                </button>
+            </h2>
+            <div id="collapse-extras" class="accordion-collapse collapse" aria-labelledby="heading-extras">
+                <div class="accordion-body">
+                    {% include 'gestao/partials/calculo/_step3_extras.html' %}
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div class="wizard-actions shadow-lg">
-        <div class="left-actions">
-            <button id="btn-prev" class="btn btn-secondary" disabled><i class="bi bi-arrow-left"></i> Anterior</button>
-        </div>
-        <div class="center-actions">
-             <button id="btn-save-draft" class="btn btn-outline-primary"><i class="bi bi-save"></i> Salvar Rascunho</button>
-        </div>
-        <div class="right-actions">
-            <button id="btn-next" class="btn btn-primary">Próximo <i class="bi bi-arrow-right"></i></button>
-            <button id="btn-calcular" class="btn btn-success d-none"><i class="bi bi-check2-circle"></i> Calcular e Ver Resultado</button>
+    <div class="text-center my-4">
+        <button id="btn-calcular" class="btn btn-success btn-lg"><i class="bi bi-check2-circle"></i> Calcular e Gerar Relatório</button>
+        <button id="btn-save-draft" class="btn btn-outline-primary"><i class="bi bi-save"></i> Salvar Rascunho</button>
+    </div>
+
+    <div id="resultado-wrapper" class="mt-5" style="display: none;">
+         <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">4. Resultado do Cálculo</h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-secondary" id="btn-print" title="Imprimir"><i class="bi bi-printer"></i></button>
+                    <button class="btn btn-sm btn-outline-success" id="btn-export-csv" title="Exportar para CSV/Excel"><i class="bi bi-file-earmark-excel"></i></button>
+                    <button class="btn btn-sm btn-outline-primary" id="btn-copy-memory" title="Copiar Memória de Cálculo"><i class="bi bi-clipboard"></i></button>
+                    <button class="btn btn-sm btn-outline-danger" id="btn-export-pdf" title="Salvar como PDF"><i class="bi bi-file-earmark-pdf"></i></button>
+                </div>
+            </div>
+            <div class="card-body" id="resultado-container">
+                <div class="text-center p-5">
+                    <p class="text-muted">O resultado do seu cálculo aparecerá aqui.</p>
+                </div>
+            </div>
         </div>
     </div>
+
 </div>
 
 {% include 'gestao/partials/calculo/_templates_js.html' %}
@@ -61,12 +99,9 @@
     // Disponibiliza variáveis do Django para o nosso script principal
     const csrfToken = "{{ csrf_token }}";
     const simularApiUrl = "{% url 'gestao:simular_calculo_api' %}";
-    // A linha abaixo estava apontando para uma URL inexistente, vamos comentar por enquanto
-    // const exportPdfUrl  = "{% url 'gestao:exportar_calculo_pdf' %}";
-    const exportPdfUrl = "#"; // URL temporária para evitar erro
+    const exportPdfUrl  = "#"; // A funcionalidade de PDF precisa ser implementada
     const initialData = JSON.parse('{{ initial_data_json|escapejs|default:"{}" }}');
     const indiceOptions = JSON.parse('{{ indice_options_json|escapejs|default:"[]" }}');
 </script>
-{# Este caminho está CORRETO para a sua estrutura de pastas gestao/static/gestao/ #}
 <script src="{% static 'gestao/js/calculo_wizard.js' %}"></script>
 {% endblock %}
