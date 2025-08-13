@@ -4,7 +4,7 @@
 {% block title %}{{ titulo_pagina|default:"Calculadora Judicial" }}{% endblock %}
 
 {% block extra_css %}
-    {# Caminho CORRETO para a sua estrutura de pastas gestao/static/gestao/ #}
+    {# Este caminho está CORRETO para a sua estrutura de pastas gestao/static/gestao/ #}
     <link rel="stylesheet" href="{% static 'gestao/css/calculo.css' %}">
 {% endblock %}
 
@@ -60,11 +60,13 @@
 <script>
     // Disponibiliza variáveis do Django para o nosso script principal
     const csrfToken = "{{ csrf_token }}";
-    const simularApiUrl = "{% url 'gestao:api_simular_calculo' %}";
-    const exportPdfUrl  = "{% url 'gestao:exportar_calculo_pdf' %}";
+    const simularApiUrl = "{% url 'gestao:simular_calculo_api' %}";
+    // A linha abaixo estava apontando para uma URL inexistente, vamos comentar por enquanto
+    // const exportPdfUrl  = "{% url 'gestao:exportar_calculo_pdf' %}";
+    const exportPdfUrl = "#"; // URL temporária para evitar erro
     const initialData = JSON.parse('{{ initial_data_json|escapejs|default:"{}" }}');
     const indiceOptions = JSON.parse('{{ indice_options_json|escapejs|default:"[]" }}');
 </script>
-{# Caminho CORRETO para a sua estrutura de pastas gestao/static/gestao/ #}
+{# Este caminho está CORRETO para a sua estrutura de pastas gestao/static/gestao/ #}
 <script src="{% static 'gestao/js/calculo_wizard.js' %}"></script>
 {% endblock %}
