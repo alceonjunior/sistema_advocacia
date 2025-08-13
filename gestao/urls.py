@@ -198,4 +198,18 @@ urlpatterns = [
     path('importacao/projudi/confirmar/', views.confirmar_importacao_projudi, name='confirmar_importacao_projudi'),
     path('importacao/projudi/executar/', views.executar_importacao_projudi, name='executar_importacao_projudi'),
 
+    path('calculos/novo/', views.calculo_wizard_view, name='calculo_novo'),
+    path('calculos/novo/processo/<int:processo_pk>/', views.calculo_wizard_view, name='calculo_novo_com_processo'),
+
+    # API para simulação e salvamento
+    path('api/calculos/simular/', views.simular_calculo_api, name='api_simular_calculo'),
+
+    # Exportação
+
+    path('calculos/novo/', views.calculo_wizard_view, name='calculo_novo'),
+    path('calculos/novo/processo/<int:processo_pk>/', views.calculo_wizard_view, name='calculo_novo_com_processo'),
+    path('api/calculos/simular/', views.simular_calculo_api, name='api_simular_calculo'),
+    #path('api/calculos/exportar/pdf/', views.exportar_calculo_pdf, name='exportar_calculo_pdf'),
+
+
 ]

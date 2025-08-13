@@ -50,6 +50,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+#from weasyprint import HTML
 
 # --- Local Application ---
 from . import models
@@ -75,8 +76,10 @@ from .models import (
     MovimentacaoServico, Pagamento, Processo, Recurso, Servico, TipoAcao,
     TipoServico, UsuarioPerfil, ContratoHonorarios, ParteProcesso, TipoMovimentacao, CalculoLancamento,
 )
-from .services import ServicoIndices
+from .services.indices.catalog import INDICE_CATALOG
+from .services.indices.providers import ServicoIndices
 from .nfse_service import NFSEService
+from .services.calculo import CalculoEngine
 from .utils import data_por_extenso, valor_por_extenso
 
 # ==============================================================================
@@ -2022,7 +2025,10 @@ from .models import (
     MovimentacaoServico, Pagamento, Processo, Recurso, Servico, TipoAcao,
     TipoServico, UsuarioPerfil, ContratoHonorarios, ParteProcesso, TipoMovimentacao,
 )
-from .services import ServicoIndices
+from .services.indices.providers import ServicoIndices
+#from weasyprint import HTML
+
+
 from .nfse_service import NFSEService
 from .utils import data_por_extenso, valor_por_extenso
 
@@ -3028,3 +3034,110 @@ def salvar_cadastro_auxiliar_ajax(request, modelo, pk=None):
     except Exception as e:
         logger.error(f"Erro em salvar_cadastro_auxiliar_ajax: {e}", exc_info=True)
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
+def calculo_wizard_view(request, processo_pk=None):
+    """
+    Renderiza a página principal do wizard de cálculo judicial.
+
+    Se um 'processo_pk' for fornecido na URL, pré-carrega os dados básicos
+    do processo para facilitar o preenchimento. Também passa a lista de
+    índices disponíveis do catálogo para o frontend.
+    """
+    initial_data = {'partes': []}
+    processo = None
+    if processo_pk:
+        processo = get_object_or_404(Processo.objects.prefetch_related('partes__cliente'), pk=processo_pk)
+        initial_data['numero_processo'] = processo.numero_processo
+        initial_data[
+            'data_transito_em_julgado'] = processo.data_transito_em_julgado.isoformat() if processo.data_transito_em_julgado else None
+
+        # Adiciona as partes do processo aos dados iniciais
+        for parte in processo.partes.all():
+            initial_data['partes'].append({
+                'nome': parte.cliente.nome_completo,
+                'tipo': parte.get_tipo_participacao_display()  # Usar o display name para o frontend
+            })
+
+    # Pega as chaves do catálogo de índices para popular o <select> no frontend
+    indice_options = list(INDICE_CATALOG.keys())
+
+    context = {
+        'titulo_pagina': 'Calculadora Judicial Completa',
+        'initial_data_json': json.dumps(initial_data),
+        'indice_options_json': json.dumps(indice_options),
+        'processo': processo
+    }
+    return render(request, 'gestao/calculo_wizard.html', context)
+
+
+@require_POST
+@login_required
+def simular_calculo_api(request):
+    """
+    API endpoint para receber o payload do cálculo, processá-lo
+    com a CalculoEngine e retornar o resultado em JSON.
+    """
+    try:
+        payload = json.loads(request.body)
+
+        # Validação mínima do payload
+        if not payload.get('parcelas'):
+            return JsonResponse({'status': 'error', 'message': 'Nenhuma parcela foi enviada para cálculo.'}, status=400)
+
+        engine = CalculoEngine(payload)
+        resultados = engine.run()
+
+        return JsonResponse({'status': 'success', 'data': resultados})
+
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Erro: O formato do JSON enviado é inválido.'}, status=400)
+    except (KeyError, TypeError) as e:
+        logger.warning(f"Payload de cálculo malformado recebido: {e}")
+        return JsonResponse(
+            {'status': 'error', 'message': f'Erro: A estrutura dos dados enviados é inválida. Detalhe: {e}'},
+            status=400)
+    except Exception as e:
+        # Pega qualquer outro erro inesperado, registra no log para depuração
+        logger.error(f"Erro inesperado na API de simulação de cálculo: {e}", exc_info=True)
+        return JsonResponse({'status': 'error', 'message': 'Ocorreu um erro inesperado no servidor.'}, status=500)
+
+
+# @require_POST
+# @login_required
+# def exportar_calculo_pdf(request):
+#     """
+#     Recebe um payload de cálculo via POST, gera o resultado e o renderiza
+#     em um arquivo PDF para download usando a biblioteca WeasyPrint.
+#     """
+#     try:
+#         # O payload vem de um campo de formulário, não do corpo da requisição
+#         payload_str = request.POST.get('payload')
+#         if not payload_str:
+#             return HttpResponseBadRequest("Erro: Nenhum dado de cálculo ('payload') foi recebido.")
+#
+#         payload = json.loads(payload_str)
+#         engine = CalculoEngine(payload)
+#         resultados = engine.run()
+#
+#         # Renderiza o template HTML específico para o PDF com os resultados
+#         html_string = render_to_string('gestao/calculo_pdf.html', {
+#             'resultados': resultados,
+#             'data_emissao': datetime.now()
+#         })
+#
+#         # Cria a resposta HTTP com o tipo de conteúdo para PDF
+#         response = HttpResponse(content_type='application/pdf')
+#         response['Content-Disposition'] = 'attachment; filename="memoria_de_calculo.pdf"'
+#
+#         # Usa WeasyPrint para escrever o PDF na resposta
+#         HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf(response)
+#
+#         return response
+#
+#     except json.JSONDecodeError:
+#         return HttpResponseBadRequest("Erro: O formato dos dados do cálculo é inválido.")
+#     except Exception as e:
+#         logger.error(f"Erro inesperado ao gerar PDF do cálculo: {e}", exc_info=True)
+#         return HttpResponse("Ocorreu um erro interno ao tentar gerar o PDF.", status=500)

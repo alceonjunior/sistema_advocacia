@@ -718,3 +718,96 @@ class NotaFiscalServico(models.Model):
 
     def __str__(self):
         return f"NFS-e {self.numero_nfse or '(Aguardando)'} para {self.servico}"
+
+
+class CalculoRascunho(models.Model):
+    """
+    Modelo principal que armazena a configuração de um cálculo judicial feito no wizard.
+    Serve como um "rascunho" que pode ser salvo e retomado.
+    """
+    processo = models.ForeignKey('Processo', on_delete=models.SET_NULL, null=True, blank=True,
+                                 related_name='rascunhos_calculo')
+    descricao = models.CharField(max_length=255, verbose_name="Descrição do Cálculo")
+    data_transito_em_julgado = models.DateField(null=True, blank=True)
+
+    # Armazena o último resultado gerado para fácil visualização
+    ultimo_resultado_json = models.JSONField(encoder=DecimalEncoder, null=True, blank=True)
+
+    usuario_criacao = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                        related_name='calculos_criados')
+    data_criacao = models.DateTimeField(auto_now_add=True)
+    data_modificacao = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Rascunho de Cálculo Judicial"
+        verbose_name_plural = "Rascunhos de Cálculos Judiciais"
+        ordering = ['-data_modificacao']
+
+    def __str__(self):
+        return f"Cálculo '{self.descricao}' para Processo {self.processo_id or 'avulso'}"
+
+
+class CalculoParcela(models.Model):
+    """
+    Representa uma 'parcela' ou 'item de débito/crédito' dentro de um cálculo.
+    Cada parcela pode ter múltiplas faixas de correção e juros.
+    """
+    rascunho = models.ForeignKey(CalculoRascunho, on_delete=models.CASCADE, related_name='parcelas')
+    descricao = models.CharField(max_length=255, default="Parcela Principal")
+    valor_original = models.DecimalField(max_digits=15, decimal_places=2, verbose_name="Valor Original")
+    data_evento = models.DateField(verbose_name="Data do Evento (para cálculo)")
+
+    class Meta:
+        ordering = ['data_evento']
+
+    def __str__(self):
+        return f"{self.descricao} - R$ {self.valor_original}"
+
+
+class CalculoFaixa(models.Model):
+    """
+    Representa uma 'faixa' de aplicação de índice/juros
+    dentro de uma única parcela. Permite a troca de índices, como IPCA -> SELIC.
+    """
+    TIPO_JUROS_CHOICES = [('NENHUM', 'Nenhum'), ('SIMPLES', 'Simples'), ('COMPOSTO', 'Composto')]
+    parcela = models.ForeignKey(CalculoParcela, on_delete=models.CASCADE, related_name='faixas')
+    ordem = models.PositiveIntegerField(default=1)
+
+    indice = models.CharField(max_length=100, verbose_name="Índice de Correção")
+    data_inicio = models.DateField()
+    data_fim = models.DateField()
+
+    juros_tipo = models.CharField(max_length=20, choices=TIPO_JUROS_CHOICES, default='NENHUM')
+    juros_taxa_mensal = models.DecimalField(max_digits=8, decimal_places=4, default=0.0,
+                                            verbose_name="Taxa de Juros Mensal (%)")
+
+    pro_rata = models.BooleanField(default=True, help_text="Calcular juros/correção proporcionais aos dias do mês.")
+
+    class Meta:
+        verbose_name = "Faixa de Cálculo"
+        ordering = ['parcela', 'ordem', 'data_inicio']
+
+    def __str__(self):
+        return f"Faixa {self.ordem} ({self.indice}) de {self.data_inicio} a {self.data_fim}"
+
+
+class CalculoExtra(models.Model):
+    """
+    Representa itens extras como Multas, Honorários e Custas, que incidem sobre o total.
+    """
+    TIPO_EXTRA_CHOICES = [('MULTA', 'Multa'), ('HONORARIO', 'Honorários'), ('CUSTAS', 'Custas')]
+    BASE_INCIDENCIA_CHOICES = [('PRINCIPAL_CORRIGIDO', 'Principal Corrigido'),
+                               ('PRINCIPAL_MAIS_JUROS', 'Principal + Juros'), ('VALOR_FIXO', 'Valor Fixo a Corrigir')]
+    rascunho = models.ForeignKey(CalculoRascunho, on_delete=models.CASCADE, related_name='extras')
+    tipo = models.CharField(max_length=20, choices=TIPO_EXTRA_CHOICES)
+    descricao = models.CharField(max_length=255)
+    base_incidencia = models.CharField(max_length=30, choices=BASE_INCIDENCIA_CHOICES)
+    percentual = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    valor_fixo = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    data_valor_fixo = models.DateField(null=True, blank=True, help_text="Data para iniciar a correção do valor fixo.")
+
+    class Meta:
+        ordering = ['tipo']
+
+    def __str__(self):
+        return f"{self.get_tipo_display()}: {self.descricao}"

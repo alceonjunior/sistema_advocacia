@@ -1,0 +1,59 @@
+<div class="row g-4">
+    <div class="col-md-4 col-lg-3">
+        <div class="card shadow-sm sticky-top" style="top: 20px;">
+            <div class="card-header fw-bold"><i class="bi bi-list-ol me-1"></i> Parcelas do Cálculo</div>
+            <div class="list-group list-group-flush" id="parcelas-sidebar"></div>
+            <div class="card-body border-top">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-primary" id="btn-add-parcela"><i class="bi bi-plus-circle"></i> Adicionar Parcela</button>
+                    <button class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#modalReplicacao"><i class="bi bi-back"></i> Replicar Última Parcela</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="btn-update-all-today"><i class="bi bi-calendar-check"></i> Atualizar Todas Para Hoje</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8 col-lg-9">
+        <div id="parcelas-container">
+            <div class="text-center p-5 bg-light rounded-3" id="parcelas-placeholder">
+                <i class="bi bi-journal-plus fs-1 text-muted"></i>
+                <h5 class="mt-3">Nenhuma parcela adicionada</h5>
+                <p class="text-muted">Clique em "Adicionar Parcela" à esquerda para começar.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalReplicacao" tabindex="-1" aria-labelledby="modalReplicacaoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title" id="modalReplicacaoLabel">Replicar Última Parcela</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+            <div class="modal-body">
+                <p class="small text-muted">Cria novas parcelas com base nos dados da última parcela da lista.</p>
+                <div class="mb-3">
+                    <label for="replicacao-tipo" class="form-label">Tipo de Replicação</label>
+                    <select id="replicacao-tipo" class="form-select">
+                        <option value="simples">Simples (Repetir valor e datas)</option>
+                        <option value="sucessiva">Sucessiva (Incrementar datas)</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="replicacao-quantidade" class="form-label">Quantidade de Novas Parcelas</label>
+                    <input type="number" id="replicacao-quantidade" class="form-control" value="11" min="1">
+                </div>
+                <div id="replicacao-sucessiva-options">
+                    <div class="mb-3">
+                        <label for="replicacao-periodo" class="form-label">Incrementar a cada</label>
+                        <select id="replicacao-periodo" class="form-select">
+                            <option value="mensal">Mês</option>
+                            <option value="anual">Ano</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-confirmar-replicacao">Replicar</button>
+            </div>
+        </div>
+    </div>
+</div>

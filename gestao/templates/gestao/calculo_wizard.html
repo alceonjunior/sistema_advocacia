@@ -1,0 +1,63 @@
+{% extends 'gestao/base.html' %}
+{% load static %}
+
+{% block title %}{{ titulo_pagina|default:"Calculadora Judicial" }}{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/calculo.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4 mb-5 pb-5" id="calculadora-wizard">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 d-flex align-items-center gap-2 mb-0">
+                <i class="bi bi-calculator-fill text-primary"></i>
+                {{ titulo_pagina|default:"Calculadora Judicial Completa" }}
+            </h1>
+            {% if processo %}<p class="text-muted mb-0"><strong>Processo:</strong> {{ processo }}</p>{% endif %}
+        </div>
+        <div>
+            <a href="#" class="btn btn-link btn-sm"><i class="bi bi-question-circle"></i> Como utilizar a calculadora?</a>
+            {% if processo %}<a href="{% url 'gestao:detalhe_processo' pk=processo.pk %}" class="btn btn-secondary"><i class="bi bi-arrow-left-circle"></i> Voltar ao Processo</a>{% endif %}
+        </div>
+    </div>
+
+    <ul class="nav nav-pills nav-fill mb-4" id="wizard-stepper">
+        <li class="nav-item"><a class="nav-link active" href="#" data-step="1"><span class="badge rounded-pill me-2">1</span>Dados Básicos</a></li>
+        <li class="nav-item"><a class="nav-link" href="#" data-step="2"><span class="badge rounded-pill me-2">2</span>Parcelas e Índices</a></li>
+        <li class="nav-item"><a class="nav-link" href="#" data-step="3"><span class="badge rounded-pill me-2">3</span>Itens Extras</a></li>
+        <li class="nav-item"><a class="nav-link" href="#" data-step="4"><span class="badge rounded-pill me-2">4</span>Resultado do Cálculo</a></li>
+    </ul>
+
+    <div class="wizard-content">
+        <div class="wizard-step" data-step="1">{% include 'gestao/partials/calculo/_step1_basicos.html' %}</div>
+        <div class="wizard-step d-none" data-step="2">{% include 'gestao/partials/calculo/_step2_parcelas.html' %}</div>
+        <div class="wizard-step d-none" data-step="3">{% include 'gestao/partials/calculo/_step3_extras.html' %}</div>
+        <div class="wizard-step d-none" data-step="4">{% include 'gestao/partials/calculo/_step4_resultado.html' %}</div>
+    </div>
+
+    <div class="wizard-actions shadow-lg">
+        <button id="btn-prev" class="btn btn-secondary" disabled><i class="bi bi-arrow-left"></i> Anterior</button>
+        <div><button id="btn-save-draft" class="btn btn-outline-primary"><i class="bi bi-save"></i> Salvar Rascunho</button></div>
+        <div>
+            <button id="btn-next" class="btn btn-primary">Próximo <i class="bi bi-arrow-right"></i></button>
+            <button id="btn-calcular" class="btn btn-success d-none"><i class="bi bi-check2-circle"></i> Calcular e Ver Resultado</button>
+        </div>
+    </div>
+</div>
+
+{% include 'gestao/partials/calculo/_templates_js.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const csrfToken = "{{ csrf_token }}";
+    const simularApiUrl = "{% url 'gestao:api_simular_calculo' %}";
+    const exportPdfUrl  = "{% url 'gestao:exportar_calculo_pdf' %}";
+    const initialData = JSON.parse('{{ initial_data_json|escapejs|default:"{}" }}');
+    const indiceOptions = JSON.parse('{{ indice_options_json|escapejs|default:"[]" }}');
+</script>
+<script src="{% static 'js/calculo_wizard.js' %}"></script>
+{% endblock %}

@@ -4,7 +4,8 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 import calendar
 
-from .services import ServicoIndices
+# AQUI ESTÁ A CORREÇÃO PRINCIPAL: O CAMINHO DA IMPORTAÇÃO FOI ATUALIZADO
+from .services.indices.providers import ServicoIndices
 
 
 class CalculadoraMonetaria:
