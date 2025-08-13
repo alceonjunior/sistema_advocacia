@@ -4,7 +4,7 @@
 {% block title %}{{ titulo_pagina|default:"Calculadora Judicial" }}{% endblock %}
 
 {% block extra_css %}
-    {# Caminho corrigido para incluir o namespace do app 'gestao' #}
+    {# Caminho CORRETO para a sua estrutura de pastas gestao/static/gestao/ #}
     <link rel="stylesheet" href="{% static 'gestao/css/calculo.css' %}">
 {% endblock %}
 
@@ -40,11 +40,13 @@
     </div>
 
     <div class="wizard-actions shadow-lg">
-        <button id="btn-prev" class="btn btn-secondary" disabled><i class="bi bi-arrow-left"></i> Anterior</button>
-        <div>
-            <button id="btn-save-draft" class="btn btn-outline-primary"><i class="bi bi-save"></i> Salvar Rascunho</button>
+        <div class="left-actions">
+            <button id="btn-prev" class="btn btn-secondary" disabled><i class="bi bi-arrow-left"></i> Anterior</button>
         </div>
-        <div>
+        <div class="center-actions">
+             <button id="btn-save-draft" class="btn btn-outline-primary"><i class="bi bi-save"></i> Salvar Rascunho</button>
+        </div>
+        <div class="right-actions">
             <button id="btn-next" class="btn btn-primary">Próximo <i class="bi bi-arrow-right"></i></button>
             <button id="btn-calcular" class="btn btn-success d-none"><i class="bi bi-check2-circle"></i> Calcular e Ver Resultado</button>
         </div>
@@ -63,6 +65,6 @@
     const initialData = JSON.parse('{{ initial_data_json|escapejs|default:"{}" }}');
     const indiceOptions = JSON.parse('{{ indice_options_json|escapejs|default:"[]" }}');
 </script>
-{# Caminho corrigido para incluir o namespace do app 'gestao' #}
+{# Caminho CORRETO para a sua estrutura de pastas gestao/static/gestao/ #}
 <script src="{% static 'gestao/js/calculo_wizard.js' %}"></script>
 {% endblock %}

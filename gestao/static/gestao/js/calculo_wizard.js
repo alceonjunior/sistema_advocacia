@@ -3,7 +3,7 @@
  * Gerencia a navegação, validação, manipulação de parcelas e faixas,
  * comunicação com a API de cálculo e renderização dos resultados.
  *
- * Versão: 1.1.0 - Integral e Funcional
+ * Versão: 2.0.0 - Definitiva e Funcional
  * Autor: Gemini Senior Dev
  */
 (() => {
@@ -36,13 +36,17 @@
             },
 
             init() {
-                this.updateButtons();
-                this.bindEvents();
-                this.prefillStep1();
+                // Adiciona a função helper ao objeto antes de qualquer chamada
+                this.utils.formatCurrency = this.utils.formatCurrency.bind(this);
+                this.utils.parseBRL = this.utils.parseBRL.bind(this);
 
                 if (this.elements.parcelasContainer.querySelectorAll('.parcela-card').length === 0) {
                     this.addParcela();
                 }
+
+                this.prefillStep1();
+                this.updateButtons();
+                this.bindEvents(); // Movido para o final para garantir que tudo esteja pronto
 
                 this.elements.formPDF.method = 'POST';
                 this.elements.formPDF.action = exportPdfUrl;
@@ -76,6 +80,14 @@
                 this.elements.btnPrev.disabled = this.state.currentStep === 1;
                 this.elements.btnNext.classList.toggle('d-none', this.state.currentStep >= this.state.totalSteps - 1);
                 this.elements.btnCalc.classList.toggle('d-none', this.state.currentStep !== this.state.totalSteps - 1);
+            },
+
+            // --- FUNÇÃO CORRIGIDA E ADICIONADA AO OBJETO ---
+            updateSidebarActive(activeId) {
+                if (!this.elements.parcelasSidebar) return;
+                this.elements.parcelasSidebar.querySelectorAll('.list-group-item').forEach(item => {
+                    item.classList.toggle('active', item.dataset.targetParcelaId === activeId.toString());
+                });
             },
 
             validateStep(stepToValidate) {
@@ -129,6 +141,7 @@
             addParcela(data = {}) {
                 this.state.parcelaCounter++;
                 const newId = this.state.parcelaCounter;
+                const today = new Date().toISOString().split('T')[0];
 
                 const cardTemplate = document.getElementById('template-parcela-card');
                 const newCard = cardTemplate.content.cloneNode(true).firstElementChild;
@@ -136,15 +149,15 @@
                 const title = data.descricao || `Parcela ${newId}`;
                 newCard.querySelector('.parcela-title').textContent = title;
                 newCard.querySelector('.parcela-descricao').value = title;
-                newCard.querySelector('.parcela-valor').value = data.valor_original ? this.utils.formatCurrency(data.valor_original, false) : '';
-                newCard.querySelector('.parcela-data').value = data.data_evento || '';
+                newCard.querySelector('.parcela-valor').value = data.valor_original ? this.utils.formatCurrency(data.valor_original, false) : '1.000,00';
+                newCard.querySelector('.parcela-data').value = data.data_evento || today;
                 this.elements.parcelasContainer.appendChild(newCard);
 
                 const sidebarTemplate = document.getElementById('template-parcela-sidebar-item');
                 const newSidebarItem = sidebarTemplate.content.cloneNode(true).firstElementChild;
                 newSidebarItem.dataset.targetParcelaId = newId;
                 newSidebarItem.querySelector('.parcela-title').textContent = title;
-                newSidebarItem.querySelector('.parcela-valor-original').textContent = this.utils.formatCurrency(data.valor_original || 0);
+                newSidebarItem.querySelector('.parcela-valor-original').textContent = this.utils.formatCurrency(data.valor_original || 1000);
                 this.elements.parcelasSidebar.appendChild(newSidebarItem);
 
                 this.elements.parcelasPlaceholder.classList.add('d-none');
@@ -152,8 +165,9 @@
                 if (data.faixas && data.faixas.length > 0) {
                     data.faixas.forEach(faixaData => this.addFaixa(newCard, faixaData));
                 } else {
-                    this.addFaixa(newCard);
+                    this.addFaixa(newCard, { data_inicio: data.data_evento || today });
                 }
+
                 this.updateSidebarActive(newId);
                 newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
             },
@@ -161,6 +175,7 @@
             addFaixa(parcelaCard, data = {}) {
                 this.state.faixaCounter++;
                 const newId = this.state.faixaCounter;
+                const today = new Date().toISOString().split('T')[0];
 
                 const faixaTemplate = document.getElementById('template-faixa-row');
                 const newFaixa = faixaTemplate.content.cloneNode(true).firstElementChild;
@@ -170,15 +185,13 @@
                 select.innerHTML = '<option value="">Selecione...</option>';
                 indiceOptions.forEach(opt => select.add(new Option(opt, opt)));
 
-                if (Object.keys(data).length > 0) {
-                    select.value = data.indice;
-                    newFaixa.querySelector('.faixa-data-inicio').value = data.data_inicio;
-                    newFaixa.querySelector('.faixa-data-fim').value = data.data_fim;
-                    newFaixa.querySelector('.faixa-juros-tipo').value = data.juros_tipo || 'NENHUM';
-                    newFaixa.querySelector('.faixa-juros-taxa').value = this.utils.formatCurrency(data.juros_taxa_mensal || 0, false);
-                    newFaixa.querySelector('.faixa-pro-rata').checked = data.pro_rata !== false;
-                    newFaixa.querySelector('.faixa-selic-exclusiva').checked = data.modo_selic_exclusiva === true;
-                }
+                select.value = data.indice || indiceOptions[0] || '';
+                newFaixa.querySelector('.faixa-data-inicio').value = data.data_inicio || today;
+                newFaixa.querySelector('.faixa-data-fim').value = data.data_fim || today;
+                newFaixa.querySelector('.faixa-juros-tipo').value = data.juros_tipo || 'NENHUM';
+                newFaixa.querySelector('.faixa-juros-taxa').value = this.utils.formatCurrency(data.juros_taxa_mensal || 0, false);
+                newFaixa.querySelector('.faixa-pro-rata').checked = data.pro_rata !== false;
+                newFaixa.querySelector('.faixa-selic-exclusiva').checked = data.modo_selic_exclusiva === true;
 
                 parcelaCard.querySelector('.faixas-container').appendChild(newFaixa);
             },
@@ -285,7 +298,7 @@
             },
 
             async simulateCalculation() {
-                if (!this.validateStep(this.state.currentStep)) return;
+                if (!this.validateStep(2)) return; // Sempre validar o passo 2 antes de calcular
 
                 const payload = this.gatherData();
                 this.state.lastResultPayload = payload;
@@ -369,10 +382,10 @@
                     return val.toLocaleString('pt-BR', options);
                 },
                 parseBRL(str) {
-                    if (typeof str !== 'string' || !str) return '0.00';
+                    if (typeof str !== 'string' || !str) return 0.00;
                     const number = str.replace(/[R$\s.]/g, '').replace(',', '.');
                     const parsed = parseFloat(number);
-                    return isNaN(parsed) ? '0.00' : parsed.toFixed(2);
+                    return isNaN(parsed) ? 0.00 : parsed;
                 },
             },
 
@@ -425,7 +438,7 @@
                                 sidebarItem.querySelector('.parcela-title').textContent = e.target.value || `Parcela ${id}`;
                             }
                             if (e.target.matches('.parcela-valor')) {
-                                sidebarItem.querySelector('.parcela-valor-original').textContent = this.utils.formatCurrency(e.target.value);
+                                sidebarItem.querySelector('.parcela-valor-original').textContent = this.utils.formatCurrency(this.utils.parseBRL(e.target.value));
                             }
                         }
                     }
@@ -447,7 +460,8 @@
 
                 this.elements.wizard.addEventListener('blur', (e) => {
                     if (e.target.matches('.parcela-valor, .faixa-juros-taxa')) {
-                        e.target.value = this.utils.formatCurrency(e.target.value, false);
+                         const valorNumerico = this.utils.parseBRL(e.target.value);
+                         e.target.value = this.utils.formatCurrency(valorNumerico, false);
                     }
                 }, true);
             },

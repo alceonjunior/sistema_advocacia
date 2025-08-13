@@ -31,8 +31,16 @@ body {
     border-top: 1px solid #dee2e6;
     z-index: 1030;
     display: flex;
-    justify-content: space-between; /* CORREÇÃO DE ALINHAMENTO */
-    align-items: center; /* Centraliza verticalmente */
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* CORREÇÃO: Regras para os grupos de botões */
+.wizard-actions .left-actions,
+.wizard-actions .center-actions,
+.wizard-actions .right-actions {
+    display: flex;
+    gap: 0.5rem;
 }
 
 .parcela-card .card-header { background-color: rgba(0,0,0,0.03); }

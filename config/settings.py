@@ -7,7 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 # Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+# See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-j-6o%c@r69ru52nj*$23r)n%(&#+hky1zua48piwlde*jo^#66'
@@ -19,7 +19,6 @@ ALLOWED_HOSTS = []
 
 
 # Application definition
-# CORREÇÃO: Unifiquei as duas listas 'INSTALLED_APPS' em uma só e removi o app 'processo' inexistente.
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -37,8 +36,7 @@ INSTALLED_APPS = [
     'ckeditor',
     'ckeditor_uploader',
     'django_filters',
-    'widget_tweaks',  # <<< ADICIONE ESTA LINHA
-
+    'widget_tweaks',
 ]
 
 MIDDLEWARE = [
@@ -64,7 +62,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'gestao.context_processors.global_forms_context',
-                'gestao.context_processors.escritorio_context', # Mantido
+                'gestao.context_processors.escritorio_context',
             ],
         },
     },
@@ -74,7 +72,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 
 # Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+# https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
 DATABASES = {
     'default': {
@@ -83,7 +81,7 @@ DATABASES = {
     }
 }
 
-# --- Configurações do CKEditor (mantidas) ---
+# --- Configurações do CKEditor ---
 CKEDITOR_UPLOAD_PATH = "uploads/"
 CKEDITOR_CONFIGS = {
     'default': {
@@ -114,7 +112,7 @@ CKEDITOR_CONFIGS = {
 
 
 # Password validation
-# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
+# https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -133,7 +131,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 
 # Internationalization
-# https://docs.djangoproject.com/en/5.2/topics/i18n/
+# https://docs.djangoproject.com/en/5.0/topics/i18n/
 
 LANGUAGE_CODE = 'pt-br'
 
@@ -146,27 +144,31 @@ USE_THOUSAND_SEPARATOR = True
 
 
 # Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.2/howto/static-files/
+# https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATIC_URL = 'static/'
 
-# ADICIONE ESTA LINHA:
-# Diz ao Django para procurar uma pasta 'static' na raiz do projeto
+# CORREÇÃO APLICADA:
+# A diretiva STATICFILES_DIRS foi removida, pois não é necessária
+# quando os arquivos estáticos estão dentro de um diretório 'static'
+# do próprio aplicativo (ex: gestao/static/). O Django já os encontrará.
 
-# LINHA OPCIONAL, MAS BOA PRÁTICA PARA PRODUÇÃO
+# A linha abaixo é usada para o comando `collectstatic` em produção.
+# É uma boa prática mantê-la.
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+
 # Default primary key field type
-# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
+# https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Altere o LOGIN_REDIRECT_URL para a URL raiz. É mais robusto.
-LOGIN_REDIRECT_URL = 'gestao:home'
 
-# Mantenha o LOGIN_URL como está, ele está correto.
+# Login/Logout URLs
+LOGIN_REDIRECT_URL = 'gestao:dashboard'  # Ajustado para uma URL mais comum de dashboard
 LOGIN_URL = 'login'
 LOGOUT_REDIRECT_URL = 'login'
 
 
+# Email Backend para Desenvolvimento
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
