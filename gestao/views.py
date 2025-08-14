@@ -78,7 +78,7 @@ from .models import (
     MovimentacaoServico, Pagamento, Processo, Recurso, Servico, TipoAcao,
     TipoServico, UsuarioPerfil, ContratoHonorarios, ParteProcesso, TipoMovimentacao, CalculoLancamento,
 )
-from .services.indices.catalog import INDICE_CATALOG
+from .services.indices.catalog import INDICE_CATALOG, public_catalog_for_api
 from .services.indices.resolver import ServicoIndices, calcular
 from .nfse_service import NFSEService
 from .services.calculo import CalculoEngine
@@ -3054,15 +3054,18 @@ def salvar_cadastro_auxiliar_ajax(request, modelo, pk=None):
 def calculo_wizard_view(request: HttpRequest, processo_pk: int | None = None):
     """
     Renderiza a página principal do wizard de cálculo judicial.
-    Se um 'processo_pk' for fornecido, o carrega para pré-povoar dados.
+    Carrega o catálogo de índices e o passa para o template como JSON.
     """
     processo = None
     if processo_pk:
         processo = get_object_or_404(Processo, pk=processo_pk)
 
+    indices_catalog_json = json.dumps(public_catalog_for_api(), ensure_ascii=False)
+
     context = {
         'titulo_pagina': 'Calculadora Judicial Completa',
-        'processo': processo
+        'processo': processo,
+        'indices_catalog_json': indices_catalog_json,
     }
     return render(request, "gestao/calculo_wizard.html", context)
 
@@ -3074,22 +3077,63 @@ def simular_calculo_api(request: HttpRequest):
     Endpoint da API para receber o payload do cálculo, processá-lo com a
     CalculoEngine e retornar o resultado detalhado em JSON.
     """
+
+    def sanitize_payload(payload):
+        """Função interna aprimorada para limpar e converter dados do frontend."""
+
+        def br_str_to_decimal_str(value_str: str | None) -> str:
+            if not isinstance(value_str, str) or not value_str:
+                return '0.00'
+            cleaned_str = re.sub(r'[^\d,.-]', '', value_str)
+            if ',' in cleaned_str:
+                cleaned_str = cleaned_str.replace('.', '').replace(',', '.')
+            try:
+                float(cleaned_str)
+                return cleaned_str
+            except ValueError:
+                return '0.00'
+
+        for parcela in payload.get('parcelas', []):
+            parcela['valor_original'] = br_str_to_decimal_str(parcela.get('valor_original'))
+            for faixa in parcela.get('faixas', []):
+                faixa['juros_taxa_mensal'] = br_str_to_decimal_str(faixa.get('juros_taxa_mensal'))
+
+        extras = payload.get('extras', {})
+        if isinstance(extras, dict):
+            for key in ['multa_percentual', 'honorarios_percentual']:
+                if key in extras:
+                    extras[key] = br_str_to_decimal_str(extras[key])
+            payload['extras'] = extras
+
+        return payload
+
     try:
         payload = json.loads(request.body)
-        if not payload.get('parcelas'):
+        sanitized_payload = sanitize_payload(payload)
+
+        if not sanitized_payload.get('parcelas'):
             return JsonResponse({'status': 'error', 'message': 'Nenhuma parcela foi enviada para cálculo.'}, status=400)
 
-        engine = CalculoEngine(payload)
+        engine = CalculoEngine(sanitized_payload)
         resultados = engine.run()
 
         return JsonResponse({'status': 'success', 'data': resultados})
 
     except json.JSONDecodeError:
         return JsonResponse({'status': 'error', 'message': 'Erro: O formato do JSON enviado é inválido.'}, status=400)
-    except (KeyError, TypeError, ValueError) as e:
-        logger.warning(f"Payload de cálculo malformado recebido: {e}")
+
+    except ConnectionError as e:
+        logger.error(f"Erro de conexão na API de cálculo: {e}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Falha de comunicação ao obter índices. Detalhe: {e}'
+        }, status=503)
+
+    except (KeyError, TypeError, ValueError, AttributeError) as e:
+        logger.warning(f"Payload de cálculo malformado ou erro de processamento: {e}", exc_info=True)
         return JsonResponse(
-            {'status': 'error', 'message': f'Erro: A estrutura dos dados enviados é inválida. Detalhe: {e}'},
+            {'status': 'error',
+             'message': f'Erro: A estrutura dos dados enviados é inválida ou causou um erro de tipo. Detalhe: {e}'},
             status=400)
     except Exception as e:
         logger.error(f"Erro inesperado na API de simulação de cálculo: {e}", exc_info=True)
@@ -3098,22 +3142,7 @@ def simular_calculo_api(request: HttpRequest):
 
 @login_required
 def api_indices_catalogo(request: HttpRequest):
-    """
-    Retorna o catálogo de índices completo em um formato amigável para o frontend,
-    como uma lista plana de objetos, garantindo a consistência da nomenclatura.
-    """
-    indices = []
-    # Ordena o catálogo pelo label para uma exibição consistente no frontend
-    sorted_catalog = sorted(INDICE_CATALOG.items(), key=lambda item: item[1].get('label', item[0]))
-
-    for key, meta in sorted_catalog:
-        indices.append({
-            "key": key,
-            "label": meta.get("label", key),
-            "group": meta.get("group", "Outros"),
-            "type": meta.get("type", "monthly_variation"),
-        })
-    return JsonResponse({"indices": indices})
+    return JsonResponse({"indices": public_catalog_for_api()})
 
 
 @login_required

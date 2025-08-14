@@ -116,16 +116,19 @@ def get_indice_info(nome: str) -> Dict[str, Any]:
         raise ValueError(f"Índice desconhecido: {nome}") from exc
 
 
-def public_catalog_for_api() -> Dict[str, Any]:
-    """Gera uma estrutura amigável para o frontend popular o seletor de índices."""
-    groups: Dict[str, Any] = {}
-    # Ordena o catálogo pelo label para exibição
-    sorted_catalog = sorted(INDICE_CATALOG.items(), key=lambda item: item[1]['label'])
-
-    for key, meta in sorted_catalog:
-        grp = meta.get("group", "Outros")
-        groups.setdefault(grp, [])
-        groups[grp].append(
-            {"key": key, "label": meta.get("label", key), "type": meta.get("type")}
-        )
-    return {"groups": groups}
+def public_catalog_for_api() -> list[dict[str, Any]]:
+    """
+    Gera uma lista plana de índices para o frontend, garantindo que todos
+    os itens tenham as chaves 'key' e 'label' para evitar erros de JavaScript.
+    """
+    indices = []
+    for key, meta in INDICE_CATALOG.items():
+        indices.append({
+            "key": key,
+            "label": meta.get("label", key),  # Garante que 'label' sempre exista
+            "group": meta.get("group", "Outros"),
+            "type": meta.get("type", "monthly_variation"),
+        })
+    # Ordena a lista final pelo 'label' para uma exibição consistente
+    indices.sort(key=lambda x: x['label'])
+    return indices

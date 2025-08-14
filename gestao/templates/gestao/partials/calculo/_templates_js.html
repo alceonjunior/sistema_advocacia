@@ -1,4 +1,3 @@
-<!-- Template para o item da barra lateral de parcelas -->
 <template id="template-parcela-sidebar-item">
     <a href="#" class="list-group-item list-group-item-action">
         <div class="d-flex w-100 justify-content-between">
@@ -8,13 +7,13 @@
     </a>
 </template>
 
-<!-- Template para o card de uma parcela completa -->
 <template id="template-parcela-card">
     <div class="card shadow-sm mb-4 parcela-card">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0 parcela-title">Parcela X</h5>
             <div>
-                <button class="btn btn-outline-danger btn-sm btn-remove-parcela" title="Remover Parcela"><i class="bi bi-trash"></i></button>
+                {# --- CORREÇÃO: Adicionado type="button" --- #}
+                <button type="button" class="btn btn-outline-danger btn-sm btn-remove-parcela" title="Remover Parcela"><i class="bi bi-trash"></i></button>
             </div>
         </div>
         <div class="card-body">
@@ -26,12 +25,12 @@
             <hr>
             <h6 class="mb-3">Faixas de Correção e Juros</h6>
             <div class="faixas-container"></div>
-            <button class="btn btn-sm btn-success btn-add-faixa mt-2"><i class="bi bi-plus"></i> Adicionar Faixa de Cálculo</button>
+            {# --- CORREÇÃO: Adicionado type="button" --- #}
+            <button type="button" class="btn btn-sm btn-success btn-add-faixa mt-2"><i class="bi bi-plus"></i> Adicionar Faixa de Cálculo</button>
         </div>
     </div>
 </template>
 
-<!-- Template para uma única linha de faixa de cálculo -->
 <template id="template-faixa-row">
      <div class="row g-2 align-items-center border-top pt-3 mt-3 faixa-row">
        <div class="col-12"><div class="row g-2">
@@ -46,7 +45,8 @@
                 <div class="form-check form-switch" title="Calcula a correção proporcional aos dias do mês."><input class="form-check-input faixa-pro-rata" type="checkbox" checked><label class="form-check-label small">Pro Rata</label></div>
                 <div class="form-check form-switch" title="Se marcado, desativa juros adicionais pois a SELIC já os inclui."><input class="form-check-input faixa-selic-exclusiva" type="checkbox"><label class="form-check-label small">SELIC Exclusiva</label></div>
             </div>
-            <div class="col-md-2 text-end"><button class="btn btn-sm btn-outline-danger btn-remove-faixa" title="Remover Faixa"><i class="bi bi-x-lg"></i></button></div>
+            {# --- CORREÇÃO: Adicionado type="button" --- #}
+            <div class="col-md-2 text-end"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-faixa" title="Remover Faixa"><i class="bi bi-x-lg"></i></button></div>
        </div></div>
     </div>
 </template>

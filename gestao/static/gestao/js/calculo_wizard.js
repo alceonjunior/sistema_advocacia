@@ -1,30 +1,20 @@
 /*
  * Script completo e funcional para o Wizard de Cálculo Judicial
- * Versão: 2.3 (Auditada e Corrigida com Delegação de Eventos)
- *
- * RESPONSABILIDADES:
- * - Controlar a navegação e o estado visual do wizard (stepper).
- * - Gerenciar a adição, remoção e replicação de parcelas e faixas de cálculo via DELEGAÇÃO DE EVENTOS.
- * - Aplicar máscaras de input e validações de formulário no frontend.
- * - Preencher datas de forma inteligente para agilizar o uso.
- * - Carregar dinamicamente os índices de correção do backend.
- * - Coletar, formatar e enviar os dados do cálculo para a API.
- * - Renderizar o resultado detalhado do cálculo na etapa final.
+ * Versão: 2.6 (Com coleta de dados robusta e feedback de erro aprimorado)
  */
 document.addEventListener('DOMContentLoaded', async () => {
     // =========================================================================
     // CONFIGURAÇÃO E VARIÁVEIS GLOBAIS
     // =========================================================================
     const API_INDICES_CATALOGO = window.API_INDICES_CATALOGO || "/api/indices/catalogo/";
-    const CALC_ENDPOINT = window.CALC_ENDPOINT || "/ajax/calculo/wizard/calcular/";
+    const CALC_ENDPOINT = window.CALC_ENDPOINT || "/api/calculos/simular/";
 
     let INDICE_CATALOGO = [];
     let parcelaSeq = 0;
     let currentStep = 1;
 
-    // Seletores de elementos principais da interface
     const wizard = document.getElementById('calculadora-wizard');
-    if (!wizard) return; // Aborta se o wizard não estiver na página
+    if (!wizard) return;
 
     const stepperLinks = wizard.querySelectorAll('.wizard-steps .nav-link');
     const stepContents = wizard.querySelectorAll('.wizard-step');
@@ -38,59 +28,43 @@ document.addEventListener('DOMContentLoaded', async () => {
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
 
     // =========================================================================
-    // FUNÇÕES UTILITÁRIAS (MÁSCARAS E DATAS)
+    // FUNÇÕES UTILITÁRIAS
     // =========================================================================
-
-    /** Aplica máscaras de formatação a campos de input usando jQuery Mask Plugin. */
     function applyMasks(context) {
-        if (typeof $ === 'undefined' || typeof $.fn.mask !== 'function') {
-            console.warn("jQuery Mask Plugin não está disponível. Máscaras não serão aplicadas.");
-            return;
-        }
+        if (typeof $ === 'undefined' || typeof $.fn.mask !== 'function') return;
         const scope = context || document;
         $(scope).find('[data-mask="money"]').mask('#.##0,00', { reverse: true });
         $(scope).find('[data-mask="date"]').mask('00/00/0000');
-        $(scope).find('[data-mask="processo"]').mask('0000000-00.0000.0.00.0000');
     }
 
-    /** Retorna a data de hoje no formato YYYY-MM-DD. */
-    function getTodayISO() {
-        return new Date().toISOString().split('T')[0];
-    }
-
-    /** Retorna o dia seguinte de uma data (formato DD/MM/AAAA) para o formato do input (YYYY-MM-DD). */
     function getNextDayForInput(dateStr) {
         if (!dateStr || !/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) return '';
         const [day, month, year] = dateStr.split('/');
         const date = new Date(year, month - 1, day);
         date.setDate(date.getDate() + 1);
-        return date.toISOString().split('T')[0];
+        return formatDateBR(date);
     }
 
-    /** Converte uma data de dd/mm/aaaa para YYYY-MM-DD. */
     function dateToISO(dateStr) {
         if (!dateStr || !/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) return null;
         const [day, month, year] = dateStr.split('/');
         return `${year}-${month}-${day}`;
     }
 
-    /** Formata um número como moeda BRL (Real Brasileiro). */
     function formatCurrency(value) {
-        const num = Number(String(value).replace(/[^0-9,.]+/g,"").replace('.','').replace(',','.')) || 0;
+        const num = Number(value) || 0;
         return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     }
 
-    /** Converte uma string dd/mm/aaaa para um objeto Date. */
     function parseDateBR(dateStr) {
         if (!dateStr || !/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) return null;
         const [day, month, year] = dateStr.split('/');
         return new Date(year, month - 1, day);
     }
 
-    /** Formata um objeto Date para uma string dd/mm/aaaa. */
     function formatDateBR(date) {
         if (!(date instanceof Date) || isNaN(date.getTime())) return "";
-        return date.toLocaleDateString('pt-BR');
+        return date.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric'});
     }
 
     function addMonths(date, months) { const d = new Date(date); d.setMonth(d.getMonth() + months); return d; }
@@ -99,24 +73,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =========================================================================
     // LÓGICA DA INTERFACE DO WIZARD (UI)
     // =========================================================================
-
-    /** Atualiza a interface do wizard (stepper, botões e conteúdo visível). */
     function updateWizardUI() {
         stepperLinks.forEach(link => {
             const step = parseInt(link.dataset.step, 10);
-            link.classList.remove('active', 'completed');
-            if (step < currentStep) link.classList.add('completed');
-            else if (step === currentStep) link.classList.add('active');
+            link.classList.toggle('active', step === currentStep);
         });
         stepContents.forEach(content => {
-            content.style.display = parseInt(content.dataset.step, 10) === currentStep ? 'block' : 'none';
+            content.classList.toggle('d-none', parseInt(content.dataset.step, 10) !== currentStep);
         });
         btnPrev.style.display = currentStep > 1 ? 'inline-flex' : 'none';
         btnNext.style.display = currentStep < stepperLinks.length ? 'inline-flex' : 'none';
         btnCalcular.style.display = currentStep === stepperLinks.length ? 'inline-flex' : 'none';
     }
 
-    /** Navega para a próxima ou anterior etapa do wizard. */
     function navigateStep(direction) {
         const nextStep = currentStep + direction;
         if (nextStep > 0 && nextStep <= stepperLinks.length) {
@@ -128,8 +97,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =========================================================================
     // CARREGAMENTO E MANIPULAÇÃO DE ÍNDICES
     // =========================================================================
-
-    /** Carrega o catálogo de índices da API do backend. */
     async function carregarCatalogoIndices() {
         try {
             const response = await fetch(API_INDICES_CATALOGO);
@@ -142,10 +109,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    /** Popula um elemento <select> com os índices do catálogo, agrupados por categoria. */
     function popularSelectIndice(selectElement) {
         selectElement.innerHTML = '<option value="">Selecione um índice...</option>';
         const groupedIndices = INDICE_CATALOGO.reduce((acc, idx) => {
+            if (!idx || !idx.label) return acc;
             const group = idx.group || 'Outros';
             if (!acc[group]) acc[group] = [];
             acc[group].push(idx);
@@ -155,10 +122,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         for (const groupName in groupedIndices) {
             const optgroup = document.createElement('optgroup');
             optgroup.label = groupName;
-            // Valida se a label existe antes de ordenar
-            groupedIndices[groupName].sort((a,b) => (a.label || '').localeCompare(b.label || '', 'pt-BR')).forEach(idx => {
-                optgroup.appendChild(new Option(idx.label, idx.key));
-            });
+            groupedIndices[groupName]
+                .sort((a,b) => a.label.localeCompare(b.label, 'pt-BR'))
+                .forEach(idx => optgroup.appendChild(new Option(idx.label, idx.key)));
             selectElement.appendChild(optgroup);
         }
     }
@@ -166,8 +132,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =========================================================================
     // MANIPULAÇÃO DINÂMICA DE PARCELAS E FAIXAS (CRUD)
     // =========================================================================
-
-    /** Atualiza a barra lateral com a lista de parcelas. */
     function reindexarParcelas() {
         parcelasSidebar.innerHTML = '';
         const cards = parcelasContainer.querySelectorAll('.parcela-card');
@@ -175,7 +139,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const id = card.dataset.parcelaId;
             const title = `Parcela ${index + 1}`;
             card.querySelector('.parcela-title').textContent = title;
-
             const template = document.getElementById('template-parcela-sidebar-item');
             const sidebarItem = template.content.cloneNode(true).firstElementChild;
             sidebarItem.href = `#parcela-card-${id}`;
@@ -187,15 +150,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         parcelasPlaceholder.style.display = cards.length === 0 ? 'block' : 'none';
     }
 
-    /** Adiciona uma nova faixa de cálculo a uma parcela, com preenchimento automático de datas. */
     function adicionarFaixa(parcelaCard) {
         const template = document.getElementById('template-faixa-row');
         const faixa = template.content.cloneNode(true).firstElementChild;
-
         const lastFaixa = parcelaCard.querySelector('.faixa-row:last-child');
         const dataInicioInput = faixa.querySelector('.faixa-data-inicio');
-        const dataFimInput = faixa.querySelector('.faixa-data-fim');
-
         if (lastFaixa) {
             const lastEndDate = lastFaixa.querySelector('.faixa-data-fim').value;
             dataInicioInput.value = getNextDayForInput(lastEndDate);
@@ -203,15 +162,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             const dataValor = parcelaCard.querySelector('.parcela-data').value;
             if (dataValor) dataInicioInput.value = dataValor;
         }
-
-        dataFimInput.value = formatDateBR(new Date());
-
+        faixa.querySelector('.faixa-data-fim').value = formatDateBR(new Date());
         popularSelectIndice(faixa.querySelector('.faixa-indice'));
         parcelaCard.querySelector('.faixas-container').appendChild(faixa);
         applyMasks(faixa);
     }
 
-    /** Adiciona uma nova parcela ao formulário, opcionalmente com dados pré-preenchidos. */
     function adicionarParcela(prefillData = null) {
         parcelaSeq++;
         const id = `p${parcelaSeq}`;
@@ -219,14 +175,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const parcela = template.content.cloneNode(true).firstElementChild;
         parcela.id = `parcela-card-${id}`;
         parcela.dataset.parcelaId = id;
-
         parcelasContainer.appendChild(parcela);
-
         if (prefillData) {
             parcela.querySelector('.parcela-descricao').value = prefillData.descricao;
             parcela.querySelector('.parcela-valor').value = prefillData.valor;
             parcela.querySelector('.parcela-data').value = prefillData.data;
-
             prefillData.faixas.forEach(faixaData => {
                 const faixaTemplate = document.getElementById('template-faixa-row');
                 const faixa = faixaTemplate.content.cloneNode(true).firstElementChild;
@@ -243,22 +196,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
             adicionarFaixa(parcela);
         }
-
         applyMasks(parcela);
         reindexarParcelas();
     }
 
-    /** Lógica de replicação de parcelas. */
     function confirmarReplicacao() {
         const lastCard = parcelasContainer.querySelector('.parcela-card:last-child');
         if (!lastCard) { alert("Não há nenhuma parcela para replicar."); return; }
-
         const tipo = document.getElementById('replicacao-tipo').value;
         const qtd = parseInt(document.getElementById('replicacao-quantidade').value, 10) || 0;
         const periodo = document.getElementById('replicacao-periodo').value;
-
         if (qtd <= 0) { alert("A quantidade de novas parcelas deve ser maior que zero."); return; }
-
         const base = {
             descricao: lastCard.querySelector('.parcela-descricao').value,
             valor: lastCard.querySelector('.parcela-valor').value,
@@ -273,12 +221,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 modo_selic_exclusiva: f.querySelector('.faixa-selic-exclusiva').checked,
             }))
         };
-
         let lastDate = parseDateBR(base.data);
         if (!lastDate) { alert("A data da última parcela é inválida."); return; }
-
         for (let i = 0; i < qtd; i++) {
-            const prefill = JSON.parse(JSON.stringify(base)); // Deep copy
+            const prefill = JSON.parse(JSON.stringify(base));
             if (tipo === 'sucessiva') {
                 lastDate = periodo === 'anual' ? addYears(lastDate, 1) : addMonths(lastDate, 1);
                 prefill.data = formatDateBR(lastDate);
@@ -289,67 +235,102 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // =========================================================================
-    // COLETA DE DADOS E ENVIO PARA O BACKEND
+    // COLETA, ENVIO E RENDERIZAÇÃO
     // =========================================================================
     function coletarDadosDoFormulario() {
+        const form = document.getElementById('wizard-form-main'); // O formulário principal que engloba tudo
         const payload = {
-            global: {
-                numero_processo: document.getElementById('calc-numero-processo').value,
-                data_transito_em_julgado: dateToISO(document.getElementById('calc-data-transito').value),
-                observacoes: document.getElementById('calc-observacoes').value,
-            },
+            global: {},
             parcelas: [],
-            extras: {
-                multa_percentual: document.getElementById('multa-percentual').value || "0",
-                multa_sobre_juros: document.getElementById('multa-sobre-juros').checked,
-                honorarios_percentual: document.getElementById('honorarios-percentual').value || "0",
-            }
+            extras: {}
         };
 
-        parcelasContainer.querySelectorAll('.parcela-card').forEach(p => {
+        // Coleta de dados básicos da Etapa 1
+        payload.global.numero_processo = form.querySelector('#calc-numero-processo')?.value || '';
+        payload.global.data_transito_em_julgado = form.querySelector('#calc-data-transito')?.value || null;
+        payload.global.parte_autora = form.querySelector('#calc-parte-autora')?.value || '';
+        payload.global.parte_re = form.querySelector('#calc-parte-re')?.value || '';
+        payload.global.observacoes = form.querySelector('#calc-observacoes')?.value || '';
+
+        // Coleta de dados das parcelas da Etapa 2
+        form.querySelectorAll('.parcela-card').forEach(p => {
             const parcela = {
-                descricao: p.querySelector('.parcela-descricao').value,
-                valor_original: p.querySelector('.parcela-valor').value,
-                data_evento: dateToISO(p.querySelector('.parcela-data').value),
-                faixas: Array.from(p.querySelectorAll('.faixa-row')).map(f => ({
-                    indice: f.querySelector('.faixa-indice').value,
-                    data_inicio: dateToISO(f.querySelector('.faixa-data-inicio').value),
-                    data_fim: dateToISO(f.querySelector('.faixa-data-fim').value),
-                    juros_tipo: f.querySelector('.faixa-juros-tipo').value,
-                    juros_taxa_mensal: f.querySelector('.faixa-juros-taxa').value,
-                    pro_rata: f.querySelector('.faixa-pro-rata').checked,
-                    modo_selic_exclusiva: f.querySelector('.faixa-selic-exclusiva').checked,
-                }))
+                descricao: p.querySelector('.parcela-descricao')?.value || '',
+                valor_original: p.querySelector('.parcela-valor')?.value || '0,00',
+                data_evento: dateToISO(p.querySelector('.parcela-data')?.value),
+                faixas: []
             };
+            p.querySelectorAll('.faixa-row').forEach(f => {
+                parcela.faixas.push({
+                    indice: f.querySelector('.faixa-indice')?.value || '',
+                    data_inicio: dateToISO(f.querySelector('.faixa-data-inicio')?.value),
+                    data_fim: dateToISO(f.querySelector('.faixa-data-fim')?.value),
+                    juros_tipo: f.querySelector('.faixa-juros-tipo')?.value || 'NENHUM',
+                    juros_taxa_mensal: f.querySelector('.faixa-juros-taxa')?.value || '0,00',
+                    pro_rata: f.querySelector('.faixa-pro-rata')?.checked || false,
+                    modo_selic_exclusiva: f.querySelector('.faixa-selic-exclusiva')?.checked || false,
+                });
+            });
             payload.parcelas.push(parcela);
         });
+
+        // Coleta de dados extras da Etapa 3
+        payload.extras.multa_percentual = form.querySelector('#multa-percentual')?.value || '0,00';
+        payload.extras.multa_sobre_juros = form.querySelector('#multa-sobre-juros')?.checked || false;
+        payload.extras.honorarios_percentual = form.querySelector('#honorarios-percentual')?.value || '0,00';
+
         return payload;
     }
 
+
     function renderizarResultado(data) {
         resultadoContainer.innerHTML = '';
-        if (!data || !data.resumo) {
+        if (!data || !data.memoria_calculo) {
             resultadoContainer.innerHTML = '<div class="alert alert-danger">Ocorreu um erro ao processar o resultado.</div>';
             return;
         }
-        const resumo = data.resumo;
+        const { resumo_total, total_geral, detalhe_parcelas } = data.memoria_calculo;
+
+        let resumoHtml = resumo_total.map(item => `
+            <tr>
+                <td>${item.label}</td>
+                <td class="text-end">${formatCurrency(item.value)}</td>
+            </tr>
+        `).join('');
+
+        let parcelasHtml = detalhe_parcelas.map((parcela, index) => `
+            <div class="mb-4">
+                <h6 class="border-bottom pb-2">Detalhe da Parcela ${index + 1}: ${parcela.descricao}</h6>
+                <p class="small mb-2"><strong>Valor Original:</strong> ${formatCurrency(parcela.valor_original)}</p>
+                <ul class="list-unstyled small">
+                    ${parcela.memoria_detalhada.map(detalhe => `
+                        <li>
+                            <strong>${detalhe.faixa_nome} (${detalhe.data_inicio} a ${detalhe.data_fim}):</strong><br>
+                            <span class="ps-3">Correção: R$ ${detalhe.valor_correcao} | Juros: R$ ${detalhe.valor_juros}
+                            | Subtotal: R$ ${detalhe.valor_atualizado_faixa}</span>
+                        </li>
+                    `).join('')}
+                </ul>
+                <p class="fw-bold text-end">Subtotal da Parcela: ${formatCurrency(parcela.valor_final)}</p>
+            </div>
+        `).join('');
+
         const resultadoHtml = `
             <div class="alert alert-success text-center">
                 <h4 class="alert-heading">Cálculo Concluído!</h4>
-                <p class="h2 mb-0">${formatCurrency(resumo.total_geral)}</p>
+                <p class="h2 mb-0">${formatCurrency(total_geral)}</p>
                 <p class="mb-0">Valor Total Atualizado</p>
             </div>
             <h5 class="mt-4">Resumo Detalhado</h5>
             <table class="table table-sm table-bordered"><tbody>
-                <tr><td>(+) Valor Principal Original</td><td class="text-end">${formatCurrency(resumo.principal)}</td></tr>
-                <tr><td>(+) Correção Monetária Total</td><td class="text-end">${formatCurrency(resumo.correcao)}</td></tr>
-                <tr><td>(+) Juros Totais</td><td class="text-end">${formatCurrency(resumo.juros)}</td></tr>
-                <tr><td>(+) Multas</td><td class="text-end">${formatCurrency(resumo.multas)}</td></tr>
-                <tr><td>(+) Honorários</td><td class="text-end">${formatCurrency(resumo.honorarios)}</td></tr>
-                <tr class="table-primary fw-bold"><td>(=) Total Geral Devido</td><td class="text-end">${formatCurrency(resumo.total_geral)}</td></tr>
+                ${resumoHtml}
+                <tr class="table-primary fw-bold">
+                    <td>(=) Total Geral Devido</td>
+                    <td class="text-end">${formatCurrency(total_geral)}</td>
+                </tr>
             </tbody></table>
             <h5 class="mt-4">Memória de Cálculo</h5>
-            <pre class="bg-light p-3 rounded" style="white-space: pre-wrap; font-size: 0.8em;">${data.memoria_texto || 'Memória de cálculo não gerada.'}</pre>
+            <div class="p-3 rounded" style="font-size: 0.9em;">${parcelasHtml}</div>
         `;
         resultadoContainer.innerHTML = resultadoHtml;
     }
@@ -357,8 +338,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function enviarCalculo() {
         const payload = coletarDadosDoFormulario();
         btnCalcular.disabled = true;
-        btnCalcular.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Calculando...';
-        resultadoContainer.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Processando...</p></div>';
+        btnCalcular.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Calculando...';
+        resultadoContainer.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2">Processando...</p></div>';
+
         try {
             const response = await fetch(CALC_ENDPOINT, {
                 method: 'POST',
@@ -369,7 +351,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (response.ok && result.status === 'success') {
                 renderizarResultado(result.data);
             } else {
-                throw new Error(result.message || 'Erro desconhecido no servidor.');
+                throw new Error(result.message || `Erro ${response.status} do servidor.`);
             }
         } catch (error) {
             console.error("Erro ao calcular:", error);
@@ -385,44 +367,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =========================================================================
     await carregarCatalogoIndices();
 
-    // Navegação
     btnNext.addEventListener('click', () => navigateStep(1));
     btnPrev.addEventListener('click', () => navigateStep(-1));
     stepperLinks.forEach(link => {
-        link.addEventListener('click', () => {
-            currentStep = parseInt(link.dataset.step, 10);
+        link.addEventListener('click', (e) => {
+            currentStep = parseInt(e.target.dataset.step, 10);
             updateWizardUI();
         });
     });
     btnCalcular.addEventListener('click', enviarCalculo);
 
-    // Ações principais (não dinâmicas)
-    document.getElementById('btn-add-parcela').addEventListener('click', adicionarParcela);
+    document.getElementById('btn-add-parcela').addEventListener('click', () => adicionarParcela());
     document.getElementById('btn-confirmar-replicacao').addEventListener('click', confirmarReplicacao);
 
-    // DELEGAÇÃO DE EVENTOS para elementos dinâmicos
     wizard.addEventListener('click', (e) => {
-        const removeParcelaBtn = e.target.closest('.btn-remove-parcela');
-        if (removeParcelaBtn) {
-            removeParcelaBtn.closest('.parcela-card').remove();
+        const target = e.target.closest('button');
+        if (!target) return;
+
+        if (target.id === 'btn-print') {
+            window.print();
+        } else if (target.id === 'btn-export-csv' || target.id === 'btn-export-pdf') {
+            alert('Funcionalidade de exportação em desenvolvimento.');
+        } else if (target.classList.contains('btn-remove-parcela')) {
+            target.closest('.parcela-card').remove();
             reindexarParcelas();
-        }
-        const addFaixaBtn = e.target.closest('.btn-add-faixa');
-        if (addFaixaBtn) {
-            adicionarFaixa(addFaixaBtn.closest('.parcela-card'));
-        }
-        const removeFaixaBtn = e.target.closest('.btn-remove-faixa');
-        if (removeFaixaBtn) {
-            removeFaixaBtn.closest('.faixa-row').remove();
-        }
-        const sidebarLink = e.target.closest('#parcelas-sidebar a');
-        if (sidebarLink) {
-            e.preventDefault();
-            document.querySelector(sidebarLink.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else if (target.classList.contains('btn-add-faixa')) {
+            adicionarFaixa(target.closest('.parcela-card'));
+        } else if (target.classList.contains('btn-remove-faixa')) {
+            target.closest('.faixa-row').remove();
         }
     });
 
-    // Delegação para atualizações de UI em tempo real
     wizard.addEventListener('input', (e) => {
         if (e.target.matches('.parcela-descricao, .parcela-valor')) {
             reindexarParcelas();
@@ -433,7 +408,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (e.target.matches('.parcela-data')) {
             const parcelaCard = e.target.closest('.parcela-card');
             const firstFaixaInicio = parcelaCard.querySelector('.faixa-data-inicio');
-            if (firstFaixaInicio) {
+            if (firstFaixaInicio && !firstFaixaInicio.value) {
                 firstFaixaInicio.value = e.target.value;
             }
         }
@@ -443,7 +418,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('replicacao-sucessiva-options').classList.toggle('d-none', this.value !== 'sucessiva');
     });
 
-    // Inicia o wizard
     adicionarParcela();
     updateWizardUI();
     applyMasks(wizard);

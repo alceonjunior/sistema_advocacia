@@ -1,12 +1,6 @@
 # gestao/urls.py
 """
 URLs do app 'gestao'.
-
-Observações:
-- Evitamos rotas duplicadas (mesmo path e/ou mesmo 'name'), pois o Django usa a última definição e isso gera
-  comportamentos confusos.
-- Como 'gestao.urls' é incluído na RAIZ em config/urls.py (path('', include('gestao.urls'))), todos os paths abaixo
-  ficam acessíveis diretamente a partir de '/', por exemplo: '/ajax/calculo/wizard/calcular/'.
 """
 
 from django.urls import path, include
@@ -77,28 +71,19 @@ urlpatterns = [
     path('documento/<int:pk>/editar/', views.editar_documento, name='editar_documento'),
     path('documento/<int:pk>/imprimir/', views.imprimir_documento, name='imprimir_documento'),
 
-    path('processo/<int:processo_pk>/calculos/', views.realizar_calculo, name='pagina_de_calculos'),
-    path('processo/<int:processo_pk>/calculo/novo/', views.realizar_calculo, name='novo_calculo'),
-    path('processo/<int:processo_pk>/calculos/<int:calculo_pk>/', views.realizar_calculo, name='carregar_calculo'),
-    path('calculo/<int:calculo_pk>/atualizar-hoje/', views.atualizar_calculo_hoje, name='atualizar_calculo_hoje'),
-    path('calculo/<int:calculo_pk>/excluir/', views.excluir_calculo, name='excluir_calculo'),
-    path('processo/<int:processo_pk>/calculos/excluir-todos/', views.excluir_todos_calculos, name='excluir_todos_calculos'),
-
     # Wizard de cálculos (página)
     path('calculos/novo/', views.calculo_wizard_view, name='calculo_novo'),
     path('calculos/novo/processo/<int:processo_pk>/', views.calculo_wizard_view, name='calculo_novo_com_processo'),
 
-    # API de simulação/salvamento/exportação (AJAX/JSON)
+    # API de simulação e endpoints de dados (AJAX/JSON)
     path('api/calculos/simular/', views.simular_calculo_api, name='api_simular_calculo'),
-    # path('api/calculos/exportar/pdf/', views.exportar_calculo_pdf, name='exportar_calculo_pdf'),
+    path('api/indices/catalogo/', views.api_indices_catalogo, name='api_indices_catalogo'),
+    path('api/indices/valores/', views.api_indices_valores, name='api_indices_valores'),
 
     # ==============================================================================
     # IMPORTAÇÃO PROJUDI
     # ==============================================================================
-    # Use somente uma convenção. Aqui mantemos 'importacao' (moderna) e deixamos
-    # um ALIAS legado 'importar/projudi/' sem 'name' para não criar conflito.
     path('importacao/projudi/', views.importacao_projudi_view, name='importacao_projudi'),
-    path('importar/projudi/', views.importacao_projudi_view),  # alias legado, sem name
     path('importacao/projudi/analisar/', views.analisar_dados_projudi_ajax, name='analisar_dados_projudi_ajax'),
     path('importacao/projudi/confirmar/', views.confirmar_importacao_projudi, name='confirmar_importacao_projudi'),
     path('importacao/projudi/executar/', views.executar_importacao_projudi, name='executar_importacao_projudi'),
@@ -141,8 +126,16 @@ urlpatterns = [
     path('ajax/tabela_financeira/<int:parent_pk>/<str:parent_type>/', views.atualizar_tabela_financeira_partial, name='atualizar_tabela_financeira_partial'),
     path('servico/<int:servico_pk>/emitir-nfse/', views.emitir_nfse_view, name='emitir_nfse'),
 
-    # ---- CÁLCULO (AJAX)
-    path('ajax/calculo/wizard/calcular/', views.calculo_wizard_calcular, name='calculo_wizard_calcular'),
-    path('api/indices/valores/', views.api_indices_valores, name='api_indices_valores'),
-    path('api/indices/catalogo/', views.api_indices_catalogo, name='api_indices_catalogo'),
+    # Cadastros Auxiliares (AJAX)
+    path('cadastros-auxiliares/<str:modelo>/salvar/', views.salvar_cadastro_auxiliar_ajax, name='salvar_cadastro_auxiliar_ajax'),
+    path('cadastros-auxiliares/<str:modelo>/<int:pk>/salvar/', views.salvar_cadastro_auxiliar_ajax, name='editar_cadastro_auxiliar_ajax'),
+    path('cadastros-auxiliares/<str:modelo>/<int:pk>/excluir/', views.excluir_cadastro_auxiliar_ajax, name='excluir_cadastro_auxiliar_ajax'),
+
+    # Configurações (Usuários e Permissões)
+    path('configuracoes/', views.configuracoes, name='configuracoes'),
+    path('usuarios/adicionar/', views.adicionar_usuario, name='adicionar_usuario'),
+    path('usuarios/<int:user_id>/editar/', views.editar_usuario, name='editar_usuario'),
+    path('usuarios/<int:user_id>/ativar-desativar/', views.ativar_desativar_usuario, name='ativar_desativar_usuario'),
+    path('grupos/<int:group_id>/permissoes/json/', views.get_permissoes_grupo_ajax, name='get_permissoes_grupo_ajax'),
+    path('grupos/<int:group_id>/permissoes/salvar/', views.salvar_permissoes_grupo, name='salvar_permissoes_grupo'),
 ]

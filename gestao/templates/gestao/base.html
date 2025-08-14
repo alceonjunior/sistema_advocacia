@@ -163,15 +163,16 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
 
     {# Constantes globais de endpoints — com fallbacks #}
-    {% url 'gestao:calculo_wizard_calcular' as url_calc_ns %}
-    {% url 'calculo_wizard_calcular' as url_calc_legacy %}
+    {% url 'gestao:api_simular_calculo' as url_calc_ns %}
+    {% url 'api_simular_calculo' as url_calc_legacy %}
     {% url 'gestao:api_indices_catalogo' as url_idx_ns %}
     {% url 'api_indices_catalogo' as url_idx_legacy %}
     {% url 'gestao:global_search' as url_search_ns %}
     {% url 'global_search' as url_search_legacy %}
 
     <script>
-      window.CALC_ENDPOINT = "{% firstof url_calc_ns url_calc_legacy '/ajax/calculo/wizard/calcular/' %}";
+      // CORREÇÃO: Aponta para o endpoint correto e unificado da API.
+      window.CALC_ENDPOINT = "{% firstof url_calc_ns url_calc_legacy '/api/calculos/simular/' %}";
       window.API_INDICES_CATALOGO = "{% firstof url_idx_ns url_idx_legacy '/api/indices/catalogo/' %}";
       window.API_GLOBAL_SEARCH = "{% firstof url_search_ns url_search_legacy '/ajax/global-search/' %}";
     </script>

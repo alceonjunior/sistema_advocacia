@@ -1,5 +1,4 @@
 <div class="row g-4">
-  <!-- Coluna da Barra Lateral (Sidebar) -->
   <div class="col-md-4 col-lg-3">
     <div class="card shadow-sm position-sticky" style="top: 20px;">
       <div class="card-header d-flex align-items-center justify-content-between">
@@ -9,7 +8,6 @@
         <span class="badge bg-secondary" id="parcelas-count">0</span>
       </div>
 
-      <!-- A lista de parcelas é preenchida dinamicamente pelo JS -->
       <div class="list-group list-group-flush" id="parcelas-sidebar" style="max-height: 300px; overflow-y: auto;"></div>
 
       <div class="card-body border-top">
@@ -25,10 +23,8 @@
     </div>
   </div>
 
-  <!-- Coluna Principal com os Cards das Parcelas -->
   <div class="col-md-8 col-lg-9">
     <div id="parcelas-container" class="d-flex flex-column gap-3">
-      <!-- Placeholder exibido quando não há parcelas -->
       <div class="text-center p-5 bg-light rounded-3" id="parcelas-placeholder">
         <i class="bi bi-journal-plus fs-1 text-muted"></i>
         <h5 class="mt-3 mb-1">Nenhuma parcela adicionada</h5>
@@ -38,7 +34,6 @@
   </div>
 </div>
 
-<!-- Modal para a funcionalidade de Replicação de Parcela -->
 <div class="modal fade" id="modalReplicacao" tabindex="-1" aria-labelledby="modalReplicacaoLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
