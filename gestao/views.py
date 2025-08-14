@@ -5,6 +5,7 @@
 # ==============================================================================
 # Otimização: Imports foram reorganizados por tipo (Standard Library, Third-Party, Django, Local App)
 # e duplicatas/redundâncias foram removidas para maior clareza e eficiência.
+from __future__ import annotations
 
 # --- Standard Library ---
 import json
@@ -41,7 +42,7 @@ from django.db.models import (
 )
 from django.db.models.functions import Coalesce
 from django.http import (
-    Http404, HttpResponse, HttpResponseBadRequest, JsonResponse, HttpResponseForbidden
+    Http404, HttpResponse, HttpResponseBadRequest, JsonResponse, HttpResponseForbidden, HttpRequest
 )
 from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404, redirect, render
@@ -51,6 +52,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 #from weasyprint import HTML
+from decimal import Decimal, ROUND_HALF_UP
 
 # --- Local Application ---
 from . import models
@@ -77,10 +79,22 @@ from .models import (
     TipoServico, UsuarioPerfil, ContratoHonorarios, ParteProcesso, TipoMovimentacao, CalculoLancamento,
 )
 from .services.indices.catalog import INDICE_CATALOG
-from .services.indices.providers import ServicoIndices
+from .services.indices.resolver import ServicoIndices, calcular
 from .nfse_service import NFSEService
 from .services.calculo import CalculoEngine
 from .utils import data_por_extenso, valor_por_extenso
+from decimal import InvalidOperation
+
+
+from decimal import InvalidOperation
+from typing import Any, Dict, List
+
+from django.http import  HttpRequest
+from django.views.decorators.http import require_POST
+from django.contrib.auth.decorators import login_required
+
+from .services.indices.providers import ServicoIndices
+from .services.indices.catalog import INDICE_CATALOG
 
 # ==============================================================================
 # CONFIGURAÇÕES E CONSTANTES GLOBAIS
@@ -2025,7 +2039,7 @@ from .models import (
     MovimentacaoServico, Pagamento, Processo, Recurso, Servico, TipoAcao,
     TipoServico, UsuarioPerfil, ContratoHonorarios, ParteProcesso, TipoMovimentacao,
 )
-from .services.indices.providers import ServicoIndices
+from .services.indices.resolver import ServicoIndices
 #from weasyprint import HTML
 
 
@@ -3069,7 +3083,13 @@ def calculo_wizard_view(request, processo_pk=None):
         'indice_options_json': json.dumps(indice_options),
         'processo': processo
     }
-    return render(request, 'gestao/calculo_wizard.html', context)
+    indices_ctx = [
+        {"name": k, "type": v.get("type", "daily_rate")}
+        for k, v in sorted(INDICE_CATALOG.items(), key=lambda x: x[0].lower())
+    ]
+    return render(request, "gestao/calculo_wizard.html", {
+        "indices_catalog_json": json.dumps({"indices": indices_ctx}, ensure_ascii=False),
+    })
 
 
 @require_POST
@@ -3141,3 +3161,263 @@ def simular_calculo_api(request):
 #     except Exception as e:
 #         logger.error(f"Erro inesperado ao gerar PDF do cálculo: {e}", exc_info=True)
 #         return HttpResponse("Ocorreu um erro interno ao tentar gerar o PDF.", status=500)
+
+
+@login_required
+def api_indices_catalogo(request):
+    # Ordena alfabeticamente para exibir bonito no select
+    indices = [
+        {"name": k, "type": v.get("type", "daily_rate")}
+        for k, v in sorted(INDICE_CATALOG.items(), key=lambda x: x[0].lower())
+    ]
+    return JsonResponse({"indices": indices})
+
+# --- (Opcional) API: valores do índice no período ---
+@login_required
+def api_indices_valores(request):
+    nome = request.GET.get("indice")
+    ini  = request.GET.get("inicio")
+    fim  = request.GET.get("fim")
+    if not (nome and ini and fim):
+        return HttpResponseBadRequest("Parâmetros obrigatórios: indice, inicio, fim (YYYY-MM-DD).")
+
+    try:
+        data_inicio = date.fromisoformat(ini)
+        data_fim    = date.fromisoformat(fim)
+    except Exception:
+        return HttpResponseBadRequest("Datas inválidas (use YYYY-MM-DD).")
+
+    svc = ServicoIndices()
+    valores = svc.get_indices_por_periodo(nome, data_inicio, data_fim)
+    return JsonResponse({"indice": nome, "valores": valores})
+
+def _to_decimal_br(v):
+    """
+    Converte '1.234,56' ou '1234.56' em Decimal('1234.56').
+    Aceita int/float/Decimal diretamente.
+    """
+    if isinstance(v, Decimal):
+        return v
+    if isinstance(v, (int, float)):
+        return Decimal(str(v))
+    if not v:
+        return Decimal('0')
+    s = str(v).strip()
+    # troca separador decimal brasileiro -> ponto
+    if "," in s and "." in s:
+        # remove milhares e troca decimal
+        s = s.replace(".", "").replace(",", ".")
+    elif "," in s and "." not in s:
+        s = s.replace(",", ".")
+    try:
+        return Decimal(s)
+    except Exception:
+        return Decimal('0')
+
+def _parse_decimal(value, default=Decimal("0")):
+    if value is None:
+        return default
+    if isinstance(value, (int, float, Decimal)):
+        try:
+            return Decimal(str(value))
+        except InvalidOperation:
+            return default
+    # aceita “1.234,56” e “1,234.56”
+    s = str(value).strip().replace(" ", "")
+    s = s.replace(".", "").replace(",", ".") if s.count(",") == 1 and s.count(".") >= 1 else s.replace(",", ".")
+    try:
+        return Decimal(s)
+    except InvalidOperation:
+        return default
+
+
+def _parse_date_br(s):
+    # aceita dd/mm/aaaa
+    return datetime.strptime(s, "%d/%m/%Y").date()
+
+
+def _resolver_indice_por_payload(svc: ServicoIndices, payload_val: dict | str | None):
+    """
+    Recebe:
+      - payload_val = {'indice_id': 'SELIC_DIARIA'}  (preferencial)
+      - OU payload_val = {'indice': 'SELIC (Taxa diária)'} (fallback)
+      - OU payload_val = 'SELIC (Taxa diária)' (compatibilidade legada)
+    Retorna um dict: {'id': '...', 'provider': '...', 'params': {...}, 'label': '...'}
+    Levanta ValueError se não encontrar.
+    """
+    if not payload_val:
+        raise ValueError("Índice não informado.")
+
+    indice_id = None
+    label = None
+
+    if isinstance(payload_val, dict):
+        indice_id = payload_val.get("indice_id") or payload_val.get("id") or None
+        label = payload_val.get("indice") or payload_val.get("label") or None
+    elif isinstance(payload_val, str):
+        label = payload_val
+
+    meta = None
+
+    # 1) Tenta por id do catálogo (melhor caminho)
+    if indice_id:
+        meta = svc.get_meta(indice_id)
+
+    # 2) Se não vier id, tenta casar pelo rótulo/nome
+    if not meta and label:
+        meta = svc.match_by_label(label)
+
+    # 3) Normalização específica: “SELIC” → opção diária do catálogo
+    if not meta and label and "SELIC" in label.upper():
+        meta = svc.match_by_label("SELIC (Taxa diária)")
+
+    if not meta:
+        raise ValueError(f"Índice inválido: {payload_val!r}")
+
+    # Garante provider e params preenchidos (incluindo 'code' para SGS)
+    return {
+        "id": meta["id"],
+        "provider": meta["provider"],
+        "params": dict(meta.get("params", {})),  # cópia defensiva
+        "label": meta.get("label") or meta.get("name") or meta["id"],
+    }
+
+def _parse_date_smart(s: str) -> date:
+    s = (s or "").strip()
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except Exception:
+            pass
+    raise ValueError(f"Data inválida: '{s}'. Use dd/mm/aaaa.")
+
+def _parse_date_smart(s: str) -> date:
+    s = (s or "").strip()
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except Exception:
+            pass
+    raise ValueError(f"Data inválida: '{s}'. Use dd/mm/aaaa.")
+
+
+@login_required
+@require_POST
+def calculo_wizard_calcular(request: HttpRequest):
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        return JsonResponse({"ok": False, "erro": "JSON inválido."}, status=400)
+
+    dados_basicos = payload.get("basicos") or {}
+    parcelas: List[Dict[str, Any]] = payload.get("parcelas") or []
+    extras = payload.get("extras") or {}
+
+    if not parcelas:
+        return JsonResponse({"ok": False, "erro": "Inclua ao menos uma parcela."}, status=400)
+
+    svc = ServicoIndices()
+
+    total_corrigido = Decimal("0")
+    resultado_parcelas: List[Dict[str, Any]] = []
+
+    try:
+        for idx, p in enumerate(parcelas, start=1):
+            # valor
+            try:
+                valor_original = str(p.get("valor") or "0").replace(".", "").replace(",", ".")
+                valor_original = Decimal(valor_original)
+            except (InvalidOperation, TypeError):
+                return JsonResponse({"ok": False, "erro": f"Parcela {idx}: valor inválido."}, status=400)
+
+            # datas
+            try:
+                data_valor = _parse_date_smart(p.get("data_valor") or p.get("data") or "")
+            except ValueError as e:
+                return JsonResponse({"ok": False, "erro": f"Parcela {idx}: {e}"}, status=400)
+
+            faixas = p.get("faixas") or []
+            valor_corrigido = valor_original
+
+            for j, f in enumerate(faixas, start=1):
+                try:
+                    inicio = _parse_date_smart(f.get("inicio", ""))
+                    fim = _parse_date_smart(f.get("fim", ""))
+                except ValueError as e:
+                    return JsonResponse({"ok": False, "erro": f"Parcela {idx}, faixa {j}: {e}"}, status=400)
+
+                indice_key = (f.get("indice") or "").strip()
+                if not indice_key:
+                    return JsonResponse({"ok": False, "erro": f"Parcela {idx}, faixa {j}: selecione um índice."}, status=400)
+                if indice_key not in INDICE_CATALOG:
+                    return JsonResponse(
+                        {"ok": False, "erro": f"Parcela {idx}, faixa {j}: índice inválido '{indice_key}'."},
+                        status=400,
+                    )
+
+                try:
+                    indices = svc.get_indices_por_periodo(indice_key, inicio, fim)
+                except Exception as e:
+                    return JsonResponse(
+                        {"ok": False, "erro": f"Parcela {idx}, faixa {j}: falha ao obter índice ({e})."},
+                        status=400,
+                    )
+
+                # aplicação de exemplo
+                tipo = INDICE_CATALOG[indice_key].get("type", "daily_rate")
+                if tipo == "monthly_variation":
+                    fator = Decimal("1")
+                    for k in sorted(indices.keys()):
+                        try:
+                            var = (indices[k] or Decimal("0")) / Decimal("100")
+                        except Exception:
+                            var = Decimal("0")
+                        fator *= (Decimal("1") + var)
+                    valor_corrigido = (valor_corrigido * fator).quantize(Decimal("0.01"))
+                else:
+                    fator = Decimal("1")
+                    for k in sorted(indices.keys()):
+                        try:
+                            taxa_aa = (indices[k] or Decimal("0")) / Decimal("100")
+                            taxa_dia = taxa_aa / Decimal("252")
+                            fator *= (Decimal("1") + taxa_dia)
+                        except Exception:
+                            continue
+                    valor_corrigido = (valor_corrigido * fator).quantize(Decimal("0.01"))
+
+            # extras (passo 3)
+            def _to_dec(x) -> Decimal:
+                s = str(x or "0").replace(".", "").replace(",", ".")
+                return Decimal(s)
+
+            multa_perc = _to_dec(extras.get("multa_perc"))
+            honorarios_perc = _to_dec(extras.get("honorarios_perc"))
+
+            if multa_perc:
+                valor_corrigido = (valor_corrigido * (Decimal("1") + multa_perc / Decimal("100"))).quantize(Decimal("0.01"))
+
+            valor_final = valor_corrigido
+            if honorarios_perc:
+                valor_final = (valor_corrigido * (Decimal("1") + honorarios_perc / Decimal("100"))).quantize(Decimal("0.01"))
+
+            total_corrigido += valor_final
+
+            resultado_parcelas.append(
+                {
+                    "indice": idx,
+                    "valor_original": f"{valor_original:.2f}",
+                    "valor_corrigido": f"{valor_corrigido:.2f}",
+                    "valor_final": f"{valor_final:.2f}",
+                    "faixas": faixas,
+                }
+            )
+
+    except Exception as e:
+        # garante JSON legível em qualquer erro não previsto
+        return JsonResponse({"ok": False, "erro": f"Falha inesperada: {e}"}, status=400)
+
+    return JsonResponse({"ok": True, "total": f"{total_corrigido:.2f}", "parcelas": resultado_parcelas})
+
+def ajax_calcular(request):
+    data = json.loads(request.body.decode('utf-8'))
+    return JsonResponse(calcular(data), safe=False)
