@@ -1,466 +1,239 @@
+# gestao/services/indices/providers.py
+
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import date, datetime
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from functools import lru_cache
-from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
-
 import csv
 import json
+import logging
+from datetime import date, datetime, timedelta
+from decimal import Decimal, InvalidOperation
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, Dict, Mapping, Optional
 
-# ---------------------------------------------------------------------------
-# Utilitários
-# ---------------------------------------------------------------------------
+import requests  # Dependência para chamadas de API
+from dateutil.relativedelta import relativedelta
 
+# Configuração do Logger para depuração
+logger = logging.getLogger(__name__)
+
+
+# ===========================================================================
+# Funções Utilitárias de Conversão e Manipulação de Dados
+# ===========================================================================
 
 def _safe_decimal(value: Any) -> Decimal:
     """
-    Converte valores (str/float/Decimal) para Decimal.
-    Aceita formatos '1.23', '1,23', '1.234,56', etc.
+    Converte de forma robusta vários formatos de string, float ou int para Decimal.
+    Trata formatos brasileiros ("1.234,56") e americanos ("1,234.56").
     """
     if value is None:
-        raise InvalidOperation("valor None")
+        raise InvalidOperation("O valor não pode ser nulo.")
     if isinstance(value, Decimal):
         return value
+    if isinstance(value, (int, float)):
+        return Decimal(str(value))  # Converte para string primeiro para evitar imprecisão de float
 
     s = str(value).strip()
-    if s == "" or s == "." or s.lower() == "nan":
-        raise InvalidOperation(f"valor vazio: {value!r}")
+    if not s:
+        raise InvalidOperation("O valor não pode ser uma string vazia.")
 
-    # normaliza separadores: remove milhares e usa ponto para decimal
+    # Normaliza separadores: remove milhares e usa ponto para decimal
     if "," in s and "." in s:
-        # assume ponto como milhar e vírgula como decimal (pt-BR)
         s = s.replace(".", "").replace(",", ".")
     else:
-        # se só tem vírgula, troca por ponto
         s = s.replace(",", ".")
 
-    return Decimal(s)
+    try:
+        return Decimal(s)
+    except InvalidOperation as e:
+        raise InvalidOperation(f"Valor inválido para conversão para Decimal: '{value}'") from e
 
 
 def _month_key(dt: date | datetime | str) -> str:
-    """
-    Normaliza para 'YYYY-MM'.
-    Aceita date/datetime/strings ('YYYY-MM', 'YYYY-MM-DD', 'DD/MM/YYYY').
-    """
+    """Normaliza qualquer formato de data para a chave 'YYYY-MM'."""
     if isinstance(dt, (date, datetime)):
         return f"{dt.year:04d}-{dt.month:02d}"
-
     s = str(dt).strip()
-    if len(s) == 7 and s[4] == "-":  # 'YYYY-MM'
-        return s
-    # tenta ISO
     try:
-        d = datetime.fromisoformat(s).date()
+        # Tenta múltiplos formatos de data
+        if len(s) == 7 and s[4] == "-": return s  # 'YYYY-MM'
+        d = datetime.fromisoformat(s).date()  # 'YYYY-MM-DD'
         return f"{d.year:04d}-{d.month:02d}"
     except Exception:
         pass
-    # tenta dd/mm/aaaa
     try:
-        d = datetime.strptime(s, "%d/%m/%Y").date()
-        return f"{d.year:04d}-{d.month:02d}"
-    except Exception:
-        pass
-    # tenta mm/yyyy
-    try:
-        d = datetime.strptime("01/" + s, "%d/%m/%Y").date()
+        d = datetime.strptime(s, "%d/%m/%Y").date()  # 'DD/MM/YYYY'
         return f"{d.year:04d}-{d.month:02d}"
     except Exception as e:
-        raise ValueError(f"Data inválida p/ chave mensal: {dt!r}") from e
+        raise ValueError(f"Formato de data inválido para chave mensal: '{dt}'") from e
 
 
-def _between_months(
-    table: Mapping[str, Decimal], inicio: date, fim: date
-) -> Dict[str, Decimal]:
-    """
-    Filtra um dicionário mensal {'YYYY-MM': Decimal} dentro do período.
-    Inclui bordas (mês de início e mês de fim).
-    """
-    m0 = _month_key(inicio)
-    m1 = _month_key(fim)
-    out: Dict[str, Decimal] = {}
-    for k, v in table.items():
-        if not isinstance(v, Decimal):
-            try:
-                v = _safe_decimal(v)
-            except Exception:
-                continue
-        if m0 <= k <= m1:
-            out[k] = v
-    # ordenado por chave
-    return dict(sorted(out.items()))
+def _between_months(table: Mapping[str, Decimal], inicio: date, fim: date) -> Dict[str, Decimal]:
+    """Filtra um dicionário {'YYYY-MM': Decimal} dentro de um período, incluindo as bordas."""
+    m0, m1 = _month_key(inicio), _month_key(fim)
+    return {k: v for k, v in table.items() if m0 <= k <= m1}
 
 
 def _project_data_dir() -> Path:
-    """
-    Resolve a pasta de dados: <root>/gestao/services/indices/data.
-    Não acessa settings no import. Funciona mesmo fora do Django.
-    """
-    # caminho relativo ao próprio arquivo
-    here = Path(__file__).resolve()
-    data_dir = here.parent / "data"
-    if data_dir.exists():
-        return data_dir
-
-    # fallback: tenta partir do root presumido
-    root = here.parents[3] if len(here.parents) >= 3 else here.parent
-    guess = root / "gestao" / "services" / "indices" / "data"
-    return guess
+    """Resolve o caminho para o diretório de dados estáticos (data/)."""
+    return Path(__file__).resolve().parent / "data"
 
 
-def _candidate_paths(
-    base: str | int, extras: Iterable[str] = ()
-) -> List[Path]:
+@lru_cache(maxsize=32)
+def _load_table_from_file(filename: str) -> Dict[str, Decimal]:
     """
-    Gera nomes candidatos para um arquivo de dados de série/índice.
-    Ex.: 433 -> ['sgs_433.csv', '433.csv', 'sgs-433.csv', ...]
+    Carrega uma tabela de um arquivo (CSV ou JSON) do diretório 'data'.
+    O resultado é cacheado para evitar leituras repetidas do disco.
     """
-    b = str(base)
-    cand = [
-        f"sgs_{b}.csv",
-        f"{b}.csv",
-        f"sgs-{b}.csv",
-        f"sgs_{b}.json",
-        f"{b}.json",
-        f"sgs-{b}.json",
-    ]
-    cand.extend(list(extras or []))
-    return [(_project_data_dir() / x) for x in cand]
+    path = _project_data_dir() / filename
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Arquivo de dados estáticos não encontrado. Verifique se '{filename}' existe em '{_project_data_dir()}'.")
 
-
-def _load_monthly_table_from_csv(path: Path) -> Dict[str, Decimal]:
-    """
-    Lê CSV com duas colunas usuais: data, valor.
-    Aceita cabeçalho variado: 'data;valor' ou 'date,value', etc.
-    Datas podem estar em 'YYYY-MM-DD', 'YYYY-MM' ou 'DD/MM/YYYY'.
-    """
     table: Dict[str, Decimal] = {}
-    with path.open("r", encoding="utf-8") as f:
-        sniffer = csv.Sniffer()
-        sample = f.read(2048)
-        f.seek(0)
-        dialect = sniffer.sniff(sample, delimiters=";,")
-        reader = csv.reader(f, dialect)
-        rows = list(reader)
-
-    # obtém índice das colunas
-    header = [h.strip().lower() for h in rows[0]]
-    if len(header) < 2:
-        raise ValueError(f"CSV malformado: {path}")
-    # tenta encontrar colunas
     try:
-        idx_data = next(
-            i for i, h in enumerate(header) if h in {"data", "date", "mes", "competencia"}
-        )
-    except StopIteration:
-        idx_data = 0
-    try:
-        idx_val = next(
-            i for i, h in enumerate(header) if h in {"valor", "value", "taxa", "indice", "ipca", "var"}
-        )
-    except StopIteration:
-        idx_val = 1
-
-    for row in rows[1:]:
-        if not row or len(row) < 2:
-            continue
-        try:
-            k = _month_key(row[idx_data])
-            v = _safe_decimal(row[idx_val])
-        except Exception:
-            continue
-        table[k] = v
+        if path.suffix.lower() == ".csv":
+            with path.open("r", encoding="utf-8-sig") as f:
+                # Detecta o delimitador (ponto e vírgula ou vírgula)
+                delimiter = ';' if ';' in f.readline() else ','
+                f.seek(0)
+                reader = csv.DictReader(f, delimiter=delimiter)
+                for row in reader:
+                    data_col = next((k for k in row if k.lower() in ['data', 'competencia', 'mes']), None)
+                    valor_col = next((k for k in row if k.lower() in ['valor', 'indice', 'fator', 'numero_indice']),
+                                     None)
+                    if data_col and valor_col and row[data_col] and row[valor_col]:
+                        table[_month_key(row[data_col])] = _safe_decimal(row[valor_col])
+        elif path.suffix.lower() == ".json":
+            data = json.loads(path.read_text(encoding="utf-8"))
+            for k, v in data.items():
+                if k and v is not None:
+                    table[_month_key(k)] = _safe_decimal(v)
+    except Exception as e:
+        raise IOError(f"Erro ao ler ou processar o arquivo {filename}: {e}") from e
 
     return dict(sorted(table.items()))
 
 
-def _load_monthly_table_from_json(path: Path) -> Dict[str, Decimal]:
-    """
-    Lê JSON com mapeamento {'YYYY-MM': valor} ou lista de objetos.
-    Se for lista, tenta chaves 'data'/'valor'.
-    """
-    data = json.loads(path.read_text(encoding="utf-8"))
-    table: Dict[str, Decimal] = {}
-
-    if isinstance(data, Mapping):
-        for k, v in data.items():
-            try:
-                table[_month_key(k)] = _safe_decimal(v)
-            except Exception:
-                continue
-    elif isinstance(data, list):
-        for item in data:
-            if not isinstance(item, Mapping):
-                continue
-            d = item.get("data") or item.get("date") or item.get("mes") or item.get("competencia")
-            v = item.get("valor") or item.get("value") or item.get("taxa") or item.get("indice")
-            if d is None or v is None:
-                continue
-            try:
-                table[_month_key(d)] = _safe_decimal(v)
-            except Exception:
-                continue
-    else:
-        raise ValueError(f"Formato JSON não suportado em {path}")
-
-    return dict(sorted(table.items()))
-
-
-@lru_cache(maxsize=64)
-def _load_table_any(*candidates: str) -> Dict[str, Decimal]:
-    """
-    Tenta carregar a primeira tabela encontrada dentre os candidatos.
-    """
-    # normaliza para Path
-    for c in candidates:
-        p = _project_data_dir() / c
-        if not p.exists():
-            continue
-        if p.suffix.lower() == ".csv":
-            return _load_monthly_table_from_csv(p)
-        if p.suffix.lower() == ".json":
-            return _load_monthly_table_from_json(p)
-    raise FileNotFoundError(
-        f"Arquivo de dados não encontrado. Procurado: {', '.join(str(_project_data_dir() / c) for c in candidates)}"
-    )
-
-
-# ---------------------------------------------------------------------------
-# Providers
-# ---------------------------------------------------------------------------
-
+# ===========================================================================
+# Classes de Provedores de Índices
+# ===========================================================================
 
 class BaseProvider:
-    """
-    Contrato básico de providers.
-    A assinatura aceita kwargs opcionais para manter compatibilidade
-    com chamadas antigas que passavam meta/params no método.
-    """
+    """Classe base para todos os provedores de índices."""
 
-    def __init__(self, **params: Any) -> None:
-        # params típicos: serie_id / code / file / alias / etc.
-        self._params = params or {}
-
-    def get_indices(
-        self,
-        inicio: date,
-        fim: date,
-        *,
-        meta: Optional[dict] = None,
-        params: Optional[dict] = None,
-        **kwargs: Any,
-    ) -> Dict[str, Decimal]:
+    def get_indices(self, inicio: date, fim: date, **kwargs: Any) -> Dict[str, Decimal]:
         raise NotImplementedError
 
 
 class BacenSGSProvider(BaseProvider):
-    """
-    Provider de séries do SGS/Bacen.
-    Não acessa a internet; utiliza arquivos locais na pasta 'data'.
+    """Provider que busca séries temporais da API do Banco Central (SGS)."""
+    BASE_URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.{serie_id}/dados"
 
-    Aceita 'serie_id' OU 'code' tanto no __init__ quanto via meta/params.
-    O arquivo esperado pode ter nomes como:
-        - sgs_<serie_id>.csv / .json
-        - <serie_id>.csv / .json
-        - sgs-<serie_id>.csv / .json
-    """
+    @lru_cache(maxsize=64)  # Cache para otimizar chamadas repetidas
+    def _fetch_from_api(self, serie_id: int, inicio: date, fim: date) -> Dict[str, Decimal]:
+        """Faz a chamada HTTP para a API do Bacen e retorna um dicionário de dados."""
+        url = self.BASE_URL.format(serie_id=serie_id)
+        params = {'formato': 'json', 'dataInicial': inicio.strftime('%d/%m/%Y'), 'dataFinal': fim.strftime('%d/%m/%Y')}
+        logger.info(f"Buscando série SGS {serie_id} do Bacen de {params['dataInicial']} a {params['dataFinal']}")
+        try:
+            response = requests.get(url, params=params, timeout=15)
+            response.raise_for_status()
+            data = response.json()
 
-    def __init__(self, **params: Any) -> None:
-        super().__init__(**params)
-        self._serie_id = self._params.get("serie_id") or self._params.get("code")
+            table = {}
+            for item in data:
+                data_item = datetime.strptime(item['data'], '%d/%m/%Y').date()
+                chave = data_item.isoformat()  # Chave 'YYYY-MM-DD'
+                table[chave] = _safe_decimal(item['valor'])
+            return table
+        except requests.Timeout:
+            raise ConnectionError(f"Tempo esgotado ao buscar a série {serie_id} do Bacen.")
+        except requests.RequestException as e:
+            raise ConnectionError(f"Falha de comunicação com a API do Bacen para a série {serie_id}: {e}")
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            raise ValueError(f"Resposta inválida da API do Bacen para a série {serie_id}: {e}")
 
-    def _resolve_serie_id(self, meta: Optional[dict], params: Optional[dict]) -> int:
-        if self._serie_id:
-            return int(self._serie_id)
+    def get_indices(self, inicio: date, fim: date, **kwargs: Any) -> Dict[str, Decimal]:
+        params = kwargs.get('params', {})
+        serie_id = params.get('serie_id')
+        index_type = kwargs.get('index_type', 'monthly_variation')
 
-        if params:
-            sid = params.get("serie_id") or params.get("code")
-            if sid:
-                return int(sid)
+        if not serie_id:
+            raise ValueError("BacenSGSProvider requer o 'serie_id' (código SGS).")
 
-        if meta and isinstance(meta, dict):
-            mp = meta.get("params") or {}
-            sid = mp.get("serie_id") or mp.get("code")
-            if sid:
-                return int(sid)
+        # Ajusta período da busca para garantir que as bordas sejam incluídas em índices mensais
+        api_inicio = inicio.replace(day=1) if index_type == 'monthly_variation' else inicio
+        api_fim = (fim + relativedelta(months=1, day=1) - timedelta(
+            days=1)) if index_type == 'monthly_variation' else fim
 
-        raise ValueError("BacenSGSProvider requer 'serie_id' ou 'code' (código SGS).")
+        api_data = self._fetch_from_api(serie_id, api_inicio, api_fim)
 
-    @lru_cache(maxsize=32)
-    def _load_full_table(self, serie_id: int) -> Dict[str, Decimal]:
-        cands = [
-            f"sgs_{serie_id}.csv",
-            f"{serie_id}.csv",
-            f"sgs-{serie_id}.csv",
-            f"sgs_{serie_id}.json",
-            f"{serie_id}.json",
-            f"sgs-{serie_id}.json",
-        ]
-        # permite arquivo explícito via __init__/params
-        file_hint = self._params.get("file")
-        if file_hint:
-            cands.insert(0, str(file_hint))
-        return _load_table_any(*cands)
-
-    def get_indices(
-        self,
-        inicio: date,
-        fim: date,
-        *,
-        meta: Optional[dict] = None,
-        params: Optional[dict] = None,
-        **kwargs: Any,
-    ) -> Dict[str, Decimal]:
-        serie_id = self._resolve_serie_id(meta, params)
-        table = self._load_full_table(serie_id)
-        return _between_months(table, inicio, fim)
+        if index_type == 'daily_rate':
+            return {k: v for k, v in api_data.items() if inicio.isoformat() <= k <= fim.isoformat()}
+        else:  # monthly_variation
+            monthly_table = {}
+            for iso_date, value in api_data.items():
+                chave_mes = iso_date[:7]  # Extrai 'YYYY-MM'
+                monthly_table[chave_mes] = value
+            return _between_months(monthly_table, inicio, fim)
 
 
 class StaticTableProvider(BaseProvider):
-    """
-    Provider para tabelas estáticas locais (ex.: IGPM/INPC em CSV/JSON).
-    A origem do arquivo pode ser indicada por:
-      - __init__(file="inpc.csv")
-      - params={'file': 'inpc.csv'}
-      - meta={'params': {'file': 'inpc.csv'}}
-    Caso não informe 'file', tenta nomes derivados de 'alias'/'name'.
-    """
+    """Provider para índices baseados em arquivos locais (CSV ou JSON)."""
 
-    @lru_cache(maxsize=32)
-    def _load_full_table(
-        self, *, meta: Optional[dict], params: Optional[dict]
-    ) -> Dict[str, Decimal]:
-        file_hint = (
-            (self._params or {}).get("file")
-            or (params or {}).get("file")
-            or (meta or {}).get("params", {}).get("file")
-        )
+    def get_indices(self, inicio: date, fim: date, **kwargs: Any) -> Dict[str, Decimal]:
+        params = kwargs.get('params', {})
+        filename = params.get('filename')
+        if not filename:
+            raise ValueError("StaticTableProvider requer o parâmetro 'filename'.")
 
-        if file_hint:
-            return _load_table_any(str(file_hint))
-
-        # tenta por alias/nome (ex.: 'INPC' -> inpc.csv/json)
-        alias = (
-            (self._params or {}).get("alias")
-            or (params or {}).get("alias")
-            or (meta or {}).get("name")
-            or (meta or {}).get("alias")
-        )
-        cands: List[str] = []
-        if alias:
-            a = str(alias).lower()
-            cands = [f"{a}.csv", f"{a}.json"]
-
-        if not cands:
-            raise FileNotFoundError(
-                "StaticTableProvider precisa de 'file' (csv/json) "
-                "ou alias/nome em meta/params."
-            )
-
-        return _load_table_any(*cands)
-
-    def get_indices(
-        self,
-        inicio: date,
-        fim: date,
-        *,
-        meta: Optional[dict] = None,
-        params: Optional[dict] = None,
-        **kwargs: Any,
-    ) -> Dict[str, Decimal]:
-        table = self._load_full_table(meta=meta, params=params)
-        return _between_months(table, inicio, fim)
+        full_table = _load_table_from_file(filename)
+        return _between_months(full_table, inicio, fim)
 
 
-# ---------------------------------------------------------------------------
-# Serviço de alto nível usado pela aplicação/API
-# ---------------------------------------------------------------------------
-
+# ===========================================================================
+# Serviço de Alto Nível (Ponto de Entrada Único)
+# ===========================================================================
 try:
-    # O catálogo deve estar no mesmo pacote
-    from .catalog import INDICE_CATALOG  # type: ignore
-except Exception:  # pragma: no cover
-    INDICE_CATALOG = {}  # evita erro no import antecipado (por testes unitários)
-
+    from .catalog import INDICE_CATALOG
+except ImportError:
+    INDICE_CATALOG = {}
 
 PROVIDERS_MAP = {
     "BacenSGSProvider": BacenSGSProvider,
     "StaticTableProvider": StaticTableProvider,
-    # Adicione aqui outros providers quando necessário
 }
 
 
-@dataclass(frozen=True)
-class _IndiceMeta:
-    key: str
-    name: str
-    type: str
-    provider: str
-    params: Dict[str, Any]
-
-
 class ServicoIndices:
-    """
-    Fachada/serviço para resolver índices a partir do catálogo.
-    Usada pela API '/api/indices/catalogo/' e pela view do cálculo.
-    """
+    """Ponto de entrada único para o sistema. Resolve qual provider usar e obtém os dados."""
 
     def __init__(self) -> None:
-        self._catalog: Dict[str, dict] = INDICE_CATALOG or {}
-
-    # ------------------------- API Pública -------------------------
+        self._catalog = INDICE_CATALOG
 
     def get_meta(self, chave: str) -> Dict[str, Any]:
-        """
-        Retorna os metadados normalizados do índice.
-        """
+        """Retorna os metadados de um índice do catálogo."""
         meta = self._catalog.get(chave)
         if not meta:
-            raise KeyError(f"Índice não encontrado no catálogo: {chave!r}")
-        # normaliza campos esperados
-        return {
-            "name": meta.get("name", chave),
-            "type": meta.get("type", ""),
-            "provider": meta.get("provider", ""),
-            "params": meta.get("params", {}) or {},
-        }
+            raise KeyError(f"Índice '{chave}' não encontrado no catálogo.")
+        return meta
 
-    def listar_catalogo(self) -> List[Dict[str, Any]]:
-        """
-        Lista em formato amigável para o front (id/nome/provider/tipo).
-        """
-        out: List[Dict[str, Any]] = []
-        for k, v in self._catalog.items():
-            out.append(
-                {
-                    "id": k,
-                    "nome": v.get("name", k),
-                    "provider": v.get("provider", ""),
-                    "tipo": v.get("type", ""),
-                }
-            )
-        # ordena alfabeticamente por nome
-        out.sort(key=lambda x: x["nome"])
-        return out
-
-    def get_indices_por_periodo(
-        self, chave: str, inicio: date, fim: date
-    ) -> Dict[str, Decimal]:
-        """
-        Resolve o provider a partir do catálogo e obtém a tabela mensal
-        no período solicitado.
-        """
+    def get_indices_por_periodo(self, chave: str, inicio: date, fim: date) -> Dict[str, Decimal]:
+        """Método principal. Obtém os valores de um índice para um determinado período."""
         meta = self.get_meta(chave)
-        provider_name = meta["provider"]
-        provider_cls = PROVIDERS_MAP.get(provider_name)
-        if not provider_cls:
-            raise ValueError(f"Provider não mapeado: {provider_name}")
+        provider_name = meta.get("provider")
+        ProviderClass = PROVIDERS_MAP.get(provider_name)
 
-        # passa os params preferencialmente no __init__
-        provider = provider_cls(**(meta.get("params") or {}))
-        # e chama usando keywords (evita erro de aridade)
-        return provider.get_indices(inicio, fim, meta=meta)
+        if not ProviderClass:
+            raise ValueError(f"Provider '{provider_name}' não está mapeado.")
 
+        provider_instance = ProviderClass()
+        return provider_instance.get_indices(
+            inicio=inicio,
+            fim=fim,
+            params=meta.get("params", {}),
+            index_type=meta.get("type", "monthly_variation")
+        )

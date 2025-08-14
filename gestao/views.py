@@ -3051,58 +3051,31 @@ def salvar_cadastro_auxiliar_ajax(request, modelo, pk=None):
 
 
 @login_required
-def calculo_wizard_view(request, processo_pk=None):
+def calculo_wizard_view(request: HttpRequest, processo_pk: int | None = None):
     """
     Renderiza a página principal do wizard de cálculo judicial.
-
-    Se um 'processo_pk' for fornecido na URL, pré-carrega os dados básicos
-    do processo para facilitar o preenchimento. Também passa a lista de
-    índices disponíveis do catálogo para o frontend.
+    Se um 'processo_pk' for fornecido, o carrega para pré-povoar dados.
     """
-    initial_data = {'partes': []}
     processo = None
     if processo_pk:
-        processo = get_object_or_404(Processo.objects.prefetch_related('partes__cliente'), pk=processo_pk)
-        initial_data['numero_processo'] = processo.numero_processo
-        initial_data[
-            'data_transito_em_julgado'] = processo.data_transito_em_julgado.isoformat() if processo.data_transito_em_julgado else None
-
-        # Adiciona as partes do processo aos dados iniciais
-        for parte in processo.partes.all():
-            initial_data['partes'].append({
-                'nome': parte.cliente.nome_completo,
-                'tipo': parte.get_tipo_participacao_display()  # Usar o display name para o frontend
-            })
-
-    # Pega as chaves do catálogo de índices para popular o <select> no frontend
-    indice_options = list(INDICE_CATALOG.keys())
+        processo = get_object_or_404(Processo, pk=processo_pk)
 
     context = {
         'titulo_pagina': 'Calculadora Judicial Completa',
-        'initial_data_json': json.dumps(initial_data),
-        'indice_options_json': json.dumps(indice_options),
         'processo': processo
     }
-    indices_ctx = [
-        {"name": k, "type": v.get("type", "daily_rate")}
-        for k, v in sorted(INDICE_CATALOG.items(), key=lambda x: x[0].lower())
-    ]
-    return render(request, "gestao/calculo_wizard.html", {
-        "indices_catalog_json": json.dumps({"indices": indices_ctx}, ensure_ascii=False),
-    })
+    return render(request, "gestao/calculo_wizard.html", context)
 
 
 @require_POST
 @login_required
-def simular_calculo_api(request):
+def simular_calculo_api(request: HttpRequest):
     """
-    API endpoint para receber o payload do cálculo, processá-lo
-    com a CalculoEngine e retornar o resultado em JSON.
+    Endpoint da API para receber o payload do cálculo, processá-lo com a
+    CalculoEngine e retornar o resultado detalhado em JSON.
     """
     try:
         payload = json.loads(request.body)
-
-        # Validação mínima do payload
         if not payload.get('parcelas'):
             return JsonResponse({'status': 'error', 'message': 'Nenhuma parcela foi enviada para cálculo.'}, status=400)
 
@@ -3113,83 +3086,57 @@ def simular_calculo_api(request):
 
     except json.JSONDecodeError:
         return JsonResponse({'status': 'error', 'message': 'Erro: O formato do JSON enviado é inválido.'}, status=400)
-    except (KeyError, TypeError) as e:
+    except (KeyError, TypeError, ValueError) as e:
         logger.warning(f"Payload de cálculo malformado recebido: {e}")
         return JsonResponse(
             {'status': 'error', 'message': f'Erro: A estrutura dos dados enviados é inválida. Detalhe: {e}'},
             status=400)
     except Exception as e:
-        # Pega qualquer outro erro inesperado, registra no log para depuração
         logger.error(f"Erro inesperado na API de simulação de cálculo: {e}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': 'Ocorreu um erro inesperado no servidor.'}, status=500)
-
-
-# @require_POST
-# @login_required
-# def exportar_calculo_pdf(request):
-#     """
-#     Recebe um payload de cálculo via POST, gera o resultado e o renderiza
-#     em um arquivo PDF para download usando a biblioteca WeasyPrint.
-#     """
-#     try:
-#         # O payload vem de um campo de formulário, não do corpo da requisição
-#         payload_str = request.POST.get('payload')
-#         if not payload_str:
-#             return HttpResponseBadRequest("Erro: Nenhum dado de cálculo ('payload') foi recebido.")
-#
-#         payload = json.loads(payload_str)
-#         engine = CalculoEngine(payload)
-#         resultados = engine.run()
-#
-#         # Renderiza o template HTML específico para o PDF com os resultados
-#         html_string = render_to_string('gestao/calculo_pdf.html', {
-#             'resultados': resultados,
-#             'data_emissao': datetime.now()
-#         })
-#
-#         # Cria a resposta HTTP com o tipo de conteúdo para PDF
-#         response = HttpResponse(content_type='application/pdf')
-#         response['Content-Disposition'] = 'attachment; filename="memoria_de_calculo.pdf"'
-#
-#         # Usa WeasyPrint para escrever o PDF na resposta
-#         HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf(response)
-#
-#         return response
-#
-#     except json.JSONDecodeError:
-#         return HttpResponseBadRequest("Erro: O formato dos dados do cálculo é inválido.")
-#     except Exception as e:
-#         logger.error(f"Erro inesperado ao gerar PDF do cálculo: {e}", exc_info=True)
-#         return HttpResponse("Ocorreu um erro interno ao tentar gerar o PDF.", status=500)
+        return JsonResponse({'status': 'error', 'message': f'Ocorreu um erro inesperado no servidor: {e}'}, status=500)
 
 
 @login_required
-def api_indices_catalogo(request):
-    # Ordena alfabeticamente para exibir bonito no select
-    indices = [
-        {"name": k, "type": v.get("type", "daily_rate")}
-        for k, v in sorted(INDICE_CATALOG.items(), key=lambda x: x[0].lower())
-    ]
+def api_indices_catalogo(request: HttpRequest):
+    """
+    Retorna o catálogo de índices completo em um formato amigável para o frontend,
+    como uma lista plana de objetos, garantindo a consistência da nomenclatura.
+    """
+    indices = []
+    # Ordena o catálogo pelo label para uma exibição consistente no frontend
+    sorted_catalog = sorted(INDICE_CATALOG.items(), key=lambda item: item[1].get('label', item[0]))
+
+    for key, meta in sorted_catalog:
+        indices.append({
+            "key": key,
+            "label": meta.get("label", key),
+            "group": meta.get("group", "Outros"),
+            "type": meta.get("type", "monthly_variation"),
+        })
     return JsonResponse({"indices": indices})
 
-# --- (Opcional) API: valores do índice no período ---
+
 @login_required
-def api_indices_valores(request):
+def api_indices_valores(request: HttpRequest):
+    """(Opcional) Retorna os valores de um índice específico em um período."""
     nome = request.GET.get("indice")
-    ini  = request.GET.get("inicio")
-    fim  = request.GET.get("fim")
+    ini = request.GET.get("inicio")
+    fim = request.GET.get("fim")
     if not (nome and ini and fim):
         return HttpResponseBadRequest("Parâmetros obrigatórios: indice, inicio, fim (YYYY-MM-DD).")
 
     try:
         data_inicio = date.fromisoformat(ini)
-        data_fim    = date.fromisoformat(fim)
+        data_fim = date.fromisoformat(fim)
     except Exception:
         return HttpResponseBadRequest("Datas inválidas (use YYYY-MM-DD).")
 
     svc = ServicoIndices()
-    valores = svc.get_indices_por_periodo(nome, data_inicio, data_fim)
-    return JsonResponse({"indice": nome, "valores": valores})
+    try:
+        valores = svc.get_indices_por_periodo(nome, data_inicio, data_fim)
+        return JsonResponse({"indice": nome, "valores": valores})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)
 
 def _to_decimal_br(v):
     """

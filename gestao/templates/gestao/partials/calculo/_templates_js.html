@@ -1,5 +1,6 @@
+<!-- Template para o item da barra lateral de parcelas -->
 <template id="template-parcela-sidebar-item">
-    <a href="#" class="list-group-item list-group-item-action" data-target-parcela-id="">
+    <a href="#" class="list-group-item list-group-item-action">
         <div class="d-flex w-100 justify-content-between">
             <h6 class="mb-1 parcela-title text-truncate">Parcela X</h6>
             <small class="parcela-valor-original text-nowrap">R$ 0,00</small>
@@ -7,20 +8,20 @@
     </a>
 </template>
 
+<!-- Template para o card de uma parcela completa -->
 <template id="template-parcela-card">
-    <div class="card shadow-sm mb-4 parcela-card" data-parcela-id="">
+    <div class="card shadow-sm mb-4 parcela-card">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0 parcela-title">Parcela X</h5>
             <div>
-                <button class="btn btn-outline-primary btn-sm btn-clone-parcela" title="Duplicar Parcela"><i class="bi bi-files"></i></button>
                 <button class="btn btn-outline-danger btn-sm btn-remove-parcela" title="Remover Parcela"><i class="bi bi-trash"></i></button>
             </div>
         </div>
         <div class="card-body">
             <div class="row g-3">
-                <div class="col-md-6 col-lg-4"><label class="form-label">Descrição</label><input type="text" class="form-control parcela-descricao"></div>
-                <div class="col-md-6 col-lg-4"><label class="form-label">Valor Original <span class="text-danger">*</span></label><input type="text" class="form-control parcela-valor" placeholder="R$ 0,00" required><div class="invalid-feedback">O valor é obrigatório e deve ser maior que zero.</div></div>
-                <div class="col-md-6 col-lg-4"><label class="form-label">Data do Valor <span class="text-danger">*</span></label><input type="date" class="form-control parcela-data" required><div class="invalid-feedback">A data é obrigatória.</div></div>
+                <div class="col-md-6 col-lg-4"><label class="form-label">Descrição</label><input type="text" class="form-control parcela-descricao" placeholder="Ex: Parcela principal"></div>
+                <div class="col-md-6 col-lg-4"><label class="form-label">Valor Original <span class="text-danger">*</span></label><input type="text" class="form-control parcela-valor" placeholder="R$ 0,00" required data-mask="money"></div>
+                <div class="col-md-6 col-lg-4"><label class="form-label">Data do Valor <span class="text-danger">*</span></label><input type="text" class="form-control parcela-data" placeholder="dd/mm/aaaa" required data-mask="date"></div>
             </div>
             <hr>
             <h6 class="mb-3">Faixas de Correção e Juros</h6>
@@ -30,16 +31,17 @@
     </div>
 </template>
 
+<!-- Template para uma única linha de faixa de cálculo -->
 <template id="template-faixa-row">
-     <div class="row g-2 align-items-center border-top pt-3 mt-3 faixa-row" data-faixa-id="">
+     <div class="row g-2 align-items-center border-top pt-3 mt-3 faixa-row">
        <div class="col-12"><div class="row g-2">
             <div class="col-md-4"><label class="form-label">Índice <span class="text-danger">*</span></label><select class="form-select faixa-indice" required></select></div>
-            <div class="col-md-4"><label class="form-label">Data Início <span class="text-danger">*</span></label><input type="date" class="form-control faixa-data-inicio" required></div>
-            <div class="col-md-4"><label class="form-label">Data Fim <span class="text-danger">*</span></label><input type="date" class="form-control faixa-data-fim" required></div>
+            <div class="col-md-4"><label class="form-label">Data Início <span class="text-danger">*</span></label><input type="text" class="form-control faixa-data-inicio" required data-mask="date"></div>
+            <div class="col-md-4"><label class="form-label">Data Fim <span class="text-danger">*</span></label><input type="text" class="form-control faixa-data-fim" required data-mask="date"></div>
        </div></div>
        <div class="col-12"><div class="row g-2 align-items-end">
             <div class="col-md-3"><label class="form-label">Juros</label><select class="form-select faixa-juros-tipo"><option value="NENHUM">Nenhum</option><option value="SIMPLES">Simples</option><option value="COMPOSTO">Composto</option></select></div>
-            <div class="col-md-3"><label class="form-label">Taxa Juros (% a.m.)</label><input type="text" class="form-control faixa-juros-taxa" value="0,00" placeholder="0,00"></div>
+            <div class="col-md-3"><label class="form-label">Taxa Juros (% a.m.)</label><input type="text" class="form-control faixa-juros-taxa" value="0,00" placeholder="0,00" data-mask="money"></div>
             <div class="col-md-4 d-flex gap-3 pt-3">
                 <div class="form-check form-switch" title="Calcula a correção proporcional aos dias do mês."><input class="form-check-input faixa-pro-rata" type="checkbox" checked><label class="form-check-label small">Pro Rata</label></div>
                 <div class="form-check form-switch" title="Se marcado, desativa juros adicionais pois a SELIC já os inclui."><input class="form-check-input faixa-selic-exclusiva" type="checkbox"><label class="form-check-label small">SELIC Exclusiva</label></div>
