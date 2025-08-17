@@ -283,63 +283,94 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
 
-    function renderizarResultado(data) {
+    function renderizarResultado(data, rascunho_pk) {
         resultadoContainer.innerHTML = '';
         if (!data || !data.memoria_calculo) {
             resultadoContainer.innerHTML = '<div class="alert alert-danger">Ocorreu um erro ao processar o resultado.</div>';
             return;
         }
+
         const { resumo_total, total_geral, detalhe_parcelas } = data.memoria_calculo;
+        const dados_basicos = data.form_data.global;
 
-        let resumoHtml = resumo_total.map(item => `
-            <tr>
-                <td>${item.label}</td>
-                <td class="text-end">${formatCurrency(item.value)}</td>
-            </tr>
-        `).join('');
-
+        // Constrói o HTML do resultado detalhado
         let parcelasHtml = detalhe_parcelas.map((parcela, index) => `
-            <div class="mb-4">
-                <h6 class="border-bottom pb-2">Detalhe da Parcela ${index + 1}: ${parcela.descricao}</h6>
-                <p class="small mb-2"><strong>Valor Original:</strong> ${formatCurrency(parcela.valor_original)}</p>
-                <ul class="list-unstyled small">
-                    ${parcela.memoria_detalhada.map(detalhe => `
-                        <li>
-                            <strong>${detalhe.faixa_nome} (${detalhe.data_inicio} a ${detalhe.data_fim}):</strong><br>
-                            <span class="ps-3">Correção: R$ ${detalhe.valor_correcao} | Juros: R$ ${detalhe.valor_juros}
-                            | Subtotal: R$ ${detalhe.valor_atualizado_faixa}</span>
-                        </li>
-                    `).join('')}
-                </ul>
-                <p class="fw-bold text-end">Subtotal da Parcela: ${formatCurrency(parcela.valor_final)}</p>
+            <div class="mb-4 p-3 border rounded">
+                <h6 class="border-bottom pb-2 mb-2">
+                    <strong>Parcela ${index + 1}:</strong> ${parcela.descricao}
+                </h6>
+                <table class="table table-sm table-borderless">
+                    <tbody>
+                        <tr>
+                            <td>Valor Original em ${new Date(parcela.data_valor + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                            <td class="text-end">${parcela.valor_original}</td>
+                        </tr>
+                        <tr>
+                            <td>(+) Correção Monetária</td>
+                            <td class="text-end">${(parseFloat(parcela.valor_apos_correcao.replace('.', '').replace(',', '.')) - parseFloat(parcela.valor_original.replace('.', '').replace(',', '.')) - parseFloat(parcela.juros_aplicados.replace('.', '').replace(',', '.'))).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                        </tr>
+                        <tr>
+                            <td>(+) Juros Aplicados</td>
+                            <td class="text-end">${parcela.juros_aplicados}</td>
+                        </tr>
+                        <tr class="fw-bold">
+                            <td>Subtotal da Parcela</td>
+                            <td class="text-end">${parcela.valor_final}</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         `).join('');
 
         const resultadoHtml = `
-            <div class="alert alert-success text-center">
-                <h4 class="alert-heading">Cálculo Concluído!</h4>
-                <p class="h2 mb-0">${formatCurrency(total_geral)}</p>
-                <p class="mb-0">Valor Total Atualizado</p>
+            <div class="p-3">
+                <h4 class="mb-3 border-bottom pb-2">Demonstrativo do Cálculo</h4>
+
+                <div class="mb-4">
+                    <p><strong>Processo:</strong> ${dados_basicos.numero_processo || 'Não informado'}</p>
+                    <p><strong>Parte Autora:</strong> ${dados_basicos.parte_autora || 'Não informado'}</p>
+                    <p><strong>Parte Ré:</strong> ${dados_basicos.parte_re || 'Não informado'}</p>
+                </div>
+
+                <h5 class="mt-4">Resumo Geral</h5>
+                <table class="table table-bordered">
+                    <tbody>
+                        ${resumo_total.map(item => `
+                            <tr>
+                                <td>${item.label}</td>
+                                <td class="text-end fw-bold">${formatCurrency(item.value)}</td>
+                            </tr>
+                        `).join('')}
+                        <tr class="table-success fs-5">
+                            <td class="fw-bold">(=) Total Geral Devido</td>
+                            <td class="text-end fw-bold">${formatCurrency(total_geral)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h5 class="mt-4">Memória de Cálculo por Parcela</h5>
+                ${parcelasHtml}
             </div>
-            <h5 class="mt-4">Resumo Detalhado</h5>
-            <table class="table table-sm table-bordered"><tbody>
-                ${resumoHtml}
-                <tr class="table-primary fw-bold">
-                    <td>(=) Total Geral Devido</td>
-                    <td class="text-end">${formatCurrency(total_geral)}</td>
-                </tr>
-            </tbody></table>
-            <h5 class="mt-4">Memória de Cálculo</h5>
-            <div class="p-3 rounded" style="font-size: 0.9em;">${parcelasHtml}</div>
         `;
         resultadoContainer.innerHTML = resultadoHtml;
+
+        // Habilita o botão de PDF
+        const btnPdf = document.getElementById('btn-export-pdf');
+        const actionButtons = document.getElementById('action-buttons-resultado');
+        if(btnPdf && actionButtons && rascunho_pk) {
+            // ATENÇÃO: A URL deve ser construída corretamente
+            btnPdf.href = `/calculos/rascunho/${rascunho_pk}/pdf/`;
+            actionButtons.style.display = 'block';
+        }
     }
 
     async function enviarCalculo() {
-        const payload = coletarDadosDoFormulario();
+
+            const payload = coletarDadosDoFormulario();
         btnCalcular.disabled = true;
         btnCalcular.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Calculando...';
         resultadoContainer.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2">Processando...</p></div>';
+
 
         try {
             const response = await fetch(CALC_ENDPOINT, {
@@ -349,7 +380,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             const result = await response.json();
             if (response.ok && result.status === 'success') {
-                renderizarResultado(result.data);
+                // Passa os dados e o novo rascunho_pk para a renderização
+                renderizarResultado(result.data, result.rascunho_pk);
             } else {
                 throw new Error(result.message || `Erro ${response.status} do servidor.`);
             }
@@ -361,6 +393,7 @@ document.addEventListener('DOMContentLoaded', async () => {
              btnCalcular.innerHTML = '<i class="bi bi-cpu me-1"></i> Calcular';
         }
     }
+
 
     // =========================================================================
     // INICIALIZAÇÃO E DELEGAÇÃO DE EVENTOS
@@ -384,10 +417,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const target = e.target.closest('button');
         if (!target) return;
 
-        if (target.id === 'btn-print') {
+        if (target.id === 'btn-print' || target.id === 'btn-export-pdf') {
+            // Ação de Imprimir / Salvar como PDF
             window.print();
-        } else if (target.id === 'btn-export-csv' || target.id === 'btn-export-pdf') {
-            alert('Funcionalidade de exportação em desenvolvimento.');
+        } else if (target.id === 'btn-export-csv') {
+            alert('Funcionalidade de exportação para CSV/Excel em desenvolvimento.');
         } else if (target.classList.contains('btn-remove-parcela')) {
             target.closest('.parcela-card').remove();
             reindexarParcelas();
@@ -397,6 +431,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             target.closest('.faixa-row').remove();
         }
     });
+
 
     wizard.addEventListener('input', (e) => {
         if (e.target.matches('.parcela-descricao, .parcela-valor')) {

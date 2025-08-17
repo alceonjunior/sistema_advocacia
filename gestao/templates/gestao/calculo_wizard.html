@@ -6,19 +6,23 @@
 {% block styles %}
 {{ block.super }}
 <style>
-    /* Estilos para impressão, escondem a UI e mostram apenas o resultado */
-    #printable-area { display: none; } /* Escondido por padrão */
+    /* Estilos que preparam a página para o comando de impressão do navegador */
     @media print {
-        body > *:not(#printable-area) {
+        /* Esconde tudo que não deve aparecer no PDF */
+        body > nav, .print-controls, .wizard-actions, #wizard-stepper, .main-container > div:first-child {
             display: none !important;
         }
-        #printable-area, #printable-area #resultado-container {
+
+        /* Garante que a área do resultado ocupe toda a página */
+        #resultado-container {
             display: block !important;
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
         }
+
+        /* Remove bordas e sombras desnecessárias na impressão */
         .card, .card-body {
             border: none !important;
             box-shadow: none !important;
@@ -32,85 +36,47 @@
 {% block content %}
 <link rel="stylesheet" href="{% static 'gestao/css/calculo.css' %}">
 
-<div id="non-printable-area">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h2 d-flex align-items-center gap-2">
         <i class="bi bi-calculator text-primary"></i> Calculadora Judicial — Wizard
     </h1>
     <a href="{% url 'gestao:dashboard' %}" class="btn btn-outline-secondary">Voltar</a>
-    </div>
-
-    <div class="card shadow-sm" id="calculadora-wizard">
-        {# --- CORREÇÃO: Adiciona a tag <form> para envolver todo o wizard --- #}
-        <form id="wizard-form-main" novalidate>
-            <div class="card-body p-4 p-md-5">
-                <div id="wizard-stepper" class="mb-4">
-                <ul class="nav nav-pills wizard-steps gap-2 flex-wrap">
-                    <li class="nav-item">
-                    <button class="nav-link active" type="button" data-step="1">
-                        <span class="fw-bold me-1">1</span> Básicos
-                    </button>
-                    </li>
-                    <li class="nav-item">
-                    <button class="nav-link" type="button" data-step="2">
-                        <span class="fw-bold me-1">2</span> Parcelas
-                    </button>
-                    </li>
-                    <li class="nav-item">
-                    <button class="nav-link" type="button" data-step="3">
-                        <span class="fw-bold me-1">3</span> Extras
-                    </button>
-                    </li>
-                    <li class="nav-item">
-                    <button class="nav-link" type="button" data-step="4">
-                        <span class="fw-bold me-1">4</span> Resultado
-                    </button>
-                    </li>
-                </ul>
-                </div>
-
-                <div class="wizard-steps-container">
-                    <section class="wizard-step" data-step="1">
-                        {% include "gestao/partials/calculo/_step1_basicos.html" %}
-                    </section>
-                    <section class="wizard-step d-none" data-step="2">
-                        {% include "gestao/partials/calculo/_step2_parcelas.html" %}
-                    </section>
-                    <section class="wizard-step d-none" data-step="3">
-                        {% include "gestao/partials/calculo/_step3_extras.html" %}
-                    </section>
-                    <section class="wizard-step d-none" data-step="4">
-                         {% include "gestao/partials/calculo/_step4_resultado.html" %}
-                    </section>
-                </div>
-            </div>
-
-            <div class="card-footer p-3 bg-light d-flex justify-content-between">
-                <button type="button" class="btn btn-secondary" id="btn-prev" style="display: none;">
-                    <i class="bi bi-arrow-left"></i> Voltar
-                </button>
-                <div class="ms-auto"></div>
-                <button type="button" class="btn btn-primary" id="btn-next">
-                    Próximo <i class="bi bi-arrow-right"></i>
-                </button>
-                <button type="button" class="btn btn-success" id="btn-calcular" style="display: none;">
-                    <i class="bi bi-cpu me-1"></i> Calcular
-                </button>
-            </div>
-        </form>
-    </div>
 </div>
 
-{# Div separada para a impressão #}
-<div id="printable-area"></div>
+<div class="card shadow-sm" id="calculadora-wizard">
+    <form id="wizard-form-main" novalidate>
+        <div class="card-body p-4 p-md-5">
+            <div id="wizard-stepper" class="mb-4">
+                <ul class="nav nav-pills wizard-steps gap-2 flex-wrap">
+                    <li class="nav-item"><button class="nav-link active" type="button" data-step="1"><span class="fw-bold me-1">1</span> Básicos</button></li>
+                    <li class="nav-item"><button class="nav-link" type="button" data-step="2"><span class="fw-bold me-1">2</span> Parcelas</button></li>
+                    <li class="nav-item"><button class="nav-link" type="button" data-step="3"><span class="fw-bold me-1">3</span> Extras</button></li>
+                    <li class="nav-item"><button class="nav-link" type="button" data-step="4"><span class="fw-bold me-1">4</span> Resultado</button></li>
+                </ul>
+            </div>
+
+            <div class="wizard-steps-container">
+                <section class="wizard-step" data-step="1">{% include "gestao/partials/calculo/_step1_basicos.html" %}</section>
+                <section class="wizard-step d-none" data-step="2">{% include "gestao/partials/calculo/_step2_parcelas.html" %}</section>
+                <section class="wizard-step d-none" data-step="3">{% include "gestao/partials/calculo/_step3_extras.html" %}</section>
+                <section class="wizard-step d-none" data-step="4">{% include "gestao/partials/calculo/_step4_resultado.html" %}</section>
+            </div>
+        </div>
+
+        <div class="card-footer p-3 bg-light d-flex justify-content-between">
+            <button type="button" class="btn btn-secondary" id="btn-prev" style="display: none;"><i class="bi bi-arrow-left"></i> Voltar</button>
+            <div class="ms-auto"></div>
+            <button type="button" class="btn btn-primary" id="btn-next">Próximo <i class="bi bi-arrow-right"></i></button>
+            <button type="button" class="btn btn-success" id="btn-calcular" style="display: none;"><i class="bi bi-cpu me-1"></i> Calcular</button>
+        </div>
+    </form>
+</div>
 
 {% include "gestao/partials/calculo/_templates_js.html" %}
 {% endblock %}
 
 {% block javascript %}
 {{ block.super }}
-<script id="indices-catalog-json" type="application/json">
-  {{ indices_catalog_json|safe }}
-</script>
+<script id="indices-catalog-json" type="application/json">{{ indices_catalog_json|safe }}</script>
 <script defer src="{% static 'gestao/js/calculo_wizard.js' %}"></script>
 {% endblock %}

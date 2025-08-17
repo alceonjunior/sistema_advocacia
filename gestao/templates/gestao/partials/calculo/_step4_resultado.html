@@ -1,15 +1,15 @@
 <div class="card shadow-sm">
   <div class="card-header d-flex justify-content-between align-items-center">
     <h5 class="mb-0">4. Resultado do Cálculo</h5>
-    <div>
-      <button class="btn btn-sm btn-outline-secondary" id="btn-print" title="Imprimir"><i class="bi bi-printer"></i></button>
-      <button class="btn btn-sm btn-outline-success" id="btn-export-csv" title="Exportar para CSV/Excel"><i class="bi bi-file-earmark-excel"></i></button>
-      <button class="btn btn-sm btn-outline-danger" id="btn-export-pdf" title="Salvar como PDF"><i class="bi bi-file-earmark-pdf"></i></button>
+    <div id="action-buttons-resultado" style="display: none;">
+      <a href="#" id="btn-export-pdf" class="btn btn-sm btn-danger" target="_blank" title="Salvar como PDF">
+        <i class="bi bi-file-earmark-pdf"></i> Salvar PDF
+      </a>
     </div>
   </div>
   <div class="card-body" id="resultado-container">
     <div class="text-center p-5">
-      <p class="text-muted">O resultado do seu cálculo aparecerá aqui.</p>
+      <p class="text-muted">O resultado do seu cálculo aparecerá aqui após clicar em "Calcular".</p>
     </div>
   </div>
 </div>

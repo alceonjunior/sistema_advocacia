@@ -1,18 +1,98 @@
+{% load humanize %}
 <!DOCTYPE html>
-<html>
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Memória de Cálculo</title>
+    <title>Cálculo Judicial - Processo {{ processo.numero_processo }}</title>
     <style>
-        body { font-family: sans-serif; font-size: 10px; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
-        th, td { border: 1px solid #ccc; padding: 4px; text-align: left; }
-        th { background-color: #f2f2f2; }
-        .total { font-weight: bold; }
+        @page { size: A4; margin: 1.5cm; }
+        body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10pt; color: #333; }
+        h1, h2, h3, h4 { color: #111; margin-top: 1.5em; margin-bottom: 0.5em; }
+        h1 { font-size: 18pt; text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+        th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+        th { background-color: #f2f2f2; font-weight: bold; }
+        .text-end { text-align: right; }
+        .fw-bold { font-weight: bold; }
+        .resumo-table td { border: none; padding: 4px; }
+        .total-row { background-color: #eaf7ea; font-size: 12pt; }
     </style>
 </head>
 <body>
-    <h1>Memória de Cálculo</h1>
-    <!-- Renderizar os dados de 'resultados' em tabelas -->
+    <h1>Demonstrativo de Cálculo Judicial</h1>
+
+    <h3>1. Dados de Identificação</h3>
+    <table class="resumo-table">
+        <tr>
+            <td><strong>Processo:</strong></td>
+            <td>{{ processo.numero_processo|default:"Não vinculado" }}</td>
+        </tr>
+        <tr>
+            <td><strong>Parte Autora:</strong></td>
+            <td>{{ autor|default:"Não informado" }}</td>
+        </tr>
+        <tr>
+            <td><strong>Parte Ré:</strong></td>
+            <td>{{ reu|default:"Não informado" }}</td>
+        </tr>
+        <tr>
+            <td><strong>Descrição do Cálculo:</strong></td>
+            <td>{{ rascunho.descricao }}</td>
+        </tr>
+    </table>
+
+    <h3>2. Resumo Geral do Cálculo</h3>
+    <table>
+        <tbody>
+            {% for item in resultado.memoria_calculo.resumo_total %}
+            <tr>
+                <td>{{ item.label }}</td>
+                <td class="text-end fw-bold">{{ item.value|floatformat:2|intcomma }}</td>
+            </tr>
+            {% endfor %}
+            <tr class="total-row">
+                <td class="fw-bold">(=) VALOR TOTAL GERAL</td>
+                <td class="text-end fw-bold">R$ {{ resultado.memoria_calculo.total_geral|floatformat:2|intcomma }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>3. Memória de Cálculo Detalhada</h3>
+    {% for parcela in resultado.memoria_calculo.detalhe_parcelas %}
+    <div style="margin-top: 1.5em; page-break-inside: avoid;">
+        <h4>Parcela: {{ parcela.descricao }}</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>Evento</th>
+                    <th class="text-end">Valor</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Valor Original em {{ parcela.data_valor|date:"d/m/Y" }}</td>
+                    <td class="text-end">R$ {{ parcela.valor_original }}</td>
+                </tr>
+                {% for faixa in parcela.faixas %}
+                <tr>
+                    <td colspan="2" style="background-color: #f9f9f9;"><em>Faixa de Cálculo ({{faixa.inicio|date:"d/m/Y"}} a {{faixa.fim|date:"d/m/Y"}})</em></td>
+                </tr>
+                 <tr>
+                    <td>&nbsp;&nbsp;&nbsp;(+) Correção Monetária ({{ faixa.indice }})</td>
+                    <td class="text-end">R$ {{ faixa.valor_corrigido|floatformat:2|intcomma }}</td>
+                </tr>
+                {% endfor %}
+                 <tr>
+                    <td>(+) Juros Aplicados</td>
+                    <td class="text-end">R$ {{ parcela.juros_aplicados }}</td>
+                </tr>
+                <tr style="font-weight: bold; background-color: #f0f0f0;">
+                    <td>Subtotal da Parcela</td>
+                    <td class="text-end">R$ {{ parcela.valor_final }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
 </body>
 </html>

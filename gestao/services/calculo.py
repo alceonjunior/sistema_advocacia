@@ -3,13 +3,38 @@
 import calendar
 import logging
 from datetime import datetime
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from dateutil.relativedelta import relativedelta
 
 from .indices.catalog import get_indice_info
 from .indices.providers import PROVIDERS_MAP
 
 logger = logging.getLogger(__name__)
+
+
+def _to_decimal(value: str | int | float | None) -> Decimal:
+    """
+    Converte de forma segura uma string monetária (ex: "1.234,56") para Decimal.
+    Esta função é a chave para corrigir o erro 'decimal.InvalidOperation'.
+    """
+    if value is None:
+        return Decimal('0.00')
+    if isinstance(value, Decimal):
+        return value
+
+    # Converte para string e remove espaços em branco
+    s_value = str(value).strip()
+    if not s_value:
+        return Decimal('0.00')
+
+    # Normaliza o formato numérico: remove pontos de milhar e troca vírgula por ponto.
+    s_value = s_value.replace('.', '').replace(',', '.')
+
+    try:
+        return Decimal(s_value)
+    except InvalidOperation:
+        logger.warning(f"Não foi possível converter o valor '{value}' para Decimal.")
+        return Decimal('0.00')
 
 
 class CalculoEngine:
@@ -43,18 +68,21 @@ class CalculoEngine:
                 self.results['resumo']['correcao'] += resultado_parcela['correcao_total']
                 self.results['resumo']['juros'] += resultado_parcela['juros_total']
             except Exception as e:
-                logger.error(f"Erro ao calcular parcela '{parcela_data.get('descricao')}': {e}", exc_info=True)
+                descricao_erro = parcela_data.get('descricao', 'ERRO')
+                logger.error(f"Erro ao calcular parcela '{descricao_erro}': {e}", exc_info=True)
+                # CORREÇÃO: Usa a função _to_decimal para evitar erro no fallback
+                valor_original_fallback = _to_decimal(parcela_data.get('valor_original', '0.0'))
                 self.results['parcelas'].append({
-                    'descricao': parcela_data.get('descricao', 'ERRO'),
-                    'valor_original': Decimal(parcela_data.get('valor_original', '0.0')),
+                    'descricao': descricao_erro,
+                    'valor_original': valor_original_fallback,
                     'correcao_total': Decimal('0.0'),
-                    'juros_total': Decimal('0.0'), 'valor_final': Decimal(parcela_data.get('valor_original', '0.0')),
+                    'juros_total': Decimal('0.0'),
+                    'valor_final': valor_original_fallback,
                     'memoria_detalhada': [{'error': f"ERRO NO CÁLCULO: {e}"}]
                 })
 
         self._calcular_extras()
 
-        # Consolida o total geral no final, após todos os cálculos.
         self.results['resumo']['total_geral'] = (
                 self.results['resumo']['principal'] + self.results['resumo']['correcao'] +
                 self.results['resumo']['juros'] + self.results['resumo']['multas'] +
@@ -75,7 +103,8 @@ class CalculoEngine:
         return dias_no_mes
 
     def _calcular_parcela(self, parcela_data):
-        valor_original = Decimal(parcela_data['valor_original'])
+        # CORREÇÃO: Utiliza a função _to_decimal para tratar o valor de entrada
+        valor_original = _to_decimal(parcela_data['valor_original'])
         valor_atual = valor_original
         memoria_detalhada = []
         correcao_total_parcela = Decimal('0.0')
@@ -127,7 +156,8 @@ class CalculoEngine:
 
             juros_faixa = Decimal('0.0')
             if not faixa.get('modo_selic_exclusiva', False) and faixa['juros_tipo'] != 'NENHUM':
-                taxa_mensal = Decimal(faixa['juros_taxa_mensal']) / 100
+                # CORREÇÃO: Utiliza a função _to_decimal para tratar a taxa de juros
+                taxa_mensal = _to_decimal(faixa['juros_taxa_mensal']) / 100
                 total_dias = (data_fim - data_inicio).days + 1
                 meses = Decimal(total_dias) / Decimal('30.4375')
                 if faixa['juros_tipo'] == 'SIMPLES':
@@ -157,8 +187,7 @@ class CalculoEngine:
 
     def _calcular_extras(self):
         """
-        Calcula itens como multas e honorários com base nos totais já apurados,
-        trabalhando com a estrutura de dicionário enviada pelo frontend.
+        Calcula itens como multas e honorários.
         """
         extras = self.payload.get('extras', {})
         if not isinstance(extras, dict): return
@@ -166,13 +195,14 @@ class CalculoEngine:
         base_principal_corrigido = self.results['resumo']['principal'] + self.results['resumo']['correcao']
         base_principal_juros = base_principal_corrigido + self.results['resumo']['juros']
 
-        multa_perc = Decimal(extras.get('multa_percentual', '0.0'))
+        # CORREÇÃO: Utiliza a função _to_decimal para tratar os percentuais
+        multa_perc = _to_decimal(extras.get('multa_percentual'))
         if multa_perc > 0:
             base_multa = base_principal_juros if extras.get('multa_sobre_juros') else base_principal_corrigido
             valor_multa = base_multa * (multa_perc / Decimal('100.0'))
             self.results['resumo']['multas'] = valor_multa.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-        honorarios_perc = Decimal(extras.get('honorarios_percentual', '0.0'))
+        honorarios_perc = _to_decimal(extras.get('honorarios_percentual'))
         if honorarios_perc > 0:
             base_honorarios = base_principal_juros + self.results['resumo'].get('multas', Decimal('0.0'))
             valor_honorarios = base_honorarios * (honorarios_perc / Decimal('100.0'))
