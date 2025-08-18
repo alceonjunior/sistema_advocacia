@@ -1,0 +1,110 @@
+{% extends "gestao/base.html" %}
+{% load static %}
+
+{% block title %}Cálculo Pro (Novo){% endblock %}
+
+{% block styles %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'gestao/css/calculo_pro.css' %}">
+{% endblock %}
+
+{% block content %}
+<div id="calculo-pro-container" class="container-fluid" style="opacity: 0; transition: opacity 0.5s;">
+    <div class="sticky-top bg-light py-2 mb-3 border-bottom" style="top: -1px; z-index: 1021;">
+        <div class="d-flex justify-content-between align-items-center">
+            <h1 class="h3 mb-0 d-flex align-items-center gap-2">
+                <i class="bi bi-bar-chart-line-fill text-primary"></i> Cálculo Pro
+            </h1>
+            <div class="d-flex align-items-center gap-2">
+                <span id="status-text" class="small text-muted fst-italic me-2">Pronto.</span>
+                <div id="main-actions" class="btn-toolbar" role="toolbar">
+                    <div class="btn-group me-2">
+                        <button id="btn-add-parcela" type="button" class="btn btn-sm btn-primary"><i class="bi bi-plus-circle-fill me-1"></i> Adicionar Parcela</button>
+                        <button id="btn-replicar" type="button" class="btn btn-sm btn-outline-secondary" disabled><i class="bi bi-back me-1"></i> Replicar</button>
+                        <button id="btn-batch-edit" type="button" class="btn btn-sm btn-outline-secondary" disabled><i class="bi bi-pencil-square me-1"></i> Editar em Lote</button>
+                    </div>
+                    <div class="btn-group">
+                        <button id="btn-preview" type="button" class="btn btn-sm btn-info"><i class="bi bi-eye-fill me-1"></i> Pré-visualizar</button>
+                        <button id="btn-save" type="button" class="btn btn-sm btn-success"><i class="bi bi-save-fill me-1"></i> Salvar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-9">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover" id="parcelas-table">
+                            <thead class="sticky-top bg-light">
+                                <tr>
+                                    <th style="width: 40px;"><input class="form-check-input" type="checkbox" id="select-all-checkbox"></th>
+                                    <th style="width: 40px;">#</th>
+                                    <th>Descrição</th>
+                                    <th style="width: 120px;">Vencimento</th>
+                                    <th style="width: 140px;" class="text-end">Principal (R$)</th>
+                                    <th style="width: 130px;">Índice</th>
+                                    <th style="width: 80px;" class="text-end">Juros (%)</th>
+                                    <th style="width: 80px;" class="text-end">Multa (%)</th>
+                                    <th style="width: 140px;" class="text-end">Atualizado (R$)</th>
+                                    <th style="width: 60px;" class="text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                </tbody>
+                        </table>
+                    </div>
+                    <div id="empty-state" class="text-center p-5 text-muted">
+                        <i class="bi bi-journal-plus fs-1"></i>
+                        <p class="mt-2">Nenhuma parcela adicionada. Clique em "Adicionar Parcela" para começar.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3">
+            <div class="card shadow-sm position-sticky" style="top: 80px;">
+                <div class="card-header"><h6 class="mb-0">Sumário do Cálculo</h6></div>
+                <div class="card-body" id="summary-panel">
+                    <div class="summary-item"><span>Principal:</span> <span id="summary-principal">R$ 0,00</span></div>
+                    <div class="summary-item"><span>Correção:</span> <span id="summary-correcao">R$ 0,00</span></div>
+                    <div class="summary-item"><span>Juros:</span> <span id="summary-juros">R$ 0,00</span></div>
+                    <div class="summary-item"><span>Multa:</span> <span id="summary-multa">R$ 0,00</span></div>
+                    <hr>
+                    <div class="summary-item fw-bold fs-5"><span>Total:</span> <span id="summary-total" class="text-primary">R$ 0,00</span></div>
+                </div>
+                <div id="warnings-panel" class="card-footer bg-light p-2" style="display: none;">
+                    <small class="text-danger"><i class="bi bi-exclamation-triangle-fill me-1"></i> <span id="warnings-text"></span></small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include "gestao/partials/_calculo_pro_modals.html" %}
+
+<template id="parcela-row-template">
+    <tr draggable="true" class="parcela-row">
+        <td><input class="form-check-input row-checkbox" type="checkbox"></td>
+        <td class="row-handle" style="cursor: grab;"><i class="bi bi-grip-vertical"></i> <span class="row-index"></span></td>
+        <td data-field="descricao" contenteditable="true"></td>
+        <td data-field="vencimento" contenteditable="true" class="text-center"></td>
+        <td data-field="principal" contenteditable="true" class="text-end"></td>
+        <td><select class="form-select form-select-sm border-0" data-field="indice"></select></td>
+        <td data-field="juros" contenteditable="true" class="text-end"></td>
+        <td data-field="multa" contenteditable="true" class="text-end"></td>
+        <td class="text-end text-muted"><span class="valor-atualizado">--</span></td>
+        <td class="text-center"><button class="btn btn-sm btn-outline-danger btn-delete-row"><i class="bi bi-trash"></i></button></td>
+    </tr>
+</template>
+{% endblock %}
+
+{% block javascript %}
+{{ block.super }}
+<script id="indices-catalogo-data" type="application/json">
+    {{ indices_catalog_json|safe }}
+</script>
+<script src="{% static 'gestao/js/calculo_pro.js' %}"></script>
+{% endblock %}

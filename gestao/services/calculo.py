@@ -2,7 +2,7 @@
 
 import calendar
 import logging
-from datetime import datetime
+from datetime import date
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from dateutil.relativedelta import relativedelta
 
@@ -12,82 +12,52 @@ from .indices.providers import PROVIDERS_MAP
 logger = logging.getLogger(__name__)
 
 
-def _to_decimal(value: str | int | float | None) -> Decimal:
-    """
-    Converte de forma segura uma string monetária (ex: "1.234,56") para Decimal.
-    Esta função é a chave para corrigir o erro 'decimal.InvalidOperation'.
-    """
-    if value is None:
-        return Decimal('0.00')
-    if isinstance(value, Decimal):
-        return value
-
-    # Converte para string e remove espaços em branco
-    s_value = str(value).strip()
-    if not s_value:
-        return Decimal('0.00')
-
-    # Normaliza o formato numérico: remove pontos de milhar e troca vírgula por ponto.
-    s_value = s_value.replace('.', '').replace(',', '.')
-
-    try:
-        return Decimal(s_value)
-    except InvalidOperation:
-        logger.warning(f"Não foi possível converter o valor '{value}' para Decimal.")
-        return Decimal('0.00')
-
-
 class CalculoEngine:
     """
-    Motor de cálculo judicial completo. Processa um payload estruturado com
-    parcelas, faixas de cálculo e itens extras, retornando um resultado detalhado.
+    Motor de cálculo judicial robusto. Opera com dados pré-validados e tipados.
     """
 
-    def __init__(self, payload):
+    def __init__(self, payload: dict):
         self.payload = payload
         self.results = {
             'parcelas': [],
-            'extras_calculados': [],
             'resumo': {
                 'principal': Decimal('0.0'), 'correcao': Decimal('0.0'), 'juros': Decimal('0.0'),
-                'multas': Decimal('0.0'), 'honorarios': Decimal('0.0'), 'custas': Decimal('0.0'),
-                'total_geral': Decimal('0.0')
+                'multas': Decimal('0.0'), 'honorarios': Decimal('0.0')
             },
             'memoria_calculo': {}
         }
 
     def run(self):
-        """
-        Orquestra a execução do cálculo em três etapas.
-        """
+        """Orquestra a execução do cálculo de forma segura."""
         for parcela_data in self.payload.get('parcelas', []):
             try:
                 resultado_parcela = self._calcular_parcela(parcela_data)
                 self.results['parcelas'].append(resultado_parcela)
+                # Acumula apenas se o cálculo foi bem-sucedido
                 self.results['resumo']['principal'] += resultado_parcela['valor_original']
                 self.results['resumo']['correcao'] += resultado_parcela['correcao_total']
                 self.results['resumo']['juros'] += resultado_parcela['juros_total']
             except Exception as e:
-                descricao_erro = parcela_data.get('descricao', 'ERRO')
-                logger.error(f"Erro ao calcular parcela '{descricao_erro}': {e}", exc_info=True)
-                # CORREÇÃO: Usa a função _to_decimal para evitar erro no fallback
-                valor_original_fallback = _to_decimal(parcela_data.get('valor_original', '0.0'))
+                descricao_erro = parcela_data.get('descricao', 'Desconhecida')
+                logger.error(f"Erro CRÍTICO ao calcular parcela '{descricao_erro}': {e}", exc_info=True)
+                valor_original_fallback = parcela_data.get('valor_original', Decimal('0.0'))
                 self.results['parcelas'].append({
-                    'descricao': descricao_erro,
+                    'descricao': f"ERRO: {descricao_erro}",
                     'valor_original': valor_original_fallback,
-                    'correcao_total': Decimal('0.0'),
-                    'juros_total': Decimal('0.0'),
+                    'data_evento': parcela_data.get('data_evento').isoformat() if isinstance(
+                        parcela_data.get('data_evento'), date) else None,
+                    'correcao_total': Decimal('0.0'), 'juros_total': Decimal('0.0'),
                     'valor_final': valor_original_fallback,
                     'memoria_detalhada': [{'error': f"ERRO NO CÁLCULO: {e}"}]
                 })
 
         self._calcular_extras()
 
-        self.results['resumo']['total_geral'] = (
-                self.results['resumo']['principal'] + self.results['resumo']['correcao'] +
-                self.results['resumo']['juros'] + self.results['resumo']['multas'] +
-                self.results['resumo']['honorarios']
-        )
+        # Cálculo explícito e seguro do total geral
+        resumo = self.results['resumo']
+        resumo['total_geral'] = resumo['principal'] + resumo['correcao'] + resumo['juros'] + resumo['multas'] + resumo[
+            'honorarios']
 
         self._gerar_memoria_de_calculo_estruturada()
         return self.results
@@ -102,32 +72,28 @@ class CalculoEngine:
             return data_fim_faixa.day
         return dias_no_mes
 
-    def _calcular_parcela(self, parcela_data):
-        # CORREÇÃO: Utiliza a função _to_decimal para tratar o valor de entrada
-        valor_original = _to_decimal(parcela_data['valor_original'])
+    def _calcular_parcela(self, parcela_data: dict):
+        valor_original = parcela_data['valor_original']
         valor_atual = valor_original
-        memoria_detalhada = []
         correcao_total_parcela = Decimal('0.0')
         juros_total_parcela = Decimal('0.0')
 
         faixas = sorted(parcela_data.get('faixas', []), key=lambda x: x['data_inicio'])
 
         for faixa in faixas:
-            data_inicio = datetime.strptime(faixa['data_inicio'], '%Y-%m-%d').date()
-            data_fim = datetime.strptime(faixa['data_fim'], '%Y-%m-%d').date()
+            data_inicio, data_fim = faixa['data_inicio'], faixa['data_fim']
             info_indice = get_indice_info(faixa['indice'])
-
-            provider_name = info_indice.get('provider')
-            ProviderClass = PROVIDERS_MAP.get(provider_name)
-            if not ProviderClass:
-                raise ValueError(f"Provider '{provider_name}' não encontrado.")
+            ProviderClass = PROVIDERS_MAP[info_indice['provider']]
             provider = ProviderClass()
 
             indices = provider.get_indices(
-                inicio=data_inicio, fim=data_fim,
-                params=info_indice.get('params', {}),
+                inicio=data_inicio, fim=data_fim, params=info_indice.get('params', {}),
                 index_type=info_indice.get('type')
             )
+
+            if not indices and info_indice['provider'] == 'BacenSGSProvider':
+                raise ConnectionError(
+                    f"Não foi possível obter dados para o índice '{faixa['indice']}'. A API do Banco Central pode estar instável.")
 
             valor_base_faixa = valor_atual
             fator_correcao = Decimal('1.0')
@@ -135,12 +101,12 @@ class CalculoEngine:
             if info_indice['type'] == 'monthly_variation':
                 data_loop = data_inicio.replace(day=1)
                 while data_loop <= data_fim:
-                    mes_chave = data_loop.strftime('%Y-%m')
-                    variacao = indices.get(mes_chave, Decimal('0.0')) / 100
+                    variacao = indices.get(data_loop.strftime('%Y-%m'), Decimal('0.0')) / 100
                     if faixa.get('pro_rata', True):
                         dias_aplicar = self._get_dias_pro_rata(data_loop, data_inicio, data_fim)
                         dias_no_mes = calendar.monthrange(data_loop.year, data_loop.month)[1]
-                        fator_correcao *= (1 + (variacao / dias_no_mes * dias_aplicar))
+                        if dias_no_mes == 0: raise ValueError("Divisão por zero: dias no mês é zero.")
+                        fator_correcao *= (1 + (variacao / Decimal(dias_no_mes) * Decimal(dias_aplicar)))
                     else:
                         fator_correcao *= (1 + variacao)
                     data_loop += relativedelta(months=1)
@@ -151,73 +117,91 @@ class CalculoEngine:
                     fator_correcao *= (1 + taxa_dia)
                     data_loop += relativedelta(days=1)
 
+            if not fator_correcao.is_finite():
+                raise InvalidOperation(
+                    f"Fator de correção tornou-se não-finito na faixa do índice '{faixa['indice']}'.")
+
             correcao_faixa = valor_base_faixa * (fator_correcao - 1)
             valor_corrigido_faixa = valor_base_faixa + correcao_faixa
-
             juros_faixa = Decimal('0.0')
+
             if not faixa.get('modo_selic_exclusiva', False) and faixa['juros_tipo'] != 'NENHUM':
-                # CORREÇÃO: Utiliza a função _to_decimal para tratar a taxa de juros
-                taxa_mensal = _to_decimal(faixa['juros_taxa_mensal']) / 100
-                total_dias = (data_fim - data_inicio).days + 1
-                meses = Decimal(total_dias) / Decimal('30.4375')
+                taxa_mensal = faixa['juros_taxa_mensal'] / 100
+                meses = Decimal((data_fim - data_inicio).days + 1) / Decimal('30.4375')
                 if faixa['juros_tipo'] == 'SIMPLES':
                     juros_faixa = valor_corrigido_faixa * taxa_mensal * meses
                 elif faixa['juros_tipo'] == 'COMPOSTO':
-                    juros_faixa = valor_corrigido_faixa * (((1 + taxa_mensal) ** meses) - 1)
+                    base_juros = 1 + taxa_mensal
+                    if base_juros < 0 and meses % 1 != 0:
+                        raise InvalidOperation("Cálculo de juros compostos inválido (raiz de número negativo).")
+                    juros_faixa = valor_corrigido_faixa * ((base_juros ** meses) - 1)
 
             valor_atual = valor_corrigido_faixa + juros_faixa
+            if not valor_atual.is_finite():
+                raise InvalidOperation(f"Valor atual tornou-se não-finito ({valor_atual}) após juros/correção.")
+
             correcao_total_parcela += correcao_faixa
             juros_total_parcela += juros_faixa
 
-            memoria_detalhada.append({
-                'faixa_nome': info_indice.get('label', faixa['indice']),
-                'data_inicio': data_inicio.strftime('%d/%m/%Y'), 'data_fim': data_fim.strftime('%d/%m/%Y'),
-                'valor_correcao': f"{correcao_faixa:,.2f}", 'valor_juros': f"{juros_faixa:,.2f}",
-                'valor_atualizado_faixa': f"{valor_atual:,.2f}"
-            })
+        if not all(v.is_finite() for v in [valor_original, correcao_total_parcela, juros_total_parcela, valor_atual]):
+            raise InvalidOperation("Resultado final da parcela contém valores não-finitos.")
 
         return {
             'descricao': parcela_data['descricao'],
-            'valor_original': valor_original.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP),
-            'correcao_total': correcao_total_parcela.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP),
-            'juros_total': juros_total_parcela.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP),
-            'valor_final': valor_atual.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP),
-            'memoria_detalhada': memoria_detalhada,
+            'data_evento': parcela_data['data_evento'].isoformat(),
+            'valor_original': valor_original,
+            'correcao_total': correcao_total_parcela,
+            'juros_total': juros_total_parcela,
+            'valor_final': valor_atual,
         }
 
     def _calcular_extras(self):
-        """
-        Calcula itens como multas e honorários.
-        """
         extras = self.payload.get('extras', {})
         if not isinstance(extras, dict): return
-
         base_principal_corrigido = self.results['resumo']['principal'] + self.results['resumo']['correcao']
         base_principal_juros = base_principal_corrigido + self.results['resumo']['juros']
-
-        # CORREÇÃO: Utiliza a função _to_decimal para tratar os percentuais
-        multa_perc = _to_decimal(extras.get('multa_percentual'))
+        multa_perc = extras.get('multa_percentual', Decimal('0.0'))
         if multa_perc > 0:
             base_multa = base_principal_juros if extras.get('multa_sobre_juros') else base_principal_corrigido
-            valor_multa = base_multa * (multa_perc / Decimal('100.0'))
-            self.results['resumo']['multas'] = valor_multa.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-
-        honorarios_perc = _to_decimal(extras.get('honorarios_percentual'))
+            self.results['resumo']['multas'] = (base_multa * (multa_perc / 100))
+        honorarios_perc = extras.get('honorarios_percentual', Decimal('0.0'))
         if honorarios_perc > 0:
             base_honorarios = base_principal_juros + self.results['resumo'].get('multas', Decimal('0.0'))
-            valor_honorarios = base_honorarios * (honorarios_perc / Decimal('100.0'))
-            self.results['resumo']['honorarios'] = valor_honorarios.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            self.results['resumo']['honorarios'] = (base_honorarios * (honorarios_perc / 100))
 
     def _gerar_memoria_de_calculo_estruturada(self):
-        """Gera uma memória de cálculo estruturada para renderização no template."""
+        def format_brl(d_value):
+            if not isinstance(d_value, Decimal) or not d_value.is_finite():
+                return "Erro de Cálculo"
+            quantized = d_value.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            return f"{quantized:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+        detalhe_parcelas_formatado = []
+        for p in self.results['parcelas']:
+            if 'error' in p:
+                detalhe_parcelas_formatado.append(p)
+                continue
+
+            valor_apos_correcao = p['valor_original'] + p['correcao_total']
+            detalhe_parcelas_formatado.append({
+                'descricao': p['descricao'], 'data_valor': p.get('data_evento'),
+                'valor_original': format_brl(p['valor_original']),
+                'valor_apos_correcao': format_brl(valor_apos_correcao),
+                'juros_aplicados': format_brl(p['juros_total']),
+                'valor_final': format_brl(p['valor_final']),
+            })
+
+        resumo_quantized = {k: v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP) for k, v in
+                            self.results['resumo'].items() if isinstance(v, Decimal) and v.is_finite()}
+
         self.results['memoria_calculo'] = {
             'resumo_total': [
-                {'label': '(+) Valor Principal Original', 'value': self.results['resumo']['principal']},
-                {'label': '(+) Correção Monetária Total', 'value': self.results['resumo']['correcao']},
-                {'label': '(+) Juros Totais', 'value': self.results['resumo']['juros']},
-                {'label': '(+) Multas', 'value': self.results['resumo']['multas']},
-                {'label': '(+) Honorários', 'value': self.results['resumo']['honorarios']},
+                {'label': '(+) Valor Principal', 'value': resumo_quantized.get('principal', Decimal('0.0'))},
+                {'label': '(+) Correção Monetária', 'value': resumo_quantized.get('correcao', Decimal('0.0'))},
+                {'label': '(+) Juros', 'value': resumo_quantized.get('juros', Decimal('0.0'))},
+                {'label': '(+) Multas', 'value': resumo_quantized.get('multas', Decimal('0.0'))},
+                {'label': '(+) Honorários', 'value': resumo_quantized.get('honorarios', Decimal('0.0'))},
             ],
-            'total_geral': self.results['resumo']['total_geral'],
-            'detalhe_parcelas': self.results['parcelas']
+            'total_geral': resumo_quantized.get('total_geral', Decimal('0.0')),
+            'detalhe_parcelas': detalhe_parcelas_formatado
         }

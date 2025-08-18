@@ -1,0 +1,30 @@
+#parcelas-table thead th {
+    vertical-align: middle;
+}
+
+#parcelas-table tbody td {
+    vertical-align: middle;
+    padding: 0.4rem 0.5rem;
+}
+
+#parcelas-table tbody td[contenteditable="true"] {
+    background-color: #f8f9fa;
+    outline: none;
+    transition: box-shadow 0.2s;
+}
+
+#parcelas-table tbody td[contenteditable="true"]:focus {
+    background-color: #fff;
+    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
+}
+
+.summary-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.3rem 0;
+    font-size: 0.9rem;
+}
+
+.row-handle {
+    cursor: grab;
+}

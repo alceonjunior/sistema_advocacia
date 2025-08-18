@@ -1,0 +1,63 @@
+<div class="modal fade" id="replicarModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Replicar Parcela</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="replicar-base-id">
+                <div class="mb-3">
+                    <label class="form-label">Parcela Base</label>
+                    <input type="text" id="replicar-base-text" class="form-control" readonly>
+                </div>
+                <div class="mb-3">
+                    <label for="replicar-quantidade" class="form-label">Gerar mais quantas parcelas?</label>
+                    <input type="number" id="replicar-quantidade" class="form-control" value="11" min="1" max="120">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Copiar quais campos?</label>
+                    <div class="form-check"><input class="form-check-input" type="checkbox" value="principal" id="copy-principal" checked> <label for="copy-principal">Principal</label></div>
+                    <div class="form-check"><input class="form-check-input" type="checkbox" value="indice" id="copy-indice" checked> <label for="copy-indice">Índice</label></div>
+                    <div class="form-check"><input class="form-check-input" type="checkbox" value="juros" id="copy-juros" checked> <label for="copy-juros">Juros</label></div>
+                    <div class="form-check"><input class="form-check-input" type="checkbox" value="multa" id="copy-multa" checked> <label for="copy-multa">Multa</label></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" id="btn-confirmar-replicacao" class="btn btn-primary">Replicar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="batchEditModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Parcelas Selecionadas (<span id="batch-count"></span>)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <span class="input-group-text" style="width: 120px;">Índice</span>
+                    <select id="batch-indice" class="form-select"></select>
+                    <button class="btn btn-outline-primary" type="button" data-op="substituir" data-field="indice">Aplicar</button>
+                </div>
+                <div class="input-group mb-3">
+                    <span class="input-group-text" style="width: 120px;">Juros (%)</span>
+                    <input type="text" id="batch-juros" class="form-control" placeholder="Ex: 1.50">
+                    <button class="btn btn-outline-primary" type="button" data-op="substituir" data-field="juros">Aplicar</button>
+                </div>
+                <div class="input-group">
+                    <span class="input-group-text" style="width: 120px;">Multa (%)</span>
+                    <input type="text" id="batch-multa" class="form-control" placeholder="Ex: 2.00">
+                    <button class="btn btn-outline-primary" type="button" data-op="substituir" data-field="multa">Aplicar</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>

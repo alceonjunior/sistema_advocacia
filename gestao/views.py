@@ -3049,15 +3049,16 @@ def salvar_cadastro_auxiliar_ajax(request, modelo, pk=None):
 
 
 @login_required
-def calculo_wizard_view(request: HttpRequest, processo_pk: int | None = None):
+def calculo_wizard_view(request, processo_pk=None):
     """
     Renderiza a página principal do wizard de cálculo judicial.
-    Carrega o catálogo de índices e o passa para o template como JSON.
+    Esta é a view que estava faltando e foi restaurada.
     """
     processo = None
     if processo_pk:
         processo = get_object_or_404(Processo, pk=processo_pk)
 
+    # Carrega o catálogo de índices e o passa para o template como um JSON
     indices_catalog_json = json.dumps(public_catalog_for_api(), ensure_ascii=False)
 
     context = {
@@ -3071,47 +3072,80 @@ def calculo_wizard_view(request: HttpRequest, processo_pk: int | None = None):
 @require_POST
 @login_required
 @transaction.atomic
-def simular_calculo_api(request: HttpRequest):
+def simular_calculo_api(request):
     """
-    Endpoint da API que calcula, salva o resultado e retorna para a interface.
-    Inclui uma função robusta para sanitizar os dados recebidos do frontend.
+    Endpoint da API que valida, calcula, salva o resultado e retorna para a interface.
+    Esta view agora atua como um 'gatekeeper', garantindo 100% da integridade dos dados.
     """
 
-    def sanitize_payload(payload):
-        """
-        Função interna para limpar e converter dados monetários e de datas
-        antes de passá-los para o motor de cálculo.
-        """
+    def _to_decimal(value, field_name="Valor"):
+        """Função utilitária robusta para conversão de string para Decimal."""
+        if value is None or str(value).strip() == '':
+            return Decimal('0.00')
 
-        def _to_decimal(value: str | int | float | None) -> str:
-            """Converte uma string monetária (ex: "1.234,56") para um formato que o Python entende ("1234.56")."""
-            if value is None: return '0.00'
-            s_value = str(value).strip().replace('.', '').replace(',', '.')
+        s_value = str(value).strip()
+        if ',' in s_value:
+            s_value = s_value.replace('.', '').replace(',', '.')
+
+        try:
+            return Decimal(s_value)
+        except InvalidOperation:
+            raise ValueError(f"{field_name} inválido: '{value}' não é um número válido.")
+
+    def _sanitize_and_validate_payload(payload):
+        """
+        Valida e normaliza rigorosamente o payload. Levanta ValueError em caso de falha.
+        """
+        if not isinstance(payload, dict):
+            raise ValueError("O corpo da requisição deve ser um objeto JSON.")
+
+        # Valida parcelas
+        parcelas = payload.get("parcelas")
+        if not parcelas or not isinstance(parcelas, list):
+            raise ValueError("É necessário fornecer pelo menos uma parcela para o cálculo.")
+
+        for i, p_data in enumerate(parcelas):
+            p_num = i + 1
+            p_data["descricao"] = p_data.get("descricao") or f"Parcela {p_num}"
+            p_data["valor_original"] = _to_decimal(p_data.get("valor_original"), f"Valor original da Parcela {p_num}")
+
             try:
-                # Valida se é um número válido antes de retornar
-                float(s_value)
-                return s_value
-            except (ValueError, TypeError):
-                return '0.00'
+                p_data["data_evento"] = date.fromisoformat(p_data.get("data_evento"))
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"Parcela {p_num}: Data do valor é inválida ou está ausente. Use o formato AAAA-MM-DD.")
 
-        for parcela in payload.get('parcelas', []):
-            parcela['valor_original'] = _to_decimal(parcela.get('valor_original'))
-            for faixa in parcela.get('faixas', []):
-                faixa['juros_taxa_mensal'] = _to_decimal(faixa.get('juros_taxa_mensal'))
+            if not p_data.get("faixas"):
+                raise ValueError(f"Parcela {p_num}: Nenhuma faixa de cálculo foi definida.")
 
-        extras = payload.get('extras', {})
+            for j, f_data in enumerate(p_data["faixas"]):
+                f_num = j + 1
+                try:
+                    f_data["data_inicio"] = date.fromisoformat(f_data.get("data_inicio"))
+                    f_data["data_fim"] = date.fromisoformat(f_data.get("data_fim"))
+                except (TypeError, ValueError):
+                    raise ValueError(
+                        f"Parcela {p_num}, Faixa {f_num}: Datas de início/fim são inválidas ou ausentes. Use AAAA-MM-DD.")
+
+                if f_data["data_inicio"] > f_data["data_fim"]:
+                    raise ValueError(
+                        f"Parcela {p_num}, Faixa {f_num}: A data de início não pode ser posterior à data de fim.")
+
+                f_data["juros_taxa_mensal"] = _to_decimal(f_data.get("juros_taxa_mensal"),
+                                                          f"Taxa de juros da Faixa {f_num}")
+
+        # Valida extras
+        extras = payload.get("extras", {})
         if isinstance(extras, dict):
-            extras['multa_percentual'] = _to_decimal(extras.get('multa_percentual'))
-            extras['honorarios_percentual'] = _to_decimal(extras.get('honorarios_percentual'))
+            extras["multa_percentual"] = _to_decimal(extras.get("multa_percentual"), "Percentual de multa")
+            extras["honorarios_percentual"] = _to_decimal(extras.get("honorarios_percentual"),
+                                                          "Percentual de honorários")
 
         return payload
 
     try:
-        payload = json.loads(request.body)
-        sanitized_payload = sanitize_payload(payload)
-
-        if not sanitized_payload.get('parcelas'):
-            return JsonResponse({'status': 'error', 'message': 'Nenhuma parcela foi enviada para cálculo.'}, status=400)
+        raw_payload = json.loads(request.body)
+        sanitized_payload = _sanitize_and_validate_payload(raw_payload)
 
         engine = CalculoEngine(sanitized_payload)
         resultados = engine.run()
@@ -3120,6 +3154,11 @@ def simular_calculo_api(request: HttpRequest):
         processo = Processo.objects.filter(numero_processo=processo_numero).first() if processo_numero else None
 
         resultados['form_data'] = sanitized_payload
+        for parcela in resultados['form_data']['parcelas']:
+            parcela['data_evento'] = parcela['data_evento'].isoformat()
+            for faixa in parcela['faixas']:
+                faixa['data_inicio'] = faixa['data_inicio'].isoformat()
+                faixa['data_fim'] = faixa['data_fim'].isoformat()
 
         rascunho = CalculoRascunho.objects.create(
             processo=processo,
@@ -3133,28 +3172,31 @@ def simular_calculo_api(request: HttpRequest):
             'data': resultados,
             'rascunho_pk': rascunho.pk
         })
-
-    except json.JSONDecodeError:
-        return JsonResponse({'status': 'error', 'message': 'Erro: O formato dos dados enviados é inválido.'},
-                            status=400)
+    except (json.JSONDecodeError, ValueError) as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     except Exception as e:
         logger.error(f"Erro inesperado na API de simulação de cálculo: {e}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': f'Ocorreu um erro inesperado no servidor: {e}'}, status=500)
-
-
-# ==============================================================================
-# VIEWS DA API DE ÍNDICES (RESTAURADAS)
-# ==============================================================================
-
-@login_required
-def api_indices_catalogo(request: HttpRequest):
-    """Retorna o catálogo de índices disponíveis para o frontend."""
-    return JsonResponse({"indices": public_catalog_for_api()})
+        return JsonResponse({'status': 'error', 'message': f'Ocorreu um erro inesperado no servidor.'}, status=500)
 
 
 @login_required
-def api_indices_valores(request: HttpRequest):
-    """Retorna os valores de um índice específico em um período."""
+def api_indices_catalogo(request):
+    """
+    Retorna o catálogo de índices econômicos disponíveis para o frontend.
+    """
+    try:
+        indices = public_catalog_for_api()
+        return JsonResponse({"indices": indices})
+    except Exception as e:
+        logger.error(f"Erro ao buscar o catálogo de índices: {e}", exc_info=True)
+        return JsonResponse({"error": "Não foi possível carregar o catálogo de índices."}, status=500)
+
+
+@login_required
+def api_indices_valores(request):
+    """
+    Retorna os valores de um índice específico em um período.
+    """
     nome = request.GET.get("indice")
     ini = request.GET.get("inicio")
     fim = request.GET.get("fim")
@@ -3174,37 +3216,6 @@ def api_indices_valores(request: HttpRequest):
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
 
-
-# @login_required
-# def gerar_calculo_pdf(request, rascunho_pk):
-#     """
-#     Gera um PDF a partir de um resultado de cálculo salvo.
-#     """
-#     if not HTML:
-#         messages.error(request, "A biblioteca 'weasyprint' não está instalada, o que impede a geração de PDFs.")
-#         return redirect(request.META.get('HTTP_REFERER', 'gestao:dashboard'))
-#
-#     rascunho = get_object_or_404(CalculoRascunho.objects.select_related('processo'), pk=rascunho_pk)
-#     resultado_json = rascunho.ultimo_resultado_json
-#
-#     if not resultado_json:
-#         messages.error(request, "Não há dados de resultado para gerar o PDF.")
-#         return redirect(request.META.get('HTTP_REFERER', 'gestao:dashboard'))
-#
-#     context = {
-#         'rascunho': rascunho,
-#         'resultado': resultado_json,
-#         'processo': rascunho.processo,
-#         'dados_basicos': resultado_json.get('global', {})
-#     }
-#
-#     html_string = render_to_string('gestao/calculo_pdf.html', context)
-#     response = HttpResponse(content_type='application/pdf')
-#     response['Content-Disposition'] = f'attachment; filename="calculo_judicial_{rascunho.pk}.pdf"'
-#
-#     HTML(string=html_string).write_pdf(response)
-#     return response
-#
 
 @login_required
 def api_indices_catalogo(request: HttpRequest):

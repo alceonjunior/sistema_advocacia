@@ -290,11 +290,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        // Desestrutura os dados recebidos do backend
         const { resumo_total, total_geral, detalhe_parcelas } = data.memoria_calculo;
         const dados_basicos = data.form_data.global;
 
-        // Constrói o HTML do resultado detalhado
-        let parcelasHtml = detalhe_parcelas.map((parcela, index) => `
+        // Constrói o HTML das parcelas
+        let parcelasHtml = detalhe_parcelas.map((parcela, index) => {
+            // Converte os valores numéricos recebidos do backend
+            const valorOriginalNum = parseFloat(parcela.valor_original) || 0;
+            const correcaoTotalNum = parseFloat(parcela.correcao_total) || 0;
+            const jurosTotalNum = parseFloat(parcela.juros_total) || 0;
+            const valorFinalNum = parseFloat(parcela.valor_final) || 0;
+            const dataEvento = new Date(parcela.data_evento + 'T00:00:00').toLocaleDateString('pt-BR');
+
+            return `
             <div class="mb-4 p-3 border rounded">
                 <h6 class="border-bottom pb-2 mb-2">
                     <strong>Parcela ${index + 1}:</strong> ${parcela.descricao}
@@ -302,36 +311,36 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <table class="table table-sm table-borderless">
                     <tbody>
                         <tr>
-                            <td>Valor Original em ${new Date(parcela.data_valor + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                            <td class="text-end">${parcela.valor_original}</td>
+                            <td>Valor Original em ${dataEvento}</td>
+                            <td class="text-end">${formatCurrency(valorOriginalNum)}</td>
                         </tr>
                         <tr>
                             <td>(+) Correção Monetária</td>
-                            <td class="text-end">${(parseFloat(parcela.valor_apos_correcao.replace('.', '').replace(',', '.')) - parseFloat(parcela.valor_original.replace('.', '').replace(',', '.')) - parseFloat(parcela.juros_aplicados.replace('.', '').replace(',', '.'))).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                            <td class="text-end">${formatCurrency(correcaoTotalNum)}</td>
                         </tr>
                         <tr>
                             <td>(+) Juros Aplicados</td>
-                            <td class="text-end">${parcela.juros_aplicados}</td>
+                            <td class="text-end">${formatCurrency(jurosTotalNum)}</td>
                         </tr>
                         <tr class="fw-bold">
                             <td>Subtotal da Parcela</td>
-                            <td class="text-end">${parcela.valor_final}</td>
+                            <td class="text-end">${formatCurrency(valorFinalNum)}</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
-        `).join('');
+            `;
+        }).join('');
 
+        // Monta o HTML completo do resultado
         const resultadoHtml = `
             <div class="p-3">
                 <h4 class="mb-3 border-bottom pb-2">Demonstrativo do Cálculo</h4>
-
                 <div class="mb-4">
                     <p><strong>Processo:</strong> ${dados_basicos.numero_processo || 'Não informado'}</p>
                     <p><strong>Parte Autora:</strong> ${dados_basicos.parte_autora || 'Não informado'}</p>
                     <p><strong>Parte Ré:</strong> ${dados_basicos.parte_re || 'Não informado'}</p>
                 </div>
-
                 <h5 class="mt-4">Resumo Geral</h5>
                 <table class="table table-bordered">
                     <tbody>
@@ -347,22 +356,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                         </tr>
                     </tbody>
                 </table>
-
                 <h5 class="mt-4">Memória de Cálculo por Parcela</h5>
                 ${parcelasHtml}
             </div>
         `;
         resultadoContainer.innerHTML = resultadoHtml;
 
-        // Habilita o botão de PDF
+        // Habilita botões de ação (PDF, etc.)
         const btnPdf = document.getElementById('btn-export-pdf');
         const actionButtons = document.getElementById('action-buttons-resultado');
-        if(btnPdf && actionButtons && rascunho_pk) {
-            // ATENÇÃO: A URL deve ser construída corretamente
+        if (btnPdf && actionButtons && rascunho_pk) {
+            // A URL para o PDF precisa ser ajustada em suas urls.py
             btnPdf.href = `/calculos/rascunho/${rascunho_pk}/pdf/`;
             actionButtons.style.display = 'block';
         }
     }
+
 
     async function enviarCalculo() {
 

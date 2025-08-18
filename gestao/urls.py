@@ -13,7 +13,7 @@ Isso evita conflitos de nomes entre diferentes aplicativos.
 """
 
 from django.urls import path, include
-from . import views
+from . import views, views_calculo_pro, api_calculos_pro
 
 # Define o namespace da aplicação. Essencial para o bom funcionamento do 'reverse()' e da tag {% url %}
 app_name = 'gestao'
@@ -142,4 +142,13 @@ urlpatterns = [
     path('usuarios/<int:user_id>/ativar-desativar/', views.ativar_desativar_usuario, name='ativar_desativar_usuario'),
     path('grupos/<int:group_id>/permissoes/json/', views.get_permissoes_grupo_ajax, name='get_permissoes_grupo_ajax'),
     path('grupos/<int:group_id>/permissoes/salvar/', views.salvar_permissoes_grupo, name='salvar_permissoes_grupo'),
+
+    # === NOVAS ROTAS PARA O CÁLCULO PRO v2 ===
+    path('calculos/novo-pro/', views_calculo_pro.calculo_pro_view, name='calculo_pro'),
+
+    # === NOVAS APIS PARA O CÁLCULO PRO v2 ===
+    path('api/calculos/preview/', api_calculos_pro.preview_calculo_pro, name='api_calculo_pro_preview'),
+    path('api/calculos/replicar/', api_calculos_pro.replicar_parcelas, name='api_calculo_pro_replicar'),
+    path('api/calculos/batch-update/', api_calculos_pro.batch_update_parcelas, name='api_calculo_pro_batch_update'),
+
 ]

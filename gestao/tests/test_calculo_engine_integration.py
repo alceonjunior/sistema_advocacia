@@ -10,7 +10,6 @@ from gestao.services.calculo import CalculoEngine
 # Ignoramos o teste se as dependências de rede não estiverem disponíveis
 try:
     import requests
-
     CAN_RUN_NETWORK_TESTS = True
 except ImportError:
     CAN_RUN_NETWORK_TESTS = False
@@ -20,7 +19,8 @@ except ImportError:
 class CalculoEngineIntegrationTest(TestCase):
     """
     Testes de Integração para a CalculoEngine.
-    Estes testes realizam chamadas reais às APIs do Banco Central e IBGE.
+    Estes testes realizam chamadas reais às APIs do Banco Central para validar
+    a precisão do motor de cálculo contra um cenário real documentado.
     """
 
     def setUp(self):
@@ -30,43 +30,49 @@ class CalculoEngineIntegrationTest(TestCase):
     def test_valida_contra_pdf_exemplo(self):
         """
         Valida o cálculo do cenário do PDF (Proc. 0013996-16.2025.8.16.0019)
-        buscando dados reais das APIs para garantir a precisão do sistema.
+        buscando dados reais das APIs. Este teste garante que a engine de cálculo,
+        quando alimentada com dados já tipados (Decimal e date), produz o resultado esperado.
         """
         print("\nExecutando teste de integração com APIs reais para validar contra o PDF... (Pode demorar)")
 
         # --- Payload do Cálculo ---
-        # Reproduz exatamente os parâmetros do PDF
+        # Os dados aqui estão no formato que a CalculoEngine espera receber
+        # após a validação e sanitização da view.
         payload = {
             "global": {
                 "observacoes": "Teste de integração com dados reais de API, validando o PDF do processo 0013996-16."
             },
             "parcelas": [{
                 "descricao": "Parcela do Processo",
-                "valor_original": "18250.00",
-                "data_evento": "2020-03-13",
+                "valor_original": Decimal("18250.00"),
+                "data_evento": date(2020, 3, 13),
                 "faixas": [
                     {
-                        "indice": "IPCA-E (IBGE)",
-                        "data_inicio": "2020-03-13",
-                        "data_fim": "2023-11-03",  # Conforme PDF [cite: 14]
+                        # CORREÇÃO: Usando a chave "IPCA-E" do catalog.py
+                        "indice": "IPCA-E",
+                        "data_inicio": date(2020, 3, 13),
+                        "data_fim": date(2023, 11, 3),
                         "juros_tipo": "NENHUM",
-                        "juros_taxa_mensal": "0.0",
+                        "juros_taxa_mensal": Decimal("0.0"),
                         "pro_rata": True,
                         "modo_selic_exclusiva": False,
                     },
                     {
-                        "indice": "SELIC (Taxa diária)",
-                        "data_inicio": "2023-11-04",
-                        # AJUSTE PRINCIPAL: A data final agora corresponde à do PDF [cite: 15]
-                        "data_fim": "2025-08-12",
+                        # CORREÇÃO: Usando a chave "SELIC_DIARIA" do catalog.py
+                        "indice": "SELIC_DIARIA",
+                        "data_inicio": date(2023, 11, 4),
+                        "data_fim": date(2025, 8, 12),
                         "juros_tipo": "NENHUM",
-                        "juros_taxa_mensal": "0.0",
+                        "juros_taxa_mensal": Decimal("0.0"),
                         "pro_rata": True,
                         "modo_selic_exclusiva": True,
                     }
                 ]
             }],
-            "extras": [],
+            "extras": {
+                "multa_percentual": Decimal("0.0"),
+                "honorarios_percentual": Decimal("0.0")
+            },
         }
 
         # --- Executa a Engine ---
@@ -74,28 +80,31 @@ class CalculoEngineIntegrationTest(TestCase):
         resultado = engine.run()
 
         # --- Validação ---
-        # O valor final esperado é o que consta no resumo do PDF.
-        valor_final_esperado_pdf = Decimal("27904.63")  # [cite: 10]
-
-        resumo = resultado['resumo']
-        valor_original = Decimal(payload['parcelas'][0]['valor_original'])
-
-        print(f"\n--- Comparativo do Cálculo ---")
-        print(f"Valor Original: R$ {valor_original:,.2f}")
-        print(f"Valor Final Calculado (Sistema): R$ {resumo['total_geral']:,.2f}")
-        print(f"Valor Final Esperado (PDF):    R$ {valor_final_esperado_pdf:,.2f}")
-
-        diferenca = abs(resumo['total_geral'] - valor_final_esperado_pdf)
-        print(f"Diferença Absoluta: R$ {diferenca:,.2f}")
+        valor_final_esperado_pdf = Decimal("27904.63")
 
         self.assertIsNotNone(resultado, "O motor de cálculo não retornou um resultado.")
         self.assertIn('resumo', resultado)
+        self.assertIn('total_geral', resultado['resumo'])
 
-        # 1. Validação principal: o valor calculado deve ser muito próximo ao do PDF.
-        # Usamos uma tolerância (delta) para absorver micro-diferenças de arredondamento
-        # entre a nossa engine e a ferramenta que gerou o PDF.
-        self.assertAlmostEqual(resumo['total_geral'], valor_final_esperado_pdf, places=2,
-                               msg=f"O valor final calculado {resumo['total_geral']} diverge do esperado {valor_final_esperado_pdf}")
+        resumo = resultado['resumo']
+        valor_original = payload['parcelas'][0]['valor_original']
+        valor_final_calculado = resumo['total_geral']
 
-        # 2. Garante que os juros são zero, conforme o PDF [cite: 19]
-        self.assertEqual(resumo['juros'], Decimal("0.00"))
+        print("\n--- Comparativo do Cálculo ---")
+        print(f"Valor Original: R$ {valor_original:,.2f}")
+        print(f"Valor Final Calculado (Sistema): R$ {valor_final_calculado:,.2f}")
+        print(f"Valor Final Esperado (PDF):    R$ {valor_final_esperado_pdf:,.2f}")
+
+        diferenca = abs(valor_final_calculado - valor_final_esperado_pdf)
+        print(f"Diferença Absoluta: R$ {diferenca:,.2f}")
+
+        # Validação principal com tolerância para pequenas diferenças de arredondamento
+        self.assertAlmostEqual(
+            valor_final_calculado,
+            valor_final_esperado_pdf,
+            places=2,
+            msg=f"O valor final calculado {valor_final_calculado} diverge do esperado {valor_final_esperado_pdf}"
+        )
+
+        # Garante que os juros são zero, conforme o PDF
+        self.assertEqual(resumo['juros'].quantize(Decimal('0.01')), Decimal("0.00"))

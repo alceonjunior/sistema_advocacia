@@ -68,13 +68,6 @@ INDICE_CATALOG: Dict[str, Dict[str, Any]] = {
         "type": "daily_rate",
         "group": "Taxas de Juros",
     },
-    "SELIC_MENSAL": {
-        "label": "SELIC (Acumulada no mês)",
-        "provider": "BacenSGSProvider",
-        "params": {"serie_id": 4390},
-        "type": "monthly_variation",
-        "group": "Taxas de Juros",
-    },
     "TR_DIARIA": {
         "label": "TR - Taxa Referencial (Fator diário)",
         "provider": "BacenSGSProvider",
